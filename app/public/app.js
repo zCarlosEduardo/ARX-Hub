@@ -1,7 +1,8 @@
 (function () {
   const e = React.createElement;
   const { useState, useEffect, useRef, useCallback } = React;
-  const { Icon, ICON_CHOICES, COLOR_CHOICES } = window.Icons;
+  const { Icon, ICON_CHOICES, COLOR_CHOICES, CATEGORY_CHOICES } = window.Icons;
+  const CATEGORY_META = CATEGORY_CHOICES.reduce((acc, c) => { acc[c.key] = c; return acc; }, {});
   const GLPI_TOKEN_STORAGE_KEY = 'arxhub_glpi_user_token';
 
   function toCamel(prop) {
@@ -379,14 +380,14 @@
 
     function openNewModal() {
       setModalMode('new');
-      setModalForm({ name: '', url: '', container: '', icon: 'Workflow', color: '#1E4A9E', description: '' });
+      setModalForm({ name: '', url: '', container: '', icon: 'Workflow', color: '#1E4A9E', categories: [], description: '' });
       setTestState('idle');
       setModalOpen(true);
     }
 
     function openEditModal(a) {
       setModalMode('edit');
-      setModalForm({ ...a });
+      setModalForm({ ...a, categories: Array.isArray(a.categories) ? a.categories : [] });
       setTestState('idle');
       setMenuOpenId(null);
       setModalOpen(true);
@@ -430,6 +431,7 @@
         description: f.description || '',
         icon: f.icon || 'Workflow',
         color: f.color || '#1E4A9E',
+        categories: Array.isArray(f.categories) ? f.categories : [],
       };
       try {
         if (f.id) {
@@ -520,6 +522,7 @@
       const isPulsing = a.status !== 'offline';
       const menuOpen = menuOpenId === a.id;
       const urlShort = a.url.replace(/^https?:\/\//, '');
+      const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
       return e('div', {
         key: a.id, className: 'card', onClick: () => openAutomation(a.id),
         style: { position: 'relative', background: '#111111', border: '1px solid #262626', borderRadius: 12, padding: 16, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeInUp 0.3s ease both', animationDelay: Math.min(i, 10) * 35 + 'ms' },
@@ -535,6 +538,10 @@
           ]),
         ]),
         e('div', { key: 'info' }, [
+          cats.length ? e('div', { key: 'cats', style: sx('display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px') }, cats.map((c) => e('span', {
+            key: c.key,
+            style: sx('display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;background:' + c.color + '22;color:' + c.color),
+          }, c.label))) : null,
           e('div', { key: 'name', style: sx("font-family:'Sora',sans-serif;font-weight:700;font-size:14px") }, a.name),
           e('div', { key: 'desc', style: sx('color:#888;font-size:12.5px;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden') }, a.description),
         ]),
@@ -681,6 +688,24 @@
                   style: { width: 30, height: 30, borderRadius: '50%', background: c, border: '2px solid ' + (selected ? '#EDEDED' : 'transparent'), cursor: 'pointer', boxShadow: '0 0 0 1px #262626' },
                 });
               })),
+            ]),
+            e('div', { key: 'category' }, [
+              e('div', { key: 'l', style: sx('font-size:11.5px;color:#888;margin-bottom:8px;font-weight:600') }, 'Sistema (pode marcar mais de um)'),
+              e('div', { key: 'row', style: sx('display:flex;flex-wrap:wrap;gap:8px') }, [
+                ...CATEGORY_CHOICES.map((c) => {
+                  const selected = modalForm.categories.includes(c.key);
+                  return e('button', {
+                    key: c.key,
+                    onClick: () => setModalField('categories', selected
+                      ? modalForm.categories.filter((k) => k !== c.key)
+                      : [...modalForm.categories, c.key]),
+                    style: sx('display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;background:' + c.color + '22;border:1px solid ' + (selected ? c.color : 'transparent') + ';color:' + c.color),
+                  }, [
+                    e('span', { key: 'dot', style: { width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0 } }),
+                    e('span', { key: 't' }, c.label),
+                  ]);
+                }),
+              ]),
             ]),
             e('div', { key: 'desc' }, [
               e('div', { key: 'l', style: sx('font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600') }, 'Descrição'),

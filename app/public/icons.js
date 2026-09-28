@@ -60,5 +60,12 @@ window.Icons = (function () {
     NAMES: Object.keys(DEFS),
     ICON_CHOICES: ['Workflow', 'Bot', 'Server', 'Container', 'Activity', 'FileText', 'Building2', 'Receipt', 'Users', 'BarChart3'],
     COLOR_CHOICES: ['#1E4A9E', '#6DBE6A', '#F5A524', '#F5514D', '#8B5CF6', '#14B8A6'],
+    CATEGORY_CHOICES: [
+      { key: 'visto', label: 'Visto', color: '#7DD3FC' },
+      { key: 'sga', label: 'SGA', color: '#3B82F6' },
+      { key: 'powercrm', label: 'PowerCRM', color: '#F5514D' },
+      { key: 'interno', label: 'Interno', color: '#9CA3AF' },
+      { key: 'db', label: 'Banco de Dados', color: '#8B5CF6' },
+    ],
   };
 })();

@@ -25,12 +25,16 @@ async function init() {
       description TEXT NOT NULL DEFAULT '',
       icon TEXT NOT NULL DEFAULT 'Workflow',
       color TEXT NOT NULL DEFAULT '#1E4A9E',
+      categories TEXT[] NOT NULL DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'checking',
       last_checked_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+
+  await pool.query(`ALTER TABLE automations DROP COLUMN IF EXISTS category;`);
+  await pool.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS glpi_tickets (
@@ -78,6 +82,7 @@ function rowToAutomation(row) {
     description: row.description,
     icon: row.icon,
     color: row.color,
+    categories: row.categories || [],
     status: row.status,
     lastCheckedAt: row.last_checked_at,
     createdAt: row.created_at,

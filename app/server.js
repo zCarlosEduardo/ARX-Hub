@@ -67,14 +67,14 @@ app.get('/api/automations', async (req, res) => {
 });
 
 app.post('/api/automations', async (req, res) => {
-  const { name, url, container, description, icon, color } = req.body || {};
+  const { name, url, container, description, icon, color, categories } = req.body || {};
   if (!name || !name.trim() || !url || !url.trim()) {
     return res.status(400).json({ error: 'name e url são obrigatórios' });
   }
   const { rows } = await pool.query(
-    `INSERT INTO automations (name, url, container, description, icon, color, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'checking') RETURNING *`,
-    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E']
+    `INSERT INTO automations (name, url, container, description, icon, color, categories, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'checking') RETURNING *`,
+    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E', Array.isArray(categories) ? categories : []]
   );
   const created = rows[0];
   broadcastAutomations().catch(() => {});
@@ -84,14 +84,14 @@ app.post('/api/automations', async (req, res) => {
 
 app.put('/api/automations/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { name, url, container, description, icon, color } = req.body || {};
+  const { name, url, container, description, icon, color, categories } = req.body || {};
   if (!name || !name.trim() || !url || !url.trim()) {
     return res.status(400).json({ error: 'name e url são obrigatórios' });
   }
   const { rows } = await pool.query(
-    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, updated_at=now()
-     WHERE id=$7 RETURNING *`,
-    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E', id]
+    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, updated_at=now()
+     WHERE id=$8 RETURNING *`,
+    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E', Array.isArray(categories) ? categories : [], id]
   );
   if (!rows.length) return res.status(404).json({ error: 'não encontrado' });
   const updated = rows[0];
