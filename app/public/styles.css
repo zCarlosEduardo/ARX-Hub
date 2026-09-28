@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: #0A0A0A; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 8px; }
+
+input::placeholder, textarea::placeholder { color: #666; }
+input, textarea, select, button { font-family: inherit; }
+
+@keyframes pulseRing { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes chatPop { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  animation: pulseRing 1.8s ease-out infinite;
+}
+
+.search-box:hover { border-color: #333333; }
+.btn-primary { transition: background 0.15s, box-shadow 0.15s; }
+.btn-primary:hover { background: #7fcb7c; box-shadow: 0 0 16px rgba(109, 190, 106, 0.4); }
+.btn-secondary:hover { background: #1a1a1a; }
+.btn-outline:hover { border-color: #3a3a3a; }
+.btn-outline-danger:hover { color: #fff; border-color: #F5514D; background: #F5514D22; }
+.btn-danger { transition: background 0.15s; }
+.btn-danger:hover { background: #e14440 !important; }
+
+.nav-scroll { scrollbar-width: thin; }
+
+.panel-tab:hover { color: #EDEDED; }
+
+.card { transition: border-color 0.15s, background 0.15s; }
+.card:hover { border-color: #3a3a3a; background: #151515; }
+.card-open-btn:hover { background: #6DBE6A; border-color: #6DBE6A; color: #0A0A0A; }
+.icon-btn:hover { background: #262626; color: #EDEDED; }
+.menu-item:hover { background: #262626; }
+.menu-item-danger:hover { background: #F5514D22; }
+
+.viewer-btn:hover { color: #EDEDED; border-color: #3a3a3a; }
+.viewer-btn-close:hover { color: #fff; border-color: #F5514D; background: #F5514D22; }
+
+.tab-close:hover { background: #262626; color: #EDEDED; }
+
+.icon-choice { cursor: pointer; }
+.icon-choice:hover { border-color: #3a3a3a; }
+
+.field-input:focus, .field-input:focus-visible { outline: none; border-color: #6DBE6A; }

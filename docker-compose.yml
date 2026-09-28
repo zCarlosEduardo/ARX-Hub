@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: arx-hub-db
+    environment:
+      POSTGRES_DB: arxhub
+      POSTGRES_USER: arxhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-arxhub_dev_password}
+    volumes:
+      - arxhub_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arxhub -d arxhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: ./app
+    container_name: arx-hub
+    ports:
+      - "8317:8317"
+    environment:
+      DATABASE_URL: postgres://arxhub:${POSTGRES_PASSWORD:-arxhub_dev_password}@db:5432/arxhub
+      PORT: "8317"
+      GLPI_BASE_URL: ${GLPI_BASE_URL:-}
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
+      GLPI_ENTITY_ID: ${GLPI_ENTITY_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  arxhub_db_data:
