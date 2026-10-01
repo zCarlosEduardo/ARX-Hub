@@ -4,10 +4,10 @@ const APP_TOKEN = process.env.GLPI_APP_TOKEN || '';
 const ENTITY_ID = process.env.GLPI_ENTITY_ID || '';
 // Raiz do site (sem o /api.php/v1) — usada só pra montar o link direto do
 // chamado (front/ticket.form.php), nunca chamada como API.
-const SITE_URL = BASE_URL.replace(/\/api\.php\/.*/i, '');
+const SITE_URL = (process.env.GLPI_SITE_URL || BASE_URL.replace(/\/api\.php\/.*/i, '') || 'https://suporte.mutualle.com.br').replace(/\/+$/, '');
 
 function ticketUrl(ticketId) {
-  return SITE_URL ? `${SITE_URL}/front/ticket.form.php?id=${ticketId}` : null;
+  return `${SITE_URL}/front/ticket.form.php?id=${ticketId}`;
 }
 
 function assertConfigured() {
