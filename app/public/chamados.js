@@ -1,0 +1,513 @@
+// Aba "Chamados" do ARX Hub: chamados do GLPI (entidade Sistemas) que as
+// automações sabem resolver aparecem como cards: "Rodar" ou "Não rodar".
+// Quem faz o trabalho é o serviço chamados-glpi (porta 4013): ele lê o GLPI,
+// roda a automação (Relatórios SGA / Cadastro de voluntário / Cadastro de
+// colaborador), responde no chamado e registra no banco-central.
+// Endereço e App-Token do GLPI ficam no servidor; aqui cada pessoa informa só
+// o próprio token e os logins do SGA/PowerCRM (salvos só neste navegador).
+(function () {
+  const e = React.createElement;
+  const { useState, useEffect, useRef, useCallback } = React;
+  const { Icon } = window.Icons;
+
+  const KEY_ACESSOS = 'arxhub_chamados_acessos_v2';
+  const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
+  const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
+  const KEY_TOKEN_HUB = 'arxhub_glpi_user_token'; // o mesmo token do "Abrir chamado" (de cada pessoa, salvo no navegador dela)
+  const SERVICO = `${location.protocol}//${location.hostname}:4013`;
+
+  const ler = (k, padrao) => {
+    try {
+      const v = localStorage.getItem(k);
+      return v === null ? padrao : JSON.parse(v);
+    } catch {
+      return padrao;
+    }
+  };
+  const gravar = (k, v) => {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {
+      // sem storage: vale só enquanto a tela estiver aberta
+    }
+  };
+  const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+
+  async function api(caminho, corpo) {
+    const resp = await fetch(SERVICO + caminho, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : undefined);
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(dados.error || `HTTP ${resp.status}`);
+    return dados;
+  }
+
+  // estilos (mesmo visual dos cards do Painel)
+  const S = {
+    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeInUp 0.3s ease both' },
+    label: { fontSize: 11.5, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 },
+    input: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', color: 'var(--text)', fontSize: 13.5, boxSizing: 'border-box', fontFamily: 'inherit' },
+    btnPrim: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+    link: { background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 },
+    tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
+    chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
+  };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6' };
+
+  const campo = (rotulo, filho, key) => e('div', { key: key || rotulo }, [e('div', { key: 'l', style: S.label }, rotulo), filho]);
+  const inp = (valor, onChange, extra = {}) => e('input', { className: 'field-input', value: valor || '', onChange: (ev) => onChange(ev.target.value), style: S.input, ...extra });
+
+  function acessosIniciais() {
+    const a = ler(KEY_ACESSOS, null);
+    let tokenHub = '';
+    try {
+      tokenHub = localStorage.getItem(KEY_TOKEN_HUB) || '';
+    } catch {
+      // ignora
+    }
+    const base = a || { userToken: tokenHub, crm: { usuario: '', senha: '' }, senhaPadrao: '', pronto: false };
+    // vários logins do SGA (a mesma senha não vale em todo SGA); `empresas: null` = todas
+    if (!Array.isArray(base.sgas)) base.sgas = base.sga && base.sga.usuario ? [{ ...base.sga, empresas: null }] : [{ usuario: '', senha: '', empresas: null }];
+    delete base.sga;
+    return base;
+  }
+
+  /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
+  const loginDaEmpresa = (sgas, chave) => sgas.find((l) => l.usuario && l.senha && (!Array.isArray(l.empresas) || l.empresas.includes(chave))) || null;
+
+  // ---------- Tela de acessos (primeira vez / botão "Acessos") ----------
+  function TelaAcessos({ inicial, aoSalvar, aoCancelar }) {
+    const [a, setA] = useState(() => JSON.parse(JSON.stringify(inicial)));
+    const [erro, setErro] = useState(null);
+    const [testando, setTestando] = useState(false);
+    const [empresas, setEmpresas] = useState([]);
+    const mudar = (fn) => setA((x) => fn(JSON.parse(JSON.stringify(x))));
+    const todas = empresas.map((x) => x.chave);
+
+    useEffect(() => {
+      api('/api/opcoes').then((o) => setEmpresas(o.empresasSga || [])).catch(() => {});
+    }, []);
+
+    // marcar uma empresa num login tira ela dos outros (cada empresa usa um login só)
+    function alternarEmpresa(i, chave) {
+      mudar((x) => {
+        const atual = x.sgas[i].empresas || todas;
+        const marcar = !atual.includes(chave);
+        x.sgas = x.sgas.map((l, j) => {
+          const emp = l.empresas || todas;
+          if (j === i) return { ...l, empresas: marcar ? [...emp, chave] : emp.filter((k) => k !== chave) };
+          return marcar ? { ...l, empresas: emp.filter((k) => k !== chave) } : l;
+        });
+        return x;
+      });
+    }
+
+    async function salvar() {
+      setErro(null);
+      if (!a.userToken) return setErro('Informe o seu token do GLPI.');
+      const logins = a.sgas.filter((l) => l.usuario || l.senha);
+      if (!logins.length) return setErro('Informe ao menos um login do SGA.');
+      if (logins.some((l) => !l.usuario || !l.senha)) return setErro('Cada login do SGA precisa de usuário e senha.');
+      if (logins.some((l) => l.empresas && !l.empresas.length)) return setErro('Cada login do SGA precisa de ao menos uma empresa marcada.');
+      if (!a.crm.usuario || !a.crm.senha) return setErro('Informe o usuário e a senha do PowerCRM.');
+      setTestando(true);
+      try {
+        const r = await api('/api/glpi/testar', { glpi: { userToken: a.userToken } });
+        const novo = { ...a, sgas: logins.map((l) => ({ ...l, empresas: l.empresas || todas })), pronto: true, nomeGlpi: r.usuario.nome };
+        gravar(KEY_ACESSOS, novo);
+        aoSalvar(novo);
+      } catch (err) {
+        setErro(`O GLPI não aceitou o token: ${err.message}`);
+      } finally {
+        setTestando(false);
+      }
+    }
+
+    return e('div', { style: { maxWidth: 560, margin: '30px auto 0', ...S.card, gap: 14, padding: 22 } }, [
+      e('div', { key: 'h' }, [
+        e('div', { key: 't', style: { fontWeight: 600, fontSize: 16 } }, 'Acessos para rodar os chamados'),
+        e('div', { key: 's', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 4, lineHeight: 1.5 } }, 'Ficam salvos só neste navegador. Quem é dono do token é quem aprova: ao rodar, o chamado fica atribuído a essa pessoa.'),
+      ]),
+      campo('Seu token de usuário do GLPI', inp(a.userToken, (v) => mudar((x) => ((x.userToken = v.trim()), x)), { type: 'password', autoComplete: 'new-password', placeholder: 'Minhas configurações → Chaves de acesso remoto' })),
+      e('div', { key: 'sga-t', style: { ...S.label, marginBottom: -6 } }, 'Logins do SGA (cada um com as empresas em que funciona)'),
+      ...a.sgas.map((l, i) =>
+        e('div', { key: 'sga' + i, style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg)' } }, [
+          e('div', { key: 'r', style: { display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' } }, [
+            campo('Usuário do SGA', inp(l.usuario, (v) => mudar((x) => ((x.sgas[i].usuario = v), x))), 'su'),
+            campo('Senha do SGA', inp(l.senha, (v) => mudar((x) => ((x.sgas[i].senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'ss'),
+            a.sgas.length > 1
+              ? e('button', { key: 'rm', style: { ...S.link, color: 'var(--error)', marginBottom: 10 }, onClick: () => mudar((x) => ((x.sgas = x.sgas.filter((_, j) => j !== i)), x)) }, 'Remover')
+              : e('span', { key: 'rm' }),
+          ]),
+          e('div', { key: 'emp', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, empresas.map((emp) => {
+            const sel = (l.empresas || todas).includes(emp.chave);
+            return e('button', { key: emp.chave, style: S.chip(sel), onClick: () => alternarEmpresa(i, emp.chave) }, emp.nome);
+          })),
+        ])
+      ),
+      e('button', { key: 'sga-add', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => mudar((x) => (x.sgas.push({ usuario: '', senha: '', empresas: [] }), x)) }, '+ Adicionar outro login do SGA'),
+      e('div', { key: 'crm', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } }, [
+        campo('Usuário (e-mail) do PowerCRM', inp(a.crm.usuario, (v) => mudar((x) => ((x.crm.usuario = v), x))), 'cu'),
+        campo('Senha do PowerCRM', inp(a.crm.senha, (v) => mudar((x) => ((x.crm.senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'cs'),
+      ]),
+      campo('Senha padrão dos novos usuários no SGA (Cadastro de usuário)', inp(a.senhaPadrao, (v) => mudar((x) => ((x.senhaPadrao = v), x)), { type: 'password', autoComplete: 'new-password' }), 'sp'),
+      erro ? e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
+      e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
+        e('button', { key: 'ok', style: { ...S.btnPrim, flex: 1 }, disabled: testando, onClick: salvar }, testando ? 'Conferindo o token…' : 'Salvar e ver os chamados'),
+        aoCancelar ? e('button', { key: 'c', style: S.btnSec, onClick: aoCancelar }, 'Cancelar') : null,
+      ]),
+    ]);
+  }
+
+  // ---------- Aba ----------
+  function ChamadosView() {
+    const [acessos, setAcessos] = useState(acessosIniciais);
+    const [editando, setEditando] = useState(false);
+    const [lista, setLista] = useState({ carregando: false, erro: null, itens: [], usuario: null, outros: 0, totalAbertos: 0, perfis: [], em: null });
+    const [dispensados, setDispensados] = useState(() => ler(KEY_DISPENSADOS, []));
+    const [verOutros, setVerOutros] = useState(false);
+    const [modoTeste, setModoTeste] = useState(() => ler(KEY_MODO_TESTE, true));
+    const [escolhas, setEscolhas] = useState({}); // id -> { dataInicial, dataFinal, roleId, loginSga, empresasCrm }
+    const [confirmando, setConfirmando] = useState(null);
+    // várias execuções ao mesmo tempo: jobId -> { jobId, ids, linhas, fim }
+    const [execucoes, setExecucoes] = useState({});
+    const [resultados, setResultados] = useState({});
+    const [mensagensGerais, setMensagensGerais] = useState([]);
+    const [logsAbertos, setLogsAbertos] = useState({});
+    const [confirmandoTodos, setConfirmandoTodos] = useState(false);
+    const fontesRef = useRef(new Map());
+    const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
+    const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
+    const pronto = !!acessos.pronto && !editando;
+
+    const buscar = useCallback(async () => {
+      if (!acessos.userToken) return;
+      setLista((l) => ({ ...l, carregando: true, erro: null }));
+      try {
+        const d = await api('/api/chamados', { glpi: { userToken: acessos.userToken } });
+        setLista({ carregando: false, erro: null, itens: d.itens, usuario: d.usuario, outros: d.outros, totalAbertos: d.totalAbertos, perfis: d.perfis || [], em: new Date() });
+      } catch (err) {
+        setLista((l) => ({ ...l, carregando: false, erro: err.message }));
+      }
+    }, [acessos.userToken]);
+
+    // puxa ao entrar e de 2 em 2 minutos (menos durante uma execução)
+    useEffect(() => {
+      if (!pronto) return undefined;
+      buscar();
+      const t = setInterval(() => {
+        if (!fontesRef.current.size) buscar();
+      }, 120000);
+      return () => clearInterval(t);
+    }, [pronto, buscar]);
+    useEffect(() => () => fontesRef.current.forEach((f) => f.close()), []);
+
+    const escolha = (item) => {
+      const atual = escolhas[item.id] || {};
+      return {
+        dataInicial: atual.dataInicial || (item.periodo && item.periodo.dataInicial),
+        dataFinal: atual.dataFinal || (item.periodo && item.periodo.dataFinal),
+        roleId: atual.roleId || '',
+        loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
+        empresasCrm: atual.empresasCrm || (item.associacaoUsuario && item.associacaoUsuario.empresasCrm.length === 1 ? item.associacaoUsuario.empresasCrm : []),
+      };
+    };
+    const mudarEscolha = (id, campos) => setEscolhas((x) => ({ ...x, [id]: { ...(x[id] || {}), ...campos } }));
+
+    /** O que ainda falta escolher no card pra poder rodar. */
+    function falta(item) {
+      if (item.altStatus) {
+        const precisaSga = item.altStatus.bases.some((b) => b.temSga);
+        if (precisaSga && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
+          return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
+        }
+        return null;
+      }
+      if (item.tipo === 'fechamento') {
+        return item.empresa && !loginDaEmpresa(acessos.sgas, item.empresa.chave) ? `Marque ${item.empresa.nome} em um login do SGA (Acessos)` : null;
+      }
+      if (item.tipo !== 'cadastro_usuario') return null;
+      const c = escolha(item);
+      if (item.usuario.sistema === 'SGA' && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
+        return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
+      }
+      if (!c.roleId) return 'Escolha o perfil';
+      if (item.usuario.sistema === 'SGA' && !c.loginSga.trim()) return 'Informe o login do SGA';
+      if (item.usuario.sistema === 'SGA' && !acessos.senhaPadrao) return 'Configure a senha padrão em Acessos';
+      if (item.usuario.sistema === 'CRM' && !c.empresasCrm.length) return 'Escolha a base do PowerCRM';
+      return null;
+    }
+
+    async function rodar(itensParaRodar) {
+      setConfirmando(null);
+      setConfirmandoTodos(false);
+      const ids = itensParaRodar.map((x) => x.id);
+      try {
+        const d = await api('/api/executar', {
+          glpi: { userToken: acessos.userToken },
+          sgas: acessos.sgas,
+          crm: acessos.crm,
+          senhaPadrao: acessos.senhaPadrao,
+          modoTeste,
+          itens: itensParaRodar.map((item) => {
+            const c = escolha(item);
+            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm };
+          }),
+        });
+        const jobId = d.jobId;
+        const mudar = (fn) => setExecucoes((ex) => (ex[jobId] ? { ...ex, [jobId]: fn(ex[jobId]) } : ex));
+        setExecucoes((ex) => ({ ...ex, [jobId]: { jobId, ids, linhas: [], fim: null } }));
+        const fonte = new EventSource(`${SERVICO}/api/logs/${jobId}`);
+        fontesRef.current.set(jobId, fonte);
+        const fechar = () => {
+          fonte.close();
+          fontesRef.current.delete(jobId);
+        };
+        fonte.onmessage = (ev) => {
+          const p = JSON.parse(ev.data);
+          if (p.type === 'log') mudar((x) => ({ ...x, linhas: [...x.linhas, p.msg].slice(-400) }));
+          else if (p.type === 'resultado') setResultados((r) => ({ ...r, [p.item.id]: p.item }));
+          else if (p.type === 'done') {
+            fechar();
+            mudar((x) => ({ ...x, fim: p }));
+            if (p.mensagensGerais && p.mensagensGerais.length) setMensagensGerais((m) => [...p.mensagensGerais, ...m].slice(0, 10));
+            if (!fontesRef.current.size) buscar();
+          }
+        };
+        fonte.onerror = () => {
+          if (fonte.readyState === EventSource.CLOSED) {
+            fechar();
+            mudar((x) => ({ ...x, fim: x.fim || { error: 'conexão com o serviço caiu' } }));
+          }
+        };
+      } catch (err) {
+        setResultados((r) => ({ ...r, ...Object.fromEntries(ids.map((id) => [id, { ok: false, status: 'erro', texto: `Não iniciou: ${err.message}` }])) }));
+      }
+    }
+
+    function dispensar(id, sim) {
+      const novo = sim ? [...new Set([...dispensados, id])] : dispensados.filter((x) => x !== id);
+      setDispensados(novo);
+      gravar(KEY_DISPENSADOS, novo);
+    }
+
+    if (!pronto) {
+      return e('div', { style: { padding: '28px 24px 96px' } }, e(TelaAcessos, {
+        inicial: acessos,
+        aoSalvar: (novo) => { setAcessos(novo); setEditando(false); },
+        aoCancelar: acessos.pronto ? () => setEditando(false) : null,
+      }));
+    }
+
+    // ---------- card de um chamado ----------
+    function card(item, i) {
+      const res = resultados[item.id];
+      const execEste = execDoChamado(item.id);
+      const rodandoEste = !!execEste;
+      const c = escolha(item);
+      const pendente = item.problemas.length ? null : falta(item);
+      const pode = !item.problemas.length && !pendente;
+
+      let detalhes = null;
+      if (item.tipo === 'fechamento' && item.periodo) {
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 6 } }, [
+          e('div', { key: 'p' }, [e('strong', { key: 's' }, item.periodo.rotulo), e('span', { key: 'o', style: { color: 'var(--muted)' } }, ' · ' + item.periodo.origem)]),
+          e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
+            e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
+          )),
+        ]);
+      } else if (item.tipo === 'cadastro_consultor' && item.consultor) {
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+          e('strong', { key: 'n' }, item.consultor.nome || '?'),
+          e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${item.consultor.cpfMascarado || '?'} · ${item.consultor.email || 'sem e-mail'}`),
+          e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || '?')),
+        ]);
+      } else if (item.altStatus && item.pessoa) {
+        const p = item.pessoa;
+        const sga = item.altStatus.bases.some((b) => b.temSga);
+        const crm = item.altStatus.bases.filter((b) => b.temPowercrm).map((b) => b.label);
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+          e('strong', { key: 'n' }, p.nome || '?'),
+          e('div', { key: 'b', style: { color: p.busca === 'CPF' ? 'var(--muted)' : 'var(--warn)' } }, p.busca === 'CPF' ? `Busca pelo CPF ${p.cpfMascarado}` : 'Busca pelo nome (o chamado não tem CPF)'),
+          e('div', { key: 'q', style: { color: 'var(--muted)' } }, item.altStatus.qual === 'usuario' ? 'Colaborador interno' : 'Consultor/voluntário'),
+          e('div', { key: 's' }, [sga ? 'SGA: inativar' : null, crm.length ? `PowerCRM (${crm.join(', ')}): bloquear` : null].filter(Boolean).join(' · ')),
+          p.outrosSistemas ? e('div', { key: 'o', style: { color: 'var(--warn)', fontSize: 12 } }, 'Cita chats/outros sistemas: ficam fora (só SGA e CRM); vai como observação na solução.') : null,
+        ]);
+      } else if (item.tipo === 'cadastro_usuario' && item.usuario) {
+        const u = item.usuario;
+        const bases = (item.associacaoUsuario && item.associacaoUsuario.empresasCrm) || [];
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          e('div', { key: 'i' }, [
+            e('span', { key: 's', style: S.tag(u.sistema === 'SGA' ? '#3B82F6' : '#F5514D') }, u.sistema === 'CRM' ? 'PowerCRM' : u.sistema),
+            ' ',
+            e('strong', { key: 'n' }, u.nomeCadastro || u.nome || '?'), // como vai ficar cadastrado ("ARX - ...")
+            e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || '?'} · ${u.email || 'sem e-mail'}`),
+          ]),
+          e('select', { key: 'perfil', value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
+            e('option', { key: '', value: '' }, 'Perfil (departamento · role)…'),
+            ...lista.perfis.map((p) => e('option', { key: p.id, value: p.id }, p.nome)),
+          ]),
+          u.sistema === 'SGA' ? e('div', { key: 'login' }, [
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Login no SGA'),
+            e('input', { key: 'i', value: c.loginSga, onChange: (ev) => mudarEscolha(item.id, { loginSga: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
+          ]) : null,
+          u.sistema === 'CRM' && bases.length > 1 ? e('div', { key: 'bases' }, [
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Base do PowerCRM'),
+            e('div', { key: 'c', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, bases.map((b) => {
+              const sel = c.empresasCrm.includes(b);
+              return e('button', { key: b, style: S.chip(sel), onClick: () => mudarEscolha(item.id, { empresasCrm: sel ? c.empresasCrm.filter((x) => x !== b) : [...c.empresasCrm, b] }) }, b);
+            })),
+          ]) : null,
+        ]);
+      }
+
+      let rodape;
+      if (res) {
+        rodape = e('div', { key: 'res', style: { borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 12.5 } }, [
+          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' ? 'var(--warn)' : 'var(--accent)' } },
+            res.status === 'teste'
+              ? `Teste: ${res.ok ? 'daria certo' : 'daria erro'}`
+              : res.status === 'concluido'
+                ? 'Solucionado no GLPI'
+                : res.status === 'nao_rodou'
+                  ? 'Não rodou (falta configurar)'
+                  : 'Erro: devolutiva no chamado (pendente)'),
+          e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
+        ]);
+      } else if (rodandoEste) {
+        rodape = e('div', { key: 'rod', style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--muted)' } }, [
+          e('span', { key: 'sp', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14)),
+          e('span', { key: 't', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, (execEste.linhas[execEste.linhas.length - 1] || 'Rodando…').replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '')),
+        ]);
+      } else if (confirmando === item.id) {
+        rodape = e('div', { key: 'conf', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar de verdade? O chamado fica atribuído a você e é solucionado no GLPI.'),
+          e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
+            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item]) }, 'Sim, rodar'),
+            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => setConfirmando(null) }, 'Cancelar'),
+          ]),
+        ]);
+      } else {
+        const bloqueado = !pode;
+        rodape = e('div', { key: 'btns', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+          pendente ? e('div', { key: 'f', style: { fontSize: 12, color: 'var(--warn)' } }, pendente) : null,
+          e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
+            e('button', { key: 'r', disabled: bloqueado, style: { ...S.btnPrim, flex: 1, opacity: bloqueado ? 0.45 : 1, cursor: bloqueado ? 'not-allowed' : 'pointer' }, onClick: () => setConfirmando(item.id) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, 'Rodar')]),
+            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => dispensar(item.id, !dispensados.includes(item.id)) }, dispensados.includes(item.id) ? 'Voltar pra lista' : 'Não rodar'),
+          ]),
+        ]);
+      }
+
+      return e('div', { key: item.id, style: { ...S.card, animationDelay: Math.min(i, 10) * 35 + 'ms', borderColor: rodandoEste ? 'var(--accent)' : 'var(--border)' } }, [
+        e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
+          e('span', { key: 'tipo', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+          e('a', { key: 'n', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
+        ]),
+        e('div', { key: 'info' }, [
+          e('div', { key: 'a', style: { fontWeight: 600, fontSize: 14 } }, item.categoria || '(sem categoria)'),
+          e('div', { key: 't', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.4 } }, item.titulo),
+          e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5, marginTop: 4 } }, `${dataBr(item.abertoEm)} · ${item.requerente || ''} · ${item.statusNome}`),
+        ]),
+        detalhes,
+        item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
+        item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
+        rodape,
+      ]);
+    }
+
+    // ---------- tela de cards ----------
+    // Só aparece o que dá pra fazer; o resto (dados faltando, sistema não
+    // automatizado...) fica atrás de um link, pra análise manual.
+    const possiveis = lista.itens.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
+    const manuais = lista.itens.filter((i) => i.problemas.length);
+    const naoRodar = lista.itens.filter((i) => !i.problemas.length && dispensados.includes(i.id));
+    const visiveis = verOutros ? [...possiveis, ...naoRodar, ...manuais] : possiveis;
+    // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento
+    const prontosTodos = possiveis.filter((i) => !falta(i) && !resultados[i.id] && !execDoChamado(i.id));
+
+    const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
+      e('div', { key: 't' }, [
+        e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
+        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
+          lista.usuario
+            ? `${possiveis.length} pra rodar · ${lista.totalAbertos} abertos na entidade Sistemas · você aprova como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}`
+            : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
+      ]),
+      e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        e('label', { key: 'mt', style: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, padding: '7px 11px', borderRadius: 8, cursor: 'pointer', border: '1px dashed ' + (modoTeste ? 'var(--warn)' : 'var(--border)'), background: modoTeste ? 'var(--warn-tint)' : 'transparent', color: modoTeste ? 'var(--warn)' : 'var(--muted)' } }, [
+          e('input', { key: 'c', type: 'checkbox', checked: modoTeste, onChange: (ev) => { setModoTeste(ev.target.checked); gravar(KEY_MODO_TESTE, ev.target.checked); } }),
+          e('span', { key: 't' }, modoTeste ? 'Modo teste (não escreve no GLPI)' : 'Modo real'),
+        ]),
+        prontosTodos.length > 1
+          ? confirmandoTodos
+            ? e('div', { key: 'todos', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
+                e('span', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, `Rodar ${prontosTodos.length}${modoTeste ? ' em modo teste' : ' de verdade'}?`),
+                e('button', { key: 's', style: S.btnPrim, onClick: () => rodar(prontosTodos) }, 'Sim'),
+                e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoTodos(false) }, 'Cancelar'),
+              ])
+            : e('button', { key: 'todos', style: S.btnPrim, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
+          : null,
+        e('button', { key: 'cfg', style: S.btnSec, onClick: () => setEditando(true) }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
+        e('button', { key: 'rf', style: S.btnSec, disabled: lista.carregando, onClick: buscar }, [
+          e('span', { key: 'i', style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
+          e('span', { key: 't' }, lista.carregando ? 'Buscando…' : 'Atualizar'),
+        ]),
+      ]),
+    ]);
+
+    let corpo;
+    if (lista.erro) {
+      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui buscar os chamados: ' + lista.erro);
+    } else if (!lista.usuario && lista.carregando) {
+      corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
+    } else if (!visiveis.length) {
+      corpo = e('div', { key: 'vazio', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '50px 20px', color: 'var(--muted-soft)', textAlign: 'center' } }, [
+        Icon('Inbox', 34, 'var(--muted-soft)', 1.3),
+        e('div', { key: 't', style: { fontSize: 14 } }, 'Nenhum chamado pra rodar agora.'),
+        e('div', { key: 's', style: { fontSize: 12.5 } }, 'Aparecem aqui: Fechamento p/ cobrança, Cadastro de consultor, Cadastro de usuário (SGA/CRM), Inativação de consultor e Bloqueio de acesso da entidade Sistemas.'),
+      ]);
+    } else {
+      corpo = e('div', { key: 'grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 12 } }, visiveis.map(card));
+    }
+
+    const extras = [];
+    if (manuais.length || naoRodar.length) {
+      extras.push(e('button', { key: 'outros', style: { ...S.link, marginTop: 14 }, onClick: () => setVerOutros((v) => !v) },
+        verOutros ? 'Mostrar só os que dá pra rodar' : `Ver também ${manuais.length ? `${manuais.length} que precisam de análise manual` : ''}${manuais.length && naoRodar.length ? ' e ' : ''}${naoRodar.length ? `${naoRodar.length} marcados como "Não rodar"` : ''}`));
+    }
+    if (mensagensGerais.length) {
+      extras.push(e('div', { key: 'msgs', style: { ...S.card, marginTop: 18 } }, mensagensGerais.map((m, i) =>
+        e('div', { key: i }, [
+          e('div', { key: 'l', style: S.label }, 'Mensagem geral do fechamento ' + m.periodo),
+          e('textarea', { key: 't', readOnly: true, value: m.texto, rows: Math.min(18, m.texto.split('\n').length + 1), style: { ...S.input, resize: 'vertical' } }),
+          e('button', { key: 'c', style: { ...S.link, marginTop: 6 }, onClick: () => navigator.clipboard && navigator.clipboard.writeText(m.texto) }, 'Copiar'),
+        ])
+      )));
+    }
+    const listaExec = Object.values(execucoes).reverse();
+    if (listaExec.length) {
+      extras.push(e('div', { key: 'execs', style: { ...S.card, marginTop: 18, gap: 8 } }, [
+        e('div', { key: 'h', style: { fontWeight: 600, fontSize: 13.5 } }, `Execuções${rodandoAlgo ? ` · ${listaExec.filter((x) => !x.fim).length} rodando` : ''}`),
+        ...listaExec.map((x) => {
+          const aberto = !!logsAbertos[x.jobId];
+          return e('div', { key: x.jobId, style: { borderTop: '1px solid var(--border)', paddingTop: 8 } }, [
+            e('div', { key: 'r', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
+              e('div', { key: 't', style: { fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 } }, [
+                !x.fim ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 13)) : null,
+                e('span', { key: 'n' }, `${x.ids.map((id) => '#' + id).join(', ')} · ${x.fim ? (x.fim.error ? 'erro' : 'concluída') : 'rodando…'}`),
+              ]),
+              e('div', { key: 'b', style: { display: 'flex', gap: 12 } }, [
+                !x.fim ? e('button', { key: 'p', style: { ...S.link, color: 'var(--error)' }, onClick: () => fetch(`${SERVICO}/api/parar/${x.jobId}`, { method: 'POST' }).catch(() => {}) }, 'Parar') : null,
+                e('button', { key: 'v', style: S.link, onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !aberto })) }, aberto ? 'Esconder log' : 'Ver log'),
+              ]),
+            ]),
+            aberto ? e('pre', { key: 'l', style: { margin: '8px 0 0', maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'pre-wrap', color: 'var(--muted)' } }, x.linhas.join('\n') || 'Aguardando…') : null,
+          ]);
+        }),
+      ]));
+    }
+
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, ...extras]);
+  }
+
+  window.ChamadosView = ChamadosView;
+})();

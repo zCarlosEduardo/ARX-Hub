@@ -82,6 +82,12 @@
     // mostra só o ícone. Guarda com quantas abas isso aconteceu e só volta a
     // mostrar o nome quando uma aba é fechada (evita ficar piscando).
     const [panelCompactAt, setPanelCompactAt] = useState(null);
+    // Aba fixa "Chamados" (chamados.js): fica ao lado do Painel; só monta na
+    // primeira vez que é aberta (aí começa a puxar os chamados do GLPI).
+    const [chamadosAberto, setChamadosAberto] = useState(false);
+    const [chamadosMontado, setChamadosMontado] = useState(false);
+    const abrirPainel = () => { setActiveTabId(null); setChamadosAberto(false); };
+    const abrirChamados = () => { setActiveTabId(null); setChamadosAberto(true); setChamadosMontado(true); };
 
     // ---- GLPI quick-ticket widget ----
     const [glpiOpen, setGlpiOpen] = useState(false);
@@ -623,10 +629,15 @@
     const header = e('div', { style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
       e('div', { key: 'left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
         e('button', {
-          key: 'panel', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: () => setActiveTabId(null),
+          key: 'panel', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
           title: 'Painel', 'aria-label': 'Painel',
-          style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (activeTabId === null ? 'var(--accent)' : 'transparent') + ';color:' + (activeTabId === null ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
+          style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (activeTabId === null && !chamadosAberto ? 'var(--accent)' : 'transparent') + ';color:' + (activeTabId === null && !chamadosAberto ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('LayoutDashboard', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Painel')]),
+        e('button', {
+          key: 'chamados', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirChamados,
+          title: 'Chamados do GLPI', 'aria-label': 'Chamados',
+          style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (activeTabId === null && chamadosAberto ? 'var(--accent)' : 'transparent') + ';color:' + (activeTabId === null && chamadosAberto ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
+        }, [Icon('Headset', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Chamados')]),
         openTabItems.length ? e('span', { key: 'sep', className: 'tabs-sep' }) : null,
         navScroll,
       ]),
@@ -1076,7 +1087,10 @@
     return e('div', { style: sx("height:100vh;width:100%;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:var(--font-sans);overflow:hidden") }, [
       header,
       e('div', { key: 'main', style: sx('flex:1;position:relative;overflow:hidden'), onClick: closeMenus }, [
-        e('div', { key: 'panel', style: { display: activeTabId === null ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
+        e('div', { key: 'panel', style: { display: activeTabId === null && !chamadosAberto ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
+        chamadosMontado && window.ChamadosView
+          ? e('div', { key: 'chamados', style: { display: activeTabId === null && chamadosAberto ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ChamadosView))
+          : null,
         ...viewerNodes,
       ]),
       modal,
