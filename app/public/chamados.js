@@ -106,6 +106,8 @@
         dataInicial: atual.dataInicial || (item.periodo && item.periodo.dataInicial),
         dataFinal: atual.dataFinal || (item.periodo && item.periodo.dataFinal),
         roleId: atual.roleId || '',
+        extrasAlt: atual.extrasAlt || (item.altStatus ? item.altStatus.secundarias.filter((b) => b.citada).map((b) => b.chave) : []),
+        baseCrm: atual.baseCrm !== undefined ? atual.baseCrm : (item.baseCrm && (item.baseCrm.pedida || item.baseCrm.principal)) || '',
         cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
         empresasCrm: atual.empresasCrm || (item.associacaoUsuario && item.associacaoUsuario.empresasCrm.length === 1 ? item.associacaoUsuario.empresasCrm : []),
@@ -153,7 +155,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, cooperativa: c.cooperativa || undefined };
+            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
           }),
         });
         const jobId = d.jobId;
@@ -231,16 +233,33 @@
                 item.cooperativa.exata ? e('div', { key: 'ok', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, 'O nome do chamado é igual ao do SGA.') : null,
               ])
             : e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || '?')),
+          item.baseCrm
+            ? e('div', { key: 'crm', style: { marginTop: 6 } }, [
+                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Base do PowerCRM'),
+                e('select', { key: 's', value: c.baseCrm, onChange: (ev) => mudarEscolha(item.id, { baseCrm: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } },
+                  item.baseCrm.opcoes.map((b, i) => e('option', { key: b, value: b }, i === 0 ? b + ' (principal)' : b))),
+                e('div', { key: 'n', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, item.baseCrm.pedida ? 'O chamado pede esta base.' : 'O chamado não diz a base: vale a principal.'),
+              ])
+            : null,
         ]);
       } else if (item.altStatus && item.pessoa) {
         const p = item.pessoa;
-        const sga = item.altStatus.bases.some((b) => b.temSga);
-        const crm = item.altStatus.bases.filter((b) => b.temPowercrm).map((b) => b.label);
+        const sec = item.altStatus.secundarias.map((b) => b.chave);
+        const sel = item.altStatus.todas.filter((b) => !sec.includes(b.chave) || c.extrasAlt.includes(b.chave)); // o que vai rodar
+        const sga = sel.some((b) => b.temSga);
+        const crm = sel.filter((b) => b.temPowercrm).map((b) => b.label);
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
           e('strong', { key: 'n' }, p.nome || '?'),
           e('div', { key: 'b', style: { color: p.busca === 'CPF' ? 'var(--muted)' : 'var(--warn)' } }, p.busca === 'CPF' ? `Busca pelo CPF ${p.cpfMascarado}` : 'Busca pelo nome (o chamado não tem CPF)'),
           e('div', { key: 'q', style: { color: 'var(--muted)' } }, item.altStatus.qual === 'usuario' ? 'Colaborador interno' : 'Consultor/voluntário'),
           e('div', { key: 's' }, [sga ? 'SGA: inativar' : null, crm.length ? `PowerCRM (${crm.join(', ')}): bloquear` : null].filter(Boolean).join(' · ')),
+          item.altStatus.secundarias.length ? e('div', { key: 'ex', style: { marginTop: 4 } }, [
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Também validar em (o chamado só cita as marcadas)'),
+            e('div', { key: 'c', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, item.altStatus.secundarias.map((b) => {
+              const marcada = c.extrasAlt.includes(b.chave);
+              return e('button', { key: b.chave, style: S.chip(marcada), onClick: () => mudarEscolha(item.id, { extrasAlt: marcada ? c.extrasAlt.filter((x) => x !== b.chave) : [...c.extrasAlt, b.chave] }) }, b.label);
+            })),
+          ]) : null,
           p.outrosSistemas ? e('div', { key: 'o', style: { color: 'var(--warn)', fontSize: 12 } }, 'Cita chats/outros sistemas: ficam fora (só SGA e CRM); vai como observação na solução.') : null,
         ]);
       } else if (item.tipo === 'cadastro_usuario' && item.usuario) {
