@@ -69,7 +69,7 @@
   }
   function horasMin(min) {
     if (!min) return '0 h';
-    if (min < 60) return `${min} min`;
+    if (min < 60) return `${Math.round(min * 10) / 10} min`;
     return (min / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
   }
   /** Topo "redondo" do eixo (4, 5, 10, 20, 25, 50...). */
