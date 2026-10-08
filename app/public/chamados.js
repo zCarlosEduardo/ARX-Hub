@@ -106,6 +106,7 @@
         dataInicial: atual.dataInicial || (item.periodo && item.periodo.dataInicial),
         dataFinal: atual.dataFinal || (item.periodo && item.periodo.dataFinal),
         roleId: atual.roleId || '',
+        cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
         empresasCrm: atual.empresasCrm || (item.associacaoUsuario && item.associacaoUsuario.empresasCrm.length === 1 ? item.associacaoUsuario.empresasCrm : []),
       };
@@ -123,6 +124,9 @@
       }
       if (item.tipo === 'fechamento') {
         return item.empresa && !loginDaEmpresa(acessos.sgas, item.empresa.chave) ? `Marque ${item.empresa.nome} em um login do SGA (Acessos)` : null;
+      }
+      if (item.tipo === 'cadastro_consultor') {
+        return item.cooperativa && !escolha(item).cooperativa ? `Escolha a cooperativa do SGA (o chamado diz "${item.cooperativa.informada}")` : null;
       }
       if (item.tipo !== 'cadastro_usuario') return null;
       const c = escolha(item);
@@ -149,7 +153,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm };
+            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, cooperativa: c.cooperativa || undefined };
           }),
         });
         const jobId = d.jobId;
@@ -214,7 +218,19 @@
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
           e('strong', { key: 'n' }, item.consultor.nome || '?'),
           e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${item.consultor.cpfMascarado || '?'} · ${item.consultor.email || 'sem e-mail'}`),
-          e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || '?')),
+          item.cooperativa
+            ? e('div', { key: 'k', style: { marginTop: 6 } }, [
+                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, `Cooperativa no SGA — o chamado diz "${item.cooperativa.informada}"`),
+                e('select', { key: 's', value: c.cooperativa, onChange: (ev) => mudarEscolha(item.id, { cooperativa: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
+                  e('option', { key: '', value: '' }, 'Escolha a cooperativa…'),
+                  item.cooperativa.sugestoes.length && !item.cooperativa.exata
+                    ? e('optgroup', { key: 'sug', label: 'Parecidas com o que o chamado diz' }, item.cooperativa.sugestoes.map((n) => e('option', { key: n, value: n }, n)))
+                    : null,
+                  e('optgroup', { key: 'todas', label: 'Todas do SGA' }, item.cooperativa.opcoes.map((n) => e('option', { key: n, value: n }, n))),
+                ]),
+                item.cooperativa.exata ? e('div', { key: 'ok', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, 'O nome do chamado é igual ao do SGA.') : null,
+              ])
+            : e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || '?')),
         ]);
       } else if (item.altStatus && item.pessoa) {
         const p = item.pessoa;
@@ -267,6 +283,9 @@
                   ? 'Não rodou (falta configurar)'
                   : 'Erro: devolutiva no chamado (pendente)'),
           e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
+          res.status !== 'concluido'
+            ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }) }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Ajustar e rodar novamente')])
+            : null,
         ]);
       } else if (rodandoEste) {
         rodape = e('div', { key: 'rod', style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--muted)' } }, [
