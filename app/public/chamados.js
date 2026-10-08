@@ -284,7 +284,7 @@
                   : 'Erro: devolutiva no chamado (pendente)'),
           e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
           res.status !== 'concluido'
-            ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }) }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Ajustar e rodar novamente')])
+            ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Rodar novamente')])
             : null,
         ]);
       } else if (rodandoEste) {
