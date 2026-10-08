@@ -6,6 +6,34 @@
   <title>ARX Hub</title>
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var d = document.documentElement;
+      function apply(t) {
+        t = t === 'dark' ? 'dark' : 'light';
+        d.setAttribute('data-theme', t);
+        try { localStorage.setItem('arx-tema', t); } catch (e) {}
+      }
+      var q = new URLSearchParams(location.search).get('theme'), s = null;
+      try { s = localStorage.getItem('arx-tema'); } catch (e) {}
+      apply(q || s || 'light');
+      // O sistema pai (ArxConnect) pode trocar o tema: postMessage({ type: 'arx-theme', theme: 'dark' | 'light' }).
+      window.addEventListener('message', function (ev) {
+        if (ev.data && ev.data.type === 'arx-theme') apply(ev.data.theme);
+      });
+    })();
+  </script>
+  <script>
+    // Repassa o tema recebido do sistema pai para as automações abertas em iframe.
+    (function () {
+      function post(f) {
+        try { f.contentWindow.postMessage({ type: 'arx-theme', theme: document.documentElement.getAttribute('data-theme') }, '*'); } catch (e) {}
+      }
+      document.addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'IFRAME') post(ev.target); }, true);
+      new MutationObserver(function () { document.querySelectorAll('iframe').forEach(post); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>
