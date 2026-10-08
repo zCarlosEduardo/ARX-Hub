@@ -51,7 +51,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -136,6 +136,9 @@
       }
       if (item.tipo === 'fechamento') {
         return item.empresa && !loginDaEmpresa(acessos.sgas, item.empresa.chave) ? `Marque ${item.empresa.nome} em um login do SGA (Acessos)` : null;
+      }
+      if (item.tipo === 'cadastro_modelo') {
+        return !item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave) ? `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)` : null;
       }
       if (item.tipo === 'cadastro_consultor') {
         return item.cooperativa && !escolha(item).cooperativa ? `Escolha a cooperativa do SGA (o chamado diz "${item.cooperativa.informada}")` : null;
@@ -240,6 +243,14 @@
           e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
             e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
           )),
+        ]);
+      } else if (item.tipo === 'cadastro_modelo' && item.modelo) {
+        const f = item.modelo.fipe;
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+          e('strong', { key: 'n' }, `FIPE ${item.modelo.codigoFipe}`),
+          f ? e('div', { key: 'm' }, `${f.marca} · ${f.modelo}`) : null,
+          f ? e('div', { key: 't', style: { color: 'var(--muted)' } }, `${f.tipoNome}${f.combustivel ? ' · ' + f.combustivel : ''} · cadastra só no SGA`) : null,
+          item.modelo.fipeErro ? e('div', { key: 'e', style: { color: 'var(--warn)' } }, 'Não consegui consultar a FIPE agora: ' + item.modelo.fipeErro) : null,
         ]);
       } else if (item.tipo === 'cadastro_consultor' && item.consultor) {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
