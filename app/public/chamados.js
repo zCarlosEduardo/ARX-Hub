@@ -13,6 +13,7 @@
   const Hub = window.ArxAcessosHub; // acessos.js: dono dos acessos do Hub
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
+  const KEY_AUTO = 'arxhub_chamados_auto'; // só o limite e os tipos; "ligado" nunca volta sozinho
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
 
   const ler = (k, padrao) => {
@@ -70,6 +71,15 @@
     const [mensagensGerais, setMensagensGerais] = useState([]);
     const [logsAbertos, setLogsAbertos] = useState({});
     const [confirmandoTodos, setConfirmandoTodos] = useState(false);
+    // Modo automático: com a chave ligada, roda sozinho os chamados prontos, até "limite" por vez
+    const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
+    const [confirmandoAuto, setConfirmandoAuto] = useState(false);
+    const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
+    const mudarAuto = (campos) => setAuto((a) => {
+      const n = { ...a, ...campos };
+      gravar(KEY_AUTO, { limite: n.limite, fora: n.fora });
+      return n;
+    });
     const fontesRef = useRef(new Map());
     const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
     const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
@@ -194,6 +204,21 @@
       setDispensados(novo);
       gravar(KEY_DISPENSADOS, novo);
     }
+
+    // Automático: a cada atualização da lista (e quando uma execução termina), pega até
+    // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
+    // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam
+    // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
+    useEffect(() => {
+      if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
+      const lote = lista.itens
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
+          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
+        .slice(0, auto.limite);
+      if (!lote.length) return;
+      lote.forEach((i) => autoRef.current.add(i.id));
+      rodar(lote);
+    }, [auto, pronto, lista.carregando, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
 
     if (!pronto) {
       return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
@@ -369,6 +394,37 @@
         e('label', { key: 'mt', style: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, padding: '7px 11px', borderRadius: 8, cursor: 'pointer', border: '1px dashed ' + (modoTeste ? 'var(--warn)' : 'var(--border)'), background: modoTeste ? 'var(--warn-tint)' : 'transparent', color: modoTeste ? 'var(--warn)' : 'var(--muted)' } }, [
           e('input', { key: 'c', type: 'checkbox', checked: modoTeste, onChange: (ev) => { setModoTeste(ev.target.checked); gravar(KEY_MODO_TESTE, ev.target.checked); } }),
           e('span', { key: 't' }, modoTeste ? 'Modo teste (não escreve no GLPI)' : 'Modo real'),
+        ]),
+        e('div', { key: 'auto', style: { display: 'flex', flexDirection: 'column', gap: 6, padding: '7px 11px', borderRadius: 8, border: '1px solid ' + (auto.ativo ? 'var(--accent)' : 'var(--border)'), fontSize: 12.5 } }, [
+          e('div', { key: 'l1', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--muted)' } }, [
+              e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
+                if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); }
+                else if (modoTeste) mudarAuto({ ativo: true });
+                else setConfirmandoAuto(true);
+              } }),
+              e('span', { key: 't' }, 'Modo automático'),
+            ]),
+            e('span', { key: 'a', style: { color: 'var(--muted)' } }, 'até'),
+            e('input', { key: 'n', type: 'number', min: 1, max: 20, value: auto.limite, onChange: (ev) => mudarAuto({ limite: Math.max(1, Math.min(20, Number(ev.target.value) || 1)) }), style: { ...S.input, width: 56, padding: '4px 6px', fontSize: 12.5 } }),
+            e('span', { key: 'b', style: { color: 'var(--muted)' } }, 'por vez'),
+          ]),
+          confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            e('span', { key: 'q', style: { color: 'var(--warn)' } }, `Ligar? Vai rodar DE VERDADE, até ${auto.limite} por vez, sem pedir confirmação.`),
+            e('button', { key: 's', style: S.btnPrim, onClick: () => { mudarAuto({ ativo: true }); setConfirmandoAuto(false); } }, 'Ligar'),
+            e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
+          ]) : null,
+          (() => {
+            const tipos = [...new Map(lista.itens.filter((i) => i.tipo).map((i) => [i.tipo, i.tipoNome])).entries()];
+            return tipos.length ? e('div', { key: 'tp', style: { display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' } }, [
+              e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Rodam sozinhos:'),
+              ...tipos.map(([tipo, nome]) => {
+                const marcado = !auto.fora.includes(tipo);
+                return e('button', { key: tipo, style: S.chip(marcado), onClick: () => mudarAuto({ fora: marcado ? [...auto.fora, tipo] : auto.fora.filter((x) => x !== tipo) }) }, nome);
+              }),
+            ]) : null;
+          })(),
+          auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: a cada atualização (2 min) roda os prontos, até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
         ]),
         prontosTodos.length > 1
           ? confirmandoTodos
