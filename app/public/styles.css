@@ -334,3 +334,10 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
   background: var(--hover-bg);
   color: var(--text);
 }
+
+/* Meus acessos (acessos.js): botão do cabeçalho e editor */
+.meus-acessos-btn { transition: border-color 0.15s, background 0.15s; }
+.meus-acessos-btn:hover { border-color: var(--border-hover) !important; background: var(--hover-bg-soft) !important; }
+@media (max-width: 1180px) { .meus-acessos-label { display: none; } }
+@media (max-width: 560px) { .acessos-editor .acessos-linha { grid-template-columns: minmax(0, 1fr) !important; } }
+

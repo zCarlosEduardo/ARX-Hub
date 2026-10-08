@@ -3,17 +3,16 @@
 // Quem faz o trabalho é o serviço chamados-glpi (porta 4013): ele lê o GLPI,
 // roda a automação (Relatórios SGA / Cadastro de voluntário / Cadastro de
 // colaborador), responde no chamado e registra no banco-central.
-// Endereço e App-Token do GLPI ficam no servidor; aqui cada pessoa informa só
-// o próprio token e os logins do SGA/PowerCRM (salvos só neste navegador).
+// Endereço e App-Token do GLPI ficam no servidor; o token de cada pessoa e os
+// logins do SGA/PowerCRM vêm de "Meus acessos" (acessos.js, só neste navegador).
 (function () {
   const e = React.createElement;
   const { useState, useEffect, useRef, useCallback } = React;
   const { Icon } = window.Icons;
 
-  const KEY_ACESSOS = 'arxhub_chamados_acessos_v2';
+  const Hub = window.ArxAcessosHub; // acessos.js: dono dos acessos do Hub
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
-  const KEY_TOKEN_HUB = 'arxhub_glpi_user_token'; // o mesmo token do "Abrir chamado" (de cada pessoa, salvo no navegador dela)
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
 
   const ler = (k, padrao) => {
@@ -53,115 +52,12 @@
   };
   const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6' };
 
-  const campo = (rotulo, filho, key) => e('div', { key: key || rotulo }, [e('div', { key: 'l', style: S.label }, rotulo), filho]);
-  const inp = (valor, onChange, extra = {}) => e('input', { className: 'field-input', value: valor || '', onChange: (ev) => onChange(ev.target.value), style: S.input, ...extra });
-
-  function acessosIniciais() {
-    const a = ler(KEY_ACESSOS, null);
-    let tokenHub = '';
-    try {
-      tokenHub = localStorage.getItem(KEY_TOKEN_HUB) || '';
-    } catch {
-      // ignora
-    }
-    const base = a || { userToken: tokenHub, crm: { usuario: '', senha: '' }, senhaPadrao: '', pronto: false };
-    // vários logins do SGA (a mesma senha não vale em todo SGA); `empresas: null` = todas
-    if (!Array.isArray(base.sgas)) base.sgas = base.sga && base.sga.usuario ? [{ ...base.sga, empresas: null }] : [{ usuario: '', senha: '', empresas: null }];
-    delete base.sga;
-    return base;
-  }
-
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
-  const loginDaEmpresa = (sgas, chave) => sgas.find((l) => l.usuario && l.senha && (!Array.isArray(l.empresas) || l.empresas.includes(chave))) || null;
-
-  // ---------- Tela de acessos (primeira vez / botão "Acessos") ----------
-  function TelaAcessos({ inicial, aoSalvar, aoCancelar }) {
-    const [a, setA] = useState(() => JSON.parse(JSON.stringify(inicial)));
-    const [erro, setErro] = useState(null);
-    const [testando, setTestando] = useState(false);
-    const [empresas, setEmpresas] = useState([]);
-    const mudar = (fn) => setA((x) => fn(JSON.parse(JSON.stringify(x))));
-    const todas = empresas.map((x) => x.chave);
-
-    useEffect(() => {
-      api('/api/opcoes').then((o) => setEmpresas(o.empresasSga || [])).catch(() => {});
-    }, []);
-
-    // marcar uma empresa num login tira ela dos outros (cada empresa usa um login só)
-    function alternarEmpresa(i, chave) {
-      mudar((x) => {
-        const atual = x.sgas[i].empresas || todas;
-        const marcar = !atual.includes(chave);
-        x.sgas = x.sgas.map((l, j) => {
-          const emp = l.empresas || todas;
-          if (j === i) return { ...l, empresas: marcar ? [...emp, chave] : emp.filter((k) => k !== chave) };
-          return marcar ? { ...l, empresas: emp.filter((k) => k !== chave) } : l;
-        });
-        return x;
-      });
-    }
-
-    async function salvar() {
-      setErro(null);
-      if (!a.userToken) return setErro('Informe o seu token do GLPI.');
-      const logins = a.sgas.filter((l) => l.usuario || l.senha);
-      if (!logins.length) return setErro('Informe ao menos um login do SGA.');
-      if (logins.some((l) => !l.usuario || !l.senha)) return setErro('Cada login do SGA precisa de usuário e senha.');
-      if (logins.some((l) => l.empresas && !l.empresas.length)) return setErro('Cada login do SGA precisa de ao menos uma empresa marcada.');
-      if (!a.crm.usuario || !a.crm.senha) return setErro('Informe o usuário e a senha do PowerCRM.');
-      setTestando(true);
-      try {
-        const r = await api('/api/glpi/testar', { glpi: { userToken: a.userToken } });
-        const novo = { ...a, sgas: logins.map((l) => ({ ...l, empresas: l.empresas || todas })), pronto: true, nomeGlpi: r.usuario.nome };
-        gravar(KEY_ACESSOS, novo);
-        aoSalvar(novo);
-      } catch (err) {
-        setErro(`O GLPI não aceitou o token: ${err.message}`);
-      } finally {
-        setTestando(false);
-      }
-    }
-
-    return e('div', { style: { maxWidth: 560, margin: '30px auto 0', ...S.card, gap: 14, padding: 22 } }, [
-      e('div', { key: 'h' }, [
-        e('div', { key: 't', style: { fontWeight: 600, fontSize: 16 } }, 'Acessos para rodar os chamados'),
-        e('div', { key: 's', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 4, lineHeight: 1.5 } }, 'Ficam salvos só neste navegador. Quem é dono do token é quem aprova: ao rodar, o chamado fica atribuído a essa pessoa.'),
-      ]),
-      campo('Seu token de usuário do GLPI', inp(a.userToken, (v) => mudar((x) => ((x.userToken = v.trim()), x)), { type: 'password', autoComplete: 'new-password', placeholder: 'Minhas configurações → Chaves de acesso remoto' })),
-      e('div', { key: 'sga-t', style: { ...S.label, marginBottom: -6 } }, 'Logins do SGA (cada um com as empresas em que funciona)'),
-      ...a.sgas.map((l, i) =>
-        e('div', { key: 'sga' + i, style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg)' } }, [
-          e('div', { key: 'r', style: { display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' } }, [
-            campo('Usuário do SGA', inp(l.usuario, (v) => mudar((x) => ((x.sgas[i].usuario = v), x))), 'su'),
-            campo('Senha do SGA', inp(l.senha, (v) => mudar((x) => ((x.sgas[i].senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'ss'),
-            a.sgas.length > 1
-              ? e('button', { key: 'rm', style: { ...S.link, color: 'var(--error)', marginBottom: 10 }, onClick: () => mudar((x) => ((x.sgas = x.sgas.filter((_, j) => j !== i)), x)) }, 'Remover')
-              : e('span', { key: 'rm' }),
-          ]),
-          e('div', { key: 'emp', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, empresas.map((emp) => {
-            const sel = (l.empresas || todas).includes(emp.chave);
-            return e('button', { key: emp.chave, style: S.chip(sel), onClick: () => alternarEmpresa(i, emp.chave) }, emp.nome);
-          })),
-        ])
-      ),
-      e('button', { key: 'sga-add', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => mudar((x) => (x.sgas.push({ usuario: '', senha: '', empresas: [] }), x)) }, '+ Adicionar outro login do SGA'),
-      e('div', { key: 'crm', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } }, [
-        campo('Usuário (e-mail) do PowerCRM', inp(a.crm.usuario, (v) => mudar((x) => ((x.crm.usuario = v), x))), 'cu'),
-        campo('Senha do PowerCRM', inp(a.crm.senha, (v) => mudar((x) => ((x.crm.senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'cs'),
-      ]),
-      campo('Senha padrão dos novos usuários no SGA (Cadastro de usuário)', inp(a.senhaPadrao, (v) => mudar((x) => ((x.senhaPadrao = v), x)), { type: 'password', autoComplete: 'new-password' }), 'sp'),
-      erro ? e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
-        e('button', { key: 'ok', style: { ...S.btnPrim, flex: 1 }, disabled: testando, onClick: salvar }, testando ? 'Conferindo o token…' : 'Salvar e ver os chamados'),
-        aoCancelar ? e('button', { key: 'c', style: S.btnSec, onClick: aoCancelar }, 'Cancelar') : null,
-      ]),
-    ]);
-  }
+  const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
 
   // ---------- Aba ----------
   function ChamadosView() {
-    const [acessos, setAcessos] = useState(acessosIniciais);
-    const [editando, setEditando] = useState(false);
+    const [acessos, setAcessos] = useState(Hub.ler);
     const [lista, setLista] = useState({ carregando: false, erro: null, itens: [], usuario: null, outros: 0, totalAbertos: 0, perfis: [], em: null });
     const [dispensados, setDispensados] = useState(() => ler(KEY_DISPENSADOS, []));
     const [verOutros, setVerOutros] = useState(false);
@@ -177,7 +73,10 @@
     const fontesRef = useRef(new Map());
     const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
     const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
-    const pronto = !!acessos.pronto && !editando;
+    const pronto = !!acessos.pronto;
+
+    // salvo em "Meus acessos" (cabeçalho), no botão "Acessos" daqui ou em outra aba
+    useEffect(() => Hub.aoMudar(setAcessos), []);
 
     const buscar = useCallback(async () => {
       if (!acessos.userToken) return;
@@ -244,7 +143,7 @@
       try {
         const d = await api('/api/executar', {
           glpi: { userToken: acessos.userToken },
-          sgas: acessos.sgas,
+          sgas: acessos.sgas.filter((l) => l.usuario && l.senha).map((l) => ({ ...l, empresas: Hub.chavesDoLogin(l) })),
           crm: acessos.crm,
           senhaPadrao: acessos.senhaPadrao,
           modoTeste,
@@ -291,11 +190,7 @@
     }
 
     if (!pronto) {
-      return e('div', { style: { padding: '28px 24px 96px' } }, e(TelaAcessos, {
-        inicial: acessos,
-        aoSalvar: (novo) => { setAcessos(novo); setEditando(false); },
-        aoCancelar: acessos.pronto ? () => setEditando(false) : null,
-      }));
+      return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
     }
 
     // ---------- card de um chamado ----------
@@ -446,7 +341,7 @@
               ])
             : e('button', { key: 'todos', style: S.btnPrim, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
           : null,
-        e('button', { key: 'cfg', style: S.btnSec, onClick: () => setEditando(true) }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
+        e('button', { key: 'cfg', style: S.btnSec, onClick: () => Hub.abrirEditor() }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
         e('button', { key: 'rf', style: S.btnSec, disabled: lista.carregando, onClick: buscar }, [
           e('span', { key: 'i', style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
           e('span', { key: 't' }, lista.carregando ? 'Buscando…' : 'Atualizar'),
