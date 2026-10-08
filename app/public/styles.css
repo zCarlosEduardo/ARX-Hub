@@ -341,3 +341,41 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
 @media (max-width: 1180px) { .meus-acessos-label { display: none; } }
 @media (max-width: 560px) { .acessos-editor .acessos-linha { grid-template-columns: minmax(0, 1fr) !important; } }
 
+/* ---------- Aba Resultados (resultados.js) ---------- */
+.res-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.res-legenda { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.res-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.res-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-right: 6px; vertical-align: -1px; }
+.res-legenda .res-sw { margin-right: 0; }
+/* concluído = verde cheio; erro = vermelho hachurado (não depende só da cor) */
+.res-ok { background: var(--accent); }
+.res-erro { background: repeating-linear-gradient(135deg, var(--error) 0 3px, color-mix(in srgb, var(--error) 55%, var(--card)) 3px 5px); }
+.res-grafico { display: flex; gap: 8px; }
+.res-eixo { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: var(--muted-soft); text-align: right; min-width: 22px; transform: translateY(-6px); font-variant-numeric: tabular-nums; }
+.res-area { flex: 1; min-width: 0; }
+.res-plot { position: relative; display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid var(--border-hover); }
+.res-grade { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border); pointer-events: none; }
+.res-col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 6px 6px 0 0; outline: none; cursor: default; }
+.res-col:hover, .res-col.foco { background: var(--hover-bg-soft); }
+.res-col:focus-visible { box-shadow: 0 0 0 2px var(--ring-border) inset; }
+.res-pilha { width: 70%; max-width: 34px; display: flex; flex-direction: column; gap: 2px; }
+.res-seg { width: 100%; }
+.res-pilha > .res-seg:first-child { border-radius: 4px 4px 0 0; }
+.res-tip { position: absolute; top: 4px; z-index: 2; pointer-events: none; background: var(--popover); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 9px 11px; font-size: 12px; line-height: 1.55; white-space: nowrap; color: var(--text); }
+.res-x { display: flex; gap: 4px; margin-top: 6px; }
+.res-x span { flex: 1; min-width: 0; text-align: center; font-size: 10.5px; color: var(--muted-soft); white-space: nowrap; overflow: visible; }
+.res-barrinha { height: 6px; border-radius: 3px; background: var(--secondary); overflow: hidden; width: 100%; }
+.res-barrinha > div { height: 100%; border-radius: 3px; }
+.res-taxa { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.res-taxa .res-barrinha { width: 54px; }
+.res-taxa > span:last-child { min-width: 42px; }
+.res-tabela { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.res-tabela th { font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 0 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.res-tabela td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.res-tabela td:first-child { text-align: left; white-space: normal; }
+.res-tabela th:first-child, .res-tabela td:first-child { padding-left: 0; }
+.res-tabela th:last-child, .res-tabela td:last-child { padding-right: 0; }
+.res-tabela tbody tr:last-child td { border-bottom: none; }
+.res-tabela tbody tr:hover td { background: var(--hover-bg-soft); }
+@media (max-width: 600px) { .res-x span.res-x-sec { visibility: hidden; } .res-eixo { min-width: 16px; } }
+
