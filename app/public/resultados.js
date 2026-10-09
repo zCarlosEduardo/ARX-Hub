@@ -192,6 +192,7 @@
     const [tipoSel, setTipoSel] = useState('');
     const [listaAssoc, setListaAssoc] = useState([]);
     const [ordem, setOrdem] = useState({ col: 'erro', desc: true });
+    const [verRes, setVerRes] = useState(null); // chamado aberto no painel (o link direto do GLPI cai em "sessão expirou")
 
     // lista de associações pro filtro (cadastro único, repassado pelo chamados-glpi)
     useEffect(() => {
@@ -345,7 +346,7 @@
                       e('span', { key: 'nm', style: { fontWeight: 600, overflowWrap: 'anywhere' } }, (i === 0 ? '▲ ' : '') + x.nome),
                       e('span', { key: 'tp', style: S.tag(COR_TIPO[x.tipo] || '#6b7280') }, nomeTipo(x.tipo)),
                       e('span', { key: 'ex', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, 'ex.:'),
-                      e('a', { key: 'lk', href: x.exemplo.link, target: '_blank', rel: 'noopener noreferrer', title: `${x.exemplo.categoria || ''} · ${dataBr(x.exemplo.criadoEm)}\n\n${x.exemplo.resultado}`, style: { color: 'var(--accent)', fontWeight: 600, fontSize: 12, textDecoration: 'underline' } }, '#' + x.exemplo.glpiTicketId),
+                      e('button', { key: 'lk', onClick: () => setVerRes({ id: x.exemplo.glpiTicketId }), title: `${x.exemplo.categoria || ''} · ${dataBr(x.exemplo.criadoEm)}\n\n${x.exemplo.resultado}`, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--accent)', fontWeight: 600, fontSize: 12, textDecoration: 'underline' } }, '#' + x.exemplo.glpiTicketId),
                     ]),
                     e('div', { key: 'b', style: { marginTop: 6 } }, e(Barrinha, { fracao: x.erro / Math.max(1, d.falhas[0].erro) })),
                   ]),
@@ -368,7 +369,7 @@
                       ...m.tipos.map((tp) => e('span', { key: tp, style: S.tag(COR_TIPO[tp] || '#6b7280') }, nomeTipo(tp))),
                       e('span', { key: 'ex', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, 'ex.:'),
                       ...m.exemplos.map((x) =>
-                        e('a', { key: x.id, href: x.link, target: '_blank', rel: 'noopener noreferrer', title: `${x.categoria || ''} · ${dataBr(x.criadoEm)}\n\n${x.resultado}`, style: { color: 'var(--accent)', fontWeight: 600, fontSize: 12, textDecoration: 'underline' } }, '#' + x.glpiTicketId)
+                        e('button', { key: x.id, onClick: () => setVerRes({ id: x.glpiTicketId }), title: `${x.categoria || ''} · ${dataBr(x.criadoEm)}\n\n${x.resultado}`, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--accent)', fontWeight: 600, fontSize: 12, textDecoration: 'underline' } }, '#' + x.glpiTicketId)
                       ),
                     ]),
                   ])
@@ -427,7 +428,7 @@
       corpo = painel(dados);
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo]);
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, verRes && window.VerChamado ? e(window.VerChamado, { key: 'ver', item: verRes, userToken: (ler('arxhub_chamados_acessos_v2', null) || {}).userToken, onFechar: () => setVerRes(null) }) : null]);
   }
 
   window.ResultadosView = ResultadosView;

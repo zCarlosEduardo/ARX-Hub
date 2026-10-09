@@ -205,7 +205,7 @@
           ]),
           e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `Requerente: ${(c && c.requerente) || item.requerente || '?'} · aberto em ${dataBr((c && c.abertoEm) || item.abertoEm)}`),
           e('div', { key: 'b', style: { display: 'flex', gap: 14, alignItems: 'center' } }, [
-            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'link copiado' : 'copiar link')]),
+            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'link copiado' : 'copiar link')]),
             e('a', { key: 'g', href: (c && c.link) || item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' } }, [Icon('ExternalLink', 12), e('span', { key: 't' }, 'abrir no GLPI')]),
           ]),
         ]),
@@ -593,8 +593,8 @@
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
             // colar o link na barra de endereço sempre funciona
-            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Eye', 13), e('span', { key: 't' }, 'ver chamado')]),
-            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'link copiado' : 'copiar link')]),
+            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Eye', 13), e('span', { key: 't' }, 'ver chamado')]),
+            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'link copiado' : 'copiar link')]),
             e('a', { key: 'a', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
           ]),
         ]),
@@ -620,6 +620,27 @@
     // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento
     const prontosTodos = possiveis.filter((i) => !falta(i) && !resultados[i.id] && !execDoChamado(i.id));
 
+    // cartões da barra do topo: mesma altura e mesmo desenho
+    const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
+    const tiposAuto = [...new Map(lista.itens.filter((i) => i.tipo).map((i) => [i.tipo, i.tipoNome])).entries()];
+    // faixa abaixo da barra: confirmação, tipos que rodam sozinhos, erro e estado do automático
+    const faixaAuto = (confirmandoAuto || auto.ativo || erroAuto) ? e('div', { key: 'faixa', style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', marginBottom: 16, borderRadius: 10, border: '1px solid ' + (confirmandoAuto ? 'var(--warn)' : 'var(--border)'), background: confirmandoAuto ? 'var(--warn-tint)' : 'transparent', fontSize: 12.5 } }, [
+      confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Vai rodar DE VERDADE, até ${auto.limite} por vez, sem pedir confirmação.`),
+        e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
+        e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
+      ]) : null,
+      tiposAuto.length ? e('div', { key: 'tp', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' } }, [
+        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Rodam sozinhos:'),
+        ...tiposAuto.map(([tipo, nome]) => {
+          const marcado = !auto.fora.includes(tipo);
+          return e('button', { key: tipo, style: S.chip(marcado), onClick: () => mudarAuto({ fora: marcado ? [...auto.fora, tipo] : auto.fora.filter((x) => x !== tipo) }) }, nome);
+        }),
+      ]) : null,
+      erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
+      auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: roda os prontos assim que aparecem (verifica o GLPI a cada 30 s), até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
+    ]) : null;
+
     const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
       e('div', { key: 't' }, [
         e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
@@ -629,41 +650,23 @@
             : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
       ]),
       e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-        e('label', { key: 'mt', style: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, padding: '7px 11px', borderRadius: 8, cursor: 'pointer', border: '1px dashed ' + (modoTeste ? 'var(--warn)' : 'var(--border)'), background: modoTeste ? 'var(--warn-tint)' : 'transparent', color: modoTeste ? 'var(--warn)' : 'var(--muted)' } }, [
+        e('label', { key: 'mt', title: modoTeste ? 'Modo teste: nada é escrito no GLPI' : 'Modo real: o resultado é gravado no GLPI', style: { ...cartaoTopo(modoTeste, 'var(--warn)', 'var(--warn-tint)'), cursor: 'pointer' } }, [
           e('input', { key: 'c', type: 'checkbox', checked: modoTeste, onChange: (ev) => { setModoTeste(ev.target.checked); gravar(KEY_MODO_TESTE, ev.target.checked); } }),
-          e('span', { key: 't' }, modoTeste ? 'Modo teste (não escreve no GLPI)' : 'Modo real'),
+          e('span', { key: 't', style: { fontWeight: 600, color: modoTeste ? 'var(--warn)' : 'var(--text)' } }, 'Modo teste'),
+          e('span', { key: 's', style: { fontSize: 11.5, color: modoTeste ? 'var(--warn)' : 'var(--muted-soft)' } }, modoTeste ? 'não escreve no GLPI' : 'gravando no GLPI'),
         ]),
-        e('div', { key: 'auto', style: { display: 'flex', flexDirection: 'column', gap: 6, padding: '7px 11px', borderRadius: 8, border: '1px solid ' + (auto.ativo ? 'var(--accent)' : 'var(--border)'), fontSize: 12.5 } }, [
-          e('div', { key: 'l1', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-            e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--muted)' } }, [
-              e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
-                if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
-                else if (modoTeste) ligarAuto();
-                else { setErroAuto(''); setConfirmandoAuto(true); }
-              } }),
-              e('span', { key: 't' }, 'Modo automático'),
-            ]),
-            e('span', { key: 'a', style: { color: 'var(--muted)' } }, 'até'),
-            e('input', { key: 'n', type: 'number', min: 1, max: 20, value: auto.limite, onChange: (ev) => mudarAuto({ limite: Math.max(1, Math.min(20, Number(ev.target.value) || 1)) }), style: { ...S.input, width: 56, padding: '4px 6px', fontSize: 12.5 } }),
-            e('span', { key: 'b', style: { color: 'var(--muted)' } }, 'por vez'),
+        e('div', { key: 'auto', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
+          e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--text)' } }, [
+            e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
+              if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
+              else if (modoTeste) ligarAuto();
+              else { setErroAuto(''); setConfirmandoAuto(true); }
+            } }),
+            e('span', { key: 't' }, 'Modo automático'),
           ]),
-          confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-            e('span', { key: 'q', style: { color: 'var(--warn)' } }, `Ligar? Vai rodar DE VERDADE, até ${auto.limite} por vez, sem pedir confirmação.`),
-            e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
-            e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
-          ]) : null,
-          (() => {
-            const tipos = [...new Map(lista.itens.filter((i) => i.tipo).map((i) => [i.tipo, i.tipoNome])).entries()];
-            return tipos.length ? e('div', { key: 'tp', style: { display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' } }, [
-              e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Rodam sozinhos:'),
-              ...tipos.map(([tipo, nome]) => {
-                const marcado = !auto.fora.includes(tipo);
-                return e('button', { key: tipo, style: S.chip(marcado), onClick: () => mudarAuto({ fora: marcado ? [...auto.fora, tipo] : auto.fora.filter((x) => x !== tipo) }) }, nome);
-              }),
-            ]) : null;
-          })(),
-          erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-          auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: roda os prontos assim que aparecem (verifica o GLPI a cada 30 s), até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
+          e('span', { key: 'a', style: { color: 'var(--muted)', fontSize: 12 } }, 'até'),
+          e('input', { key: 'n', type: 'number', min: 1, max: 20, value: auto.limite, onChange: (ev) => mudarAuto({ limite: Math.max(1, Math.min(20, Number(ev.target.value) || 1)) }), style: { ...S.input, width: 52, padding: '3px 6px', fontSize: 12.5 } }),
+          e('span', { key: 'b', style: { color: 'var(--muted)', fontSize: 12 } }, 'por vez'),
         ]),
         prontosTodos.length > 1
           ? confirmandoTodos
@@ -672,10 +675,10 @@
                 e('button', { key: 's', style: S.btnPrim, onClick: () => rodar(prontosTodos) }, 'Sim'),
                 e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoTodos(false) }, 'Cancelar'),
               ])
-            : e('button', { key: 'todos', style: S.btnPrim, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
+            : e('button', { key: 'todos', style: { ...S.btnPrim, height: 40 }, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
           : null,
-        e('button', { key: 'cfg', style: S.btnSec, onClick: () => Hub.abrirEditor() }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
-        e('button', { key: 'rf', style: S.btnSec, disabled: lista.carregando, onClick: buscar }, [
+        e('button', { key: 'cfg', style: { ...S.btnSec, height: 40 }, onClick: () => Hub.abrirEditor() }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
+        e('button', { key: 'rf', style: { ...S.btnSec, height: 40 }, disabled: lista.carregando, onClick: buscar }, [
           e('span', { key: 'i', style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
           e('span', { key: 't' }, lista.carregando ? 'Buscando…' : 'Atualizar'),
         ]),
@@ -734,8 +737,9 @@
       ]));
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
   }
 
   window.ChamadosView = ChamadosView;
+  window.VerChamado = VerChamado; // a aba Resultados abre o mesmo painel
 })();
