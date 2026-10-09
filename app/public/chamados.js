@@ -295,7 +295,7 @@
       return {
         dataInicial: atual.dataInicial || (item.periodo && item.periodo.dataInicial),
         dataFinal: atual.dataFinal || (item.periodo && item.periodo.dataFinal),
-        roleId: atual.roleId || '',
+        roleId: atual.roleId || (item.usuario && item.usuario.roleSugerido) || '',
         extrasAlt: atual.extrasAlt || (item.altStatus ? item.altStatus.secundarias.filter((b) => b.citada).map((b) => b.chave) : []),
         baseCrm: atual.baseCrm !== undefined ? atual.baseCrm : (item.baseCrm && (item.baseCrm.pedida || item.baseCrm.principal)) || '',
         cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
@@ -429,7 +429,7 @@
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !(i.usuario && i.usuario.daPlanilha)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
         .slice(0, auto.limite);
       if (!lote.length) return;
@@ -530,6 +530,7 @@
             ' ',
             e('strong', { key: 'n' }, u.nomeCadastro || u.nome || '?'), // como vai ficar cadastrado ("ARX - ...")
             e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || '?'} · ${u.email || 'sem e-mail'}`),
+            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'sem função'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.ambos ? ' O chamado cita SGA e CRM: faz só o primeiro citado.' : ''}` ) : null,
           ]),
           e('select', { key: 'perfil', value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
             e('option', { key: '', value: '' }, 'Perfil (departamento · role)…'),
