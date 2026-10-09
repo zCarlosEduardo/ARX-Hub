@@ -42,6 +42,25 @@
   };
   const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
+  /** Copia texto pra área de transferência (o Hub abre em http: sem navigator.clipboard, então cai no execCommand). */
+  async function copiarTexto(texto) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+        return true;
+      }
+    } catch { /* tenta o plano B */ }
+    const t = document.createElement('textarea');
+    t.value = texto;
+    t.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(t);
+    t.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    document.body.removeChild(t);
+    return ok;
+  }
+
   async function api(caminho, corpo) {
     const resp = await fetch(SERVICO + caminho, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : undefined);
     const dados = await resp.json().catch(() => ({}));
@@ -84,6 +103,13 @@
     const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
     const [erroAuto, setErroAuto] = useState('');
+    const [linkCopiado, setLinkCopiado] = useState(null); // id do chamado cujo link acabou de ser copiado
+    const copiarLink = async (item) => {
+      if (await copiarTexto(item.link)) {
+        setLinkCopiado(item.id);
+        setTimeout(() => setLinkCopiado((x) => (x === item.id ? null : x)), 2500);
+      }
+    };
     const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 30 s)
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
@@ -434,7 +460,12 @@
       return e('div', { key: item.id, style: { ...S.card, animationDelay: Math.min(i, 10) * 35 + 'ms', borderColor: rodandoEste ? 'var(--accent)' : 'var(--border)' } }, [
         e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
           e('span', { key: 'tipo', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
-          e('a', { key: 'n', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
+          e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
+            // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
+            // colar o link na barra de endereço sempre funciona
+            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'link copiado' : 'copiar link')]),
+            e('a', { key: 'a', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
+          ]),
         ]),
         e('div', { key: 'info' }, [
           e('div', { key: 'a', style: { fontWeight: 600, fontSize: 14 } }, item.categoria || '(sem categoria)'),
