@@ -79,7 +79,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -458,6 +458,8 @@
             e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
           )),
         ]);
+      } else if (item.tipo === 'senha_crm') {
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
       } else if (item.tipo === 'erro_exportar_modelo') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
           e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || '?'}`),

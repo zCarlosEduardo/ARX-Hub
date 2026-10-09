@@ -38,8 +38,8 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor, whiteSpace: 'nowrap' }),
     chip: (sel) => ({ padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const NOMES_TIPO = { fechamento: 'Fechamento p/ cobrança', cadastro_consultor: 'Cadastro de consultor', cadastro_usuario: 'Cadastro de usuário', inativacao_consultor: 'Inativação de consultor', bloqueio_acesso: 'Bloqueio de acesso', cadastro_modelo: 'Cadastro de modelo (FIPE)', erro_exportar_modelo: 'Modelo não encontrado (exportar card)' };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#0EA5A4', erro_exportar_modelo: '#EC4899' };
+  const NOMES_TIPO = { fechamento: 'Fechamento p/ cobrança', cadastro_consultor: 'Cadastro de consultor', cadastro_usuario: 'Cadastro de usuário', inativacao_consultor: 'Inativação de consultor', bloqueio_acesso: 'Bloqueio de acesso', cadastro_modelo: 'Cadastro de modelo (FIPE)', erro_exportar_modelo: 'Modelo não encontrado (exportar card)', senha_crm: 'Senha do CRM (resposta padrão)' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#0EA5A4', erro_exportar_modelo: '#EC4899', senha_crm: '#64748B' };
   const MIN_FINALIZADAS_ALERTA = 3; // associação com menos que isso não entra no destaque (amostra pequena)
   const TAXA_ALTA = 0.25;
   const PERIODOS = [
