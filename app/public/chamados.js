@@ -84,6 +84,7 @@
     const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
     const [erroAuto, setErroAuto] = useState('');
+    const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 30 s)
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
       const n = { ...a, ...campos };
@@ -123,6 +124,7 @@
         volta++;
         try {
           const m = await api('/api/mudou', { glpi: { userToken: acessos.userToken } });
+          setVerificadoEm(new Date());
           if (volta % 10 === 0 || m.assinatura !== assinaturaRef.current) buscar();
         } catch {
           // servidor fora por um instante: tenta de novo no próximo ciclo
@@ -461,7 +463,7 @@
         e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
         e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
           lista.usuario
-            ? `${possiveis.length} pra rodar · ${lista.totalAbertos} abertos na entidade Sistemas · você aprova como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}`
+            ? `${possiveis.length} pra rodar · ${lista.totalAbertos} abertos na entidade Sistemas · você aprova como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}${verificadoEm ? ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR') : ''}`
             : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
       ]),
       e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
