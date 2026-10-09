@@ -60,7 +60,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -158,6 +158,10 @@
       }
       if (item.tipo === 'fechamento') {
         return item.empresa && !loginDaEmpresa(acessos.sgas, item.empresa.chave) ? `Marque ${item.empresa.nome} em um login do SGA (Acessos)` : null;
+      }
+      if (item.tipo === 'erro_exportar_modelo') {
+        if (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave)) return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
+        return acessos.crm && acessos.crm.usuario && acessos.crm.senha ? null : 'Configure o login do PowerCRM (Acessos)';
       }
       if (item.tipo === 'cadastro_modelo') {
         return !item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave) ? `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)` : null;
@@ -267,7 +271,7 @@
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
+        .filter((i) => !i.problemas.length && !i.porDescricao && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
         .slice(0, auto.limite);
       if (!lote.length) return;
@@ -295,6 +299,13 @@
           e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
             e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
           )),
+        ]);
+      } else if (item.tipo === 'erro_exportar_modelo') {
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+          e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || '?'}`),
+          item.descricaoErro ? e('div', { key: 'd', style: { color: 'var(--muted)' } }, item.descricaoErro) : null,
+          e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Busca o código FIPE no card do PowerCRM (só roda com 1 card) e cadastra o modelo no SGA.'),
+          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição: confira antes de rodar (fica fora do automático).'),
         ]);
       } else if (item.tipo === 'cadastro_modelo' && item.modelo) {
         const f = item.modelo.fipe;
