@@ -13,6 +13,15 @@
   const Hub = window.ArxAcessosHub; // acessos.js: dono dos acessos do Hub
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
+  // identifica esta aba pro servidor (a "vaga" do modo automático é de um computador de cada vez)
+  const CLIENTE_ID = (() => {
+    const novo = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try {
+      let v = sessionStorage.getItem('arxhub_chamados_cliente');
+      if (!v) { v = novo(); sessionStorage.setItem('arxhub_chamados_cliente', v); }
+      return v;
+    } catch { return novo(); }
+  })();
   const KEY_AUTO = 'arxhub_chamados_auto'; // só o limite e os tipos; "ligado" nunca volta sozinho
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
 
@@ -74,6 +83,7 @@
     // Modo automático: com a chave ligada, roda sozinho os chamados prontos, até "limite" por vez
     const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
+    const [erroAuto, setErroAuto] = useState('');
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
       const n = { ...a, ...campos };
@@ -162,6 +172,7 @@
       try {
         const d = await api('/api/executar', {
           glpi: { userToken: acessos.userToken },
+          quem: lista.usuario && lista.usuario.nome,
           sgas: acessos.sgas.filter((l) => l.usuario && l.senha).map((l) => ({ ...l, empresas: Hub.chavesDoLogin(l) })),
           crm: acessos.crm,
           senhaPadrao: acessos.senhaPadrao,
@@ -172,6 +183,10 @@
           }),
         });
         const jobId = d.jobId;
+        // chamados que já estavam rodando em outra execução (outro computador): não rodam aqui
+        const ign = new Map((d.ignorados || []).map((i) => [i.id, i.por]));
+        if (ign.size) setResultados((r) => ({ ...r, ...Object.fromEntries([...ign].map(([id, por]) => [id, { ok: false, status: 'nao_rodou', texto: `Já estava sendo executado por outra execução${por ? ` (${por})` : ''}. Atualize a lista pra ver o resultado.` }])) }));
+        ids.splice(0, ids.length, ...ids.filter((x) => !ign.has(x)));
         const mudar = (fn) => setExecucoes((ex) => (ex[jobId] ? { ...ex, [jobId]: fn(ex[jobId]) } : ex));
         setExecucoes((ex) => ({ ...ex, [jobId]: { jobId, ids, linhas: [], fim: null } }));
         const fonte = new EventSource(`${SERVICO}/api/logs/${jobId}`);
@@ -207,6 +222,31 @@
       setDispensados(novo);
       gravar(KEY_DISPENSADOS, novo);
     }
+
+    /** Pega a vaga do automático no servidor (só um computador de cada vez) e liga. */
+    async function ligarAuto() {
+      try {
+        await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome });
+        setErroAuto('');
+        mudarAuto({ ativo: true });
+      } catch (err) {
+        setErroAuto(err.message);
+        mudarAuto({ ativo: false });
+      }
+    }
+    // com o automático ligado: renova a vaga a cada 30 s (se perder, desliga); ao desligar/fechar, solta
+    useEffect(() => {
+      if (!auto.ativo) return undefined;
+      const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).catch((err) => {
+        if (/^HTTP|Failed|NetworkError/.test(err.message)) return; // servidor fora um instante: tenta de novo
+        setErroAuto(err.message);
+        mudarAuto({ ativo: false });
+      });
+      const t = setInterval(renovar, 30000);
+      const soltar = () => { try { fetch(SERVICO + '/api/auto/soltar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteId: CLIENTE_ID }) }); } catch { /* sem rede */ } };
+      window.addEventListener('beforeunload', soltar);
+      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); };
+    }, [auto.ativo]); // eslint-disable-line
 
     // Automático: a cada atualização da lista (e quando uma execução termina), pega até
     // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
@@ -410,9 +450,9 @@
           e('div', { key: 'l1', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
             e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--muted)' } }, [
               e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
-                if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); }
-                else if (modoTeste) mudarAuto({ ativo: true });
-                else setConfirmandoAuto(true);
+                if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
+                else if (modoTeste) ligarAuto();
+                else { setErroAuto(''); setConfirmandoAuto(true); }
               } }),
               e('span', { key: 't' }, 'Modo automático'),
             ]),
@@ -422,7 +462,7 @@
           ]),
           confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
             e('span', { key: 'q', style: { color: 'var(--warn)' } }, `Ligar? Vai rodar DE VERDADE, até ${auto.limite} por vez, sem pedir confirmação.`),
-            e('button', { key: 's', style: S.btnPrim, onClick: () => { mudarAuto({ ativo: true }); setConfirmandoAuto(false); } }, 'Ligar'),
+            e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
             e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
           ]) : null,
           (() => {
@@ -435,6 +475,7 @@
               }),
             ]) : null;
           })(),
+          erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
           auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: a cada atualização (2 min) roda os prontos, até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
         ]),
         prontosTodos.length > 1
