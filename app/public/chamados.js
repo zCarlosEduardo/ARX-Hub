@@ -501,7 +501,7 @@
             ]) : null;
           })(),
           erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-          auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: a cada atualização (2 min) roda os prontos, até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
+          auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: roda os prontos assim que aparecem (verifica o GLPI a cada 30 s), até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
         ]),
         prontosTodos.length > 1
           ? confirmandoTodos
