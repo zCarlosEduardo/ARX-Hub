@@ -530,7 +530,7 @@
             ' ',
             e('strong', { key: 'n' }, u.nomeCadastro || u.nome || '?'), // como vai ficar cadastrado ("ARX - ...")
             e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || '?'} · ${u.email || 'sem e-mail'}`),
-            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'sem função'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.ambos ? ' O chamado cita SGA e CRM: faz só o primeiro citado.' : ''}` ) : null,
+            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'sem função'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.solicitanteDepto ? ` Solicitante do departamento ${u.solicitanteDepto}${u.avisoDepto ? ', diferente da aba da lista: confira o perfil' : ''}.` : ''}${u.ambos ? ' O chamado cita SGA e CRM: faz só o primeiro citado.' : ''}` ) : null,
           ]),
           e('select', { key: 'perfil', value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
             e('option', { key: '', value: '' }, 'Perfil (departamento · role)…'),
