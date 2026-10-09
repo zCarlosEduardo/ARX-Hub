@@ -84,6 +84,135 @@
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
 
+  // ---------- "Ver chamado": painel lateral com o chamado do GLPI + linha do tempo ----------
+  // O link do GLPI cai em "sessão expirou" quando clicado de fora, então o chamado é lido
+  // aqui dentro, pela API (chamados-glpi: /api/chamado/:id e /api/chamado/:id/historico).
+  // O servidor já devolve os textos sem CPF, e-mail, telefone e senha.
+  const COR_EXEC = { concluido: 'var(--accent)', erro: 'var(--error)', teste: 'var(--warn)', executando: 'var(--muted)' };
+  const NOME_EXEC = { concluido: 'Concluído', erro: 'Erro', teste: 'Teste', executando: 'Executando' };
+  const tempo = (s) => { const t = Date.parse(String(s || '').replace(' ', 'T')); return Number.isNaN(t) ? 0 : t; };
+
+  /** Texto que começa recolhido (poucas linhas) e abre com "ver mais". */
+  function TextoRecolhivel({ texto, linhas, recolhidoTodo, rotulo }) {
+    const [aberto, setAberto] = useState(false);
+    if (!texto) return null;
+    const longo = !!recolhidoTodo || texto.length > 220 || texto.split('\n').length > (linhas || 4);
+    const estilo = { margin: 0, fontFamily: 'inherit', fontSize: 12.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text)' };
+    const corte = !aberto && !recolhidoTodo ? { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: linhas || 4, overflow: 'hidden' } : {};
+    return e('div', null, [
+      recolhidoTodo && !aberto ? null : e('pre', { key: 't', style: { ...estilo, ...corte } }, texto),
+      longo ? e('button', { key: 'b', style: { ...S.link, fontSize: 11.5, marginTop: 4 }, onClick: () => setAberto((a) => !a) }, aberto ? 'recolher' : (rotulo || 'ver mais')) : null,
+    ]);
+  }
+
+  function VerChamado({ item, userToken, onFechar }) {
+    const [d, setD] = useState({ carregando: true, erro: null, chamado: null });
+    const [h, setH] = useState({ carregando: true, erro: null, itens: [] });
+    const [copiado, setCopiado] = useState(false);
+
+    useEffect(() => {
+      let vivo = true;
+      const corpo = { glpi: { userToken } };
+      setD({ carregando: true, erro: null, chamado: null });
+      setH({ carregando: true, erro: null, itens: [] });
+      api(`/api/chamado/${item.id}`, corpo)
+        .then((c) => vivo && setD({ carregando: false, erro: null, chamado: c }))
+        .catch((err) => vivo && setD({ carregando: false, erro: err.message, chamado: null }));
+      api(`/api/chamado/${item.id}/historico`, corpo)
+        .then((itens) => vivo && setH({ carregando: false, erro: null, itens: Array.isArray(itens) ? itens : [] }))
+        .catch((err) => vivo && setH({ carregando: false, erro: err.message, itens: [] }));
+      return () => { vivo = false; };
+    }, [item.id, userToken]);
+
+    useEffect(() => {
+      const tecla = (ev) => { if (ev.key === 'Escape') onFechar(); };
+      window.addEventListener('keydown', tecla);
+      return () => window.removeEventListener('keydown', tecla);
+    }, [onFechar]);
+
+    const c = d.chamado;
+    const linha = [];
+    if (c) {
+      linha.push({ k: 'aberto', em: c.abertoEm, autor: c.requerente });
+      c.acompanhamentos.forEach((x, i) => linha.push({ ...x, k: 'acomp' + i, de: 'acomp' }));
+      c.solucoes.forEach((x, i) => linha.push({ ...x, k: 'sol' + i, de: 'solucao' }));
+    }
+    h.itens.forEach((x) => linha.push({ ...x, k: 'exec' + x.id, de: 'exec' }));
+    linha.forEach((x) => { x.t = tempo(x.em); });
+    linha.sort((a, b) => b.t - a.t);
+
+    const marcador = (cor) => e('span', { style: { position: 'absolute', left: -22, top: 4, width: 9, height: 9, borderRadius: '50%', background: cor, boxShadow: '0 0 0 3px var(--card)' } });
+    function evento(x) {
+      let cor; let topo; let corpo = null;
+      if (x.de === 'exec') {
+        cor = COR_EXEC[x.status] || 'var(--muted)';
+        topo = [
+          e('span', { key: 's', style: { fontWeight: 700, fontSize: 12.5, color: cor } }, 'Automação · ' + (NOME_EXEC[x.status] || x.status)),
+          x.teste && x.status !== 'teste' ? e('span', { key: 'm', style: S.tag('#F5A524') }, 'modo teste') : null,
+        ];
+        corpo = [
+          e('div', { key: 'q', style: { fontSize: 12, color: 'var(--muted)' } }, [x.tipo ? x.tipo : null, x.por ? 'aprovado por ' + x.por : null].filter(Boolean).join(' · ') || 'Execução da automação'),
+          x.resultado ? e(TextoRecolhivel, { key: 'r', texto: x.resultado, recolhidoTodo: true, rotulo: 'ver resultado' }) : null,
+        ];
+      } else {
+        cor = x.k === 'aberto' ? 'var(--muted)' : x.de === 'solucao' ? '#6DBE6A' : '#3B82F6';
+        topo = [e('span', { key: 's', style: { fontWeight: 700, fontSize: 12.5 } }, x.k === 'aberto' ? 'Chamado aberto' : x.de === 'solucao' ? 'Solução' : 'Acompanhamento')];
+        corpo = [
+          x.autor ? e('div', { key: 'a', style: { fontSize: 12, color: 'var(--muted)' } }, x.autor) : null,
+          x.texto ? e(TextoRecolhivel, { key: 't', texto: x.texto }) : null,
+        ];
+      }
+      return e('div', { key: x.k, style: { position: 'relative', paddingBottom: 16 } }, [
+        marcador(cor),
+        e('div', { key: 'h', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } }, [
+          ...topo,
+          e('span', { key: 'd', style: { marginLeft: 'auto', fontSize: 11.5, color: 'var(--muted-soft)' } }, dataBr(x.em)),
+        ]),
+        e('div', { key: 'c', style: { marginTop: 3, display: 'flex', flexDirection: 'column', gap: 4 } }, corpo),
+      ]);
+    }
+
+    const faixa = (txt, cor) => e('div', { style: { fontSize: 12.5, color: cor || 'var(--muted)', padding: '6px 0' } }, txt);
+    const secao = (t) => e('div', { style: { ...S.label, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8, marginTop: 4 } }, t);
+
+    let miolo;
+    if (d.carregando) {
+      miolo = e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 20, 'var(--accent)')), 'Lendo o chamado no GLPI…']);
+    } else if (d.erro) {
+      miolo = e('div', { style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui ler o chamado: ' + d.erro);
+    } else {
+      miolo = e('div', null, [
+        secao('Descrição'),
+        e('div', { key: 'desc', style: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 18 } }, c.descricao ? e(TextoRecolhivel, { texto: c.descricao, linhas: 8 }) : faixa('(sem descrição)')),
+        secao('Linha do tempo'),
+        h.carregando ? faixa('Buscando as execuções da automação…') : null,
+        h.erro ? faixa('Não consegui buscar as execuções da automação: ' + h.erro, 'var(--warn)') : null,
+        e('div', { key: 'tl', style: { position: 'relative', marginLeft: 5, paddingLeft: 16, borderLeft: '2px solid var(--border)', marginTop: 6 } }, linha.map(evento)),
+        !h.carregando && !h.erro && !h.itens.length ? faixa('A automação ainda não rodou neste chamado.') : null,
+      ]);
+    }
+
+    return e('div', { onMouseDown: (ev) => { if (ev.target === ev.currentTarget) onFechar(); }, style: { position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.45)', display: 'flex', justifyContent: 'flex-end' } },
+      e('aside', { role: 'dialog', 'aria-label': 'Chamado #' + item.id, style: { width: 'min(560px, 100vw)', height: '100%', background: 'var(--card)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', animation: 'toastIn 0.2s ease both', boxSizing: 'border-box' } }, [
+        e('div', { key: 'cab', style: { padding: '16px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          e('div', { key: 'l1', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 } }, [
+            e('div', { key: 't', style: { fontWeight: 600, fontSize: 15, lineHeight: 1.35, minWidth: 0, wordBreak: 'break-word' } }, `#${item.id} · ${(c && c.titulo) || item.titulo}`),
+            e('button', { key: 'x', 'aria-label': 'Fechar', title: 'Fechar (Esc)', onClick: onFechar, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' } }, Icon('X', 18, 'var(--muted)')),
+          ]),
+          e('div', { key: 'tags', style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 } }, [
+            e('span', { key: 'c', style: S.tag('#3B82F6') }, (c && c.categoria) || item.categoria || '(sem categoria)'),
+            e('span', { key: 's', style: S.tag(c && c.status >= 5 ? '#6DBE6A' : '#F5A524') }, (c && c.statusNome) || item.statusNome),
+          ]),
+          e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `Requerente: ${(c && c.requerente) || item.requerente || '?'} · aberto em ${dataBr((c && c.abertoEm) || item.abertoEm)}`),
+          e('div', { key: 'b', style: { display: 'flex', gap: 14, alignItems: 'center' } }, [
+            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'link copiado' : 'copiar link')]),
+            e('a', { key: 'g', href: (c && c.link) || item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' } }, [Icon('ExternalLink', 12), e('span', { key: 't' }, 'abrir no GLPI')]),
+          ]),
+        ]),
+        e('div', { key: 'corpo', style: { flex: 1, overflowY: 'auto', padding: '14px 16px 40px' } }, miolo),
+      ]));
+  }
+
   // ---------- Aba ----------
   function ChamadosView() {
     const [acessos, setAcessos] = useState(Hub.ler);
@@ -103,6 +232,7 @@
     const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
     const [erroAuto, setErroAuto] = useState('');
+    const [verChamado, setVerChamado] = useState(null); // chamado aberto no painel "Ver chamado"
     const [linkCopiado, setLinkCopiado] = useState(null); // id do chamado cujo link acabou de ser copiado
     const copiarLink = async (item) => {
       if (await copiarTexto(item.link)) {
@@ -463,6 +593,7 @@
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
             // colar o link na barra de endereço sempre funciona
+            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Eye', 13), e('span', { key: 't' }, 'ver chamado')]),
             e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0 } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'link copiado' : 'copiar link')]),
             e('a', { key: 'a', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
           ]),
@@ -603,7 +734,7 @@
       ]));
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, ...extras]);
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
   }
 
   window.ChamadosView = ChamadosView;
