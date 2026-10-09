@@ -91,6 +91,7 @@
       return n;
     });
     const fontesRef = useRef(new Map());
+    const assinaturaRef = useRef(''); // assinatura dos chamados abertos na última atualização
     const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
     const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
     const pronto = !!acessos.pronto;
@@ -103,6 +104,7 @@
       setLista((l) => ({ ...l, carregando: true, erro: null }));
       try {
         const d = await api('/api/chamados', { glpi: { userToken: acessos.userToken } });
+        assinaturaRef.current = d.assinatura || '';
         setLista({ carregando: false, erro: null, itens: d.itens, usuario: d.usuario, outros: d.outros, totalAbertos: d.totalAbertos, perfis: d.perfis || [], em: new Date() });
       } catch (err) {
         setLista((l) => ({ ...l, carregando: false, erro: err.message }));
@@ -113,9 +115,19 @@
     useEffect(() => {
       if (!pronto) return undefined;
       buscar();
-      const t = setInterval(() => {
-        if (!fontesRef.current.size) buscar();
-      }, 120000);
+      // a cada 30 s só pergunta ao servidor se algo mudou no GLPI (1 busca leve) e recarrega a lista
+      // inteira só se mudou; por segurança recarrega tudo a cada 5 min mesmo sem mudança
+      let volta = 0;
+      const t = setInterval(async () => {
+        if (fontesRef.current.size) return;
+        volta++;
+        try {
+          const m = await api('/api/mudou', { glpi: { userToken: acessos.userToken } });
+          if (volta % 10 === 0 || m.assinatura !== assinaturaRef.current) buscar();
+        } catch {
+          // servidor fora por um instante: tenta de novo no próximo ciclo
+        }
+      }, 30000);
       return () => clearInterval(t);
     }, [pronto, buscar]);
     useEffect(() => () => fontesRef.current.forEach((f) => f.close()), []);
