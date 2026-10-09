@@ -299,6 +299,7 @@
         extrasAlt: atual.extrasAlt || (item.altStatus ? item.altStatus.secundarias.filter((b) => b.citada).map((b) => b.chave) : []),
         baseCrm: atual.baseCrm !== undefined ? atual.baseCrm : (item.baseCrm && (item.baseCrm.pedida || item.baseCrm.principal)) || '',
         cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
+        fotoLista: atual.fotoLista !== undefined ? atual.fotoLista : item.foto && item.foto.multi ? item.foto.fotos.map((x) => `${x.nome} | ${x.departamento}`).join('\n') : '',
         fotoNome: atual.fotoNome !== undefined ? atual.fotoNome : '',
         fotoDepartamento: atual.fotoDepartamento !== undefined ? atual.fotoDepartamento : '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
@@ -331,6 +332,13 @@
       }
       if (item.tipo === 'foto_perfil' && item.foto) {
         const c = escolha(item);
+        if (item.foto.multi) {
+          const linhas = c.fotoLista.split('\n').map((l) => l.trim()).filter(Boolean);
+          const padrao = item.foto.fotos.map((x) => `${x.nome} | ${x.departamento}`).join('\n');
+          if (!linhas.length || linhas.some((l) => !l.split('|')[0].trim() || !(l.split('|')[1] || '').trim())) return 'Cada linha da lista precisa de Nome | DEPARTAMENTO';
+          if (item.foto.fotos.some((x) => x.duvida) && c.fotoLista === padrao) return 'Confira/edite a lista de fotos (há linhas em dúvida)';
+          return null;
+        }
         if (item.foto.duvidaNome && !c.fotoNome.trim()) return 'Digite o nome que vai na foto';
         if (item.foto.duvidaDepto && !c.fotoDepartamento.trim()) return 'Digite o departamento que vai na foto';
         return null;
@@ -361,7 +369,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
+            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoLista: item.foto && item.foto.multi ? c.fotoLista : undefined, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
           }),
         });
         const jobId = d.jobId;
@@ -437,7 +445,7 @@
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !(i.usuario && i.usuario.daPlanilha)
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
         .slice(0, auto.limite);
       if (!lote.length) return;
@@ -465,6 +473,15 @@
           e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
             e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
           )),
+        ]);
+      } else if (item.tipo === 'foto_perfil' && item.foto && item.foto.multi) {
+        const f = item.foto;
+        const duvidosas = f.fotos.filter((x) => x.duvida);
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          e('div', { key: 'r' }, [e('strong', { key: 'n' }, f.fotos.length + ' fotos de perfil'), e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' neste chamado (uma arte por pessoa, todas anexadas)')]),
+          e('div', { key: 'p', style: { color: 'var(--warn)', fontSize: 12 } }, 'Várias fotos: não roda no automático. Confira a lista abaixo (uma pessoa por linha: Nome | DEPARTAMENTO).'),
+          duvidosas.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, duvidosas.map((x) => `${x.nome}: ${x.motivos.join('; ')}`).join(' · ') + '. Edite a lista para liberar.') : null,
+          e('textarea', { key: 'lista', rows: Math.min(10, f.fotos.length + 1), value: c.fotoLista, onChange: (ev) => mudarEscolha(item.id, { fotoLista: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' } }),
         ]);
       } else if (item.tipo === 'foto_perfil' && item.foto) {
         const f = item.foto;
