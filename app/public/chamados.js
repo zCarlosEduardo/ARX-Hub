@@ -271,7 +271,7 @@
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !i.porDescricao && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
         .slice(0, auto.limite);
       if (!lote.length) return;
@@ -305,7 +305,7 @@
           e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || '?'}`),
           item.descricaoErro ? e('div', { key: 'd', style: { color: 'var(--muted)' } }, item.descricaoErro) : null,
           e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Busca o código FIPE no card do PowerCRM (só roda com 1 card) e cadastra o modelo no SGA.'),
-          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição: confira antes de rodar (fica fora do automático).'),
+          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição. Só cadastra se achar o card (1 só) e a FIPE; modelo que já existe é respondido como "Modelo já cadastrado".'),
         ]);
       } else if (item.tipo === 'cadastro_modelo' && item.modelo) {
         const f = item.modelo.fipe;
