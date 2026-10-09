@@ -79,7 +79,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', foto_perfil: '#D946EF' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -299,6 +299,8 @@
         extrasAlt: atual.extrasAlt || (item.altStatus ? item.altStatus.secundarias.filter((b) => b.citada).map((b) => b.chave) : []),
         baseCrm: atual.baseCrm !== undefined ? atual.baseCrm : (item.baseCrm && (item.baseCrm.pedida || item.baseCrm.principal)) || '',
         cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
+        fotoNome: atual.fotoNome !== undefined ? atual.fotoNome : '',
+        fotoDepartamento: atual.fotoDepartamento !== undefined ? atual.fotoDepartamento : '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
         empresasCrm: atual.empresasCrm || (item.associacaoUsuario && item.associacaoUsuario.empresasCrm.length === 1 ? item.associacaoUsuario.empresasCrm : []),
       };
@@ -327,6 +329,12 @@
       if (item.tipo === 'cadastro_consultor') {
         return item.cooperativa && !escolha(item).cooperativa ? `Escolha a cooperativa do SGA (o chamado diz "${item.cooperativa.informada}")` : null;
       }
+      if (item.tipo === 'foto_perfil' && item.foto) {
+        const c = escolha(item);
+        if (item.foto.duvidaNome && !c.fotoNome.trim()) return 'Digite o nome que vai na foto';
+        if (item.foto.duvidaDepto && !c.fotoDepartamento.trim()) return 'Digite o departamento que vai na foto';
+        return null;
+      }
       if (item.tipo !== 'cadastro_usuario') return null;
       const c = escolha(item);
       if (item.usuario.sistema === 'SGA' && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
@@ -353,7 +361,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
+            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
           }),
         });
         const jobId = d.jobId;
@@ -457,6 +465,28 @@
           e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
             e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
           )),
+        ]);
+      } else if (item.tipo === 'foto_perfil' && item.foto) {
+        const f = item.foto;
+        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          e('div', { key: 'r' }, [
+            e('strong', { key: 'n' }, f.duvidaNome ? '(nome a digitar)' : f.nome),
+            e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' · ' + (f.duvidaDepto ? '(departamento a digitar)' : f.departamento)),
+            !f.duvidaDepto && f.departamentoOrigem === 'planilha' ? e('span', { key: 'o', style: { color: 'var(--muted)' } }, ' (pela lista de funcionários)') : null,
+          ]),
+          e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Gera a foto de perfil (arte com nome e departamento), anexa no chamado e soluciona.'),
+          (f.duvidaNome || f.duvidaDepto) && f.motivos.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, 'Na dúvida, digite abaixo (não roda no automático): ' + f.motivos.join('; ') + '.') : null,
+          f.outraPessoa && !f.duvidaDepto ? e('div', { key: 'o2', style: { color: 'var(--warn)', fontSize: 12 } }, 'A foto é para outra pessoa, não o solicitante.') : null,
+          f.duvidaNome ? e('div', { key: 'nome' }, [
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Nome na foto'),
+            e('input', { key: 'i', value: c.fotoNome, placeholder: f.analista ? 'Analista 4' : 'Primeiro e último nome', onChange: (ev) => mudarEscolha(item.id, { fotoNome: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
+            f.sugestaoNome && !c.fotoNome ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoNome: f.sugestaoNome }) }, 'Usar: ' + f.sugestaoNome) : null,
+          ]) : null,
+          f.duvidaDepto ? e('div', { key: 'dep' }, [
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Departamento na foto (MAIÚSCULO)'),
+            e('input', { key: 'i', value: c.fotoDepartamento, placeholder: 'Ex.: CENTRAL DE RELACIONAMENTO', onChange: (ev) => mudarEscolha(item.id, { fotoDepartamento: ev.target.value.toUpperCase() }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
+            f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
+          ]) : null,
         ]);
       } else if (item.tipo === 'senha_crm') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
