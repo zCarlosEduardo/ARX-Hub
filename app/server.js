@@ -26,6 +26,14 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
+// Versão do front (hash da pasta public): a tela aberta consulta e recarrega quando muda.
+const { calcularVersao } = require('./versao');
+const versaoFront = calcularVersao(path.join(__dirname, 'public'));
+app.get('/api/versao', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ versao: versaoFront });
+});
+
 const sseClients = new Set();
 
 // Cache em memória da lista de automações: GET /api/automations, o SSE e o
