@@ -431,5 +431,21 @@
     return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, verRes && window.VerChamado ? e(window.VerChamado, { key: 'ver', item: verRes, userToken: (ler('arxhub_chamados_acessos_v2', null) || {}).userToken, onFechar: () => setVerRes(null) }) : null]);
   }
 
-  window.ResultadosView = ResultadosView;
+  // A aba Resultados tem duas visões: os chamados tratados (esta tela) e a disponibilidade das automações (disponibilidade.js).
+  const KEY_VISAO = 'arxhub_resultados_visao';
+  function ResultadosComVisoes() {
+    const [visao, setVisao] = useState(() => (ler(KEY_VISAO, 'chamados') === 'disponibilidade' ? 'disponibilidade' : 'chamados'));
+    const escolher = (v) => {
+      setVisao(v);
+      gravar(KEY_VISAO, v);
+    };
+    const chip = (id, rotulo, icone) => e('button', { key: id, style: { ...S.chip(visao === id), display: 'flex', alignItems: 'center', gap: 6 }, onClick: () => escolher(id), 'aria-pressed': visao === id }, [Icon(icone, 13), rotulo]);
+    const barra = e('div', { key: 'visoes', style: { display: 'flex', gap: 8, padding: '18px 24px 0', maxWidth: 1200, margin: '0 auto', flexWrap: 'wrap' } }, [
+      chip('chamados', 'Chamados tratados', 'BarChart3'),
+      window.DisponibilidadeView ? chip('disponibilidade', 'Disponibilidade', 'Activity') : null,
+    ]);
+    return e('div', null, [barra, visao === 'disponibilidade' && window.DisponibilidadeView ? e(window.DisponibilidadeView, { key: 'disp' }) : e(ResultadosView, { key: 'res' })]);
+  }
+
+  window.ResultadosView = ResultadosComVisoes;
 })();
