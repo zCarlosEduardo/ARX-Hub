@@ -57,6 +57,33 @@
     return { motivo: textoOuNaoInformado(id && id.motivo), texto: 'Este chamado não será executado' };
   }
 
+  // ---------- confirmação manual (chamado identificado só pela descrição) ----------
+  const MOTIVO_PADRAO_CONFIANCA = 'pedido identificado pela descrição';
+
+  /** Rótulo do chip do card (null = confiança alta ou serviço sem o campo). */
+  function rotuloConfianca(item) {
+    return item && item.somenteManual === true ? 'Confirmação manual' : null;
+  }
+
+  /** Itens somenteManual nunca entram no modo automático nem em "Rodar todos os prontos". */
+  function deveExcluirDoAutomatico(item) {
+    return !!item && item.somenteManual === true;
+  }
+
+  /** Textos do aviso âmbar do card (null = sem aviso). */
+  function avisoConfianca(item) {
+    if (!rotuloConfianca(item)) return null;
+    const motivo = String(item.motivoConfianca || '').trim() || MOTIVO_PADRAO_CONFIANCA;
+    return { titulo: `Confirmação manual: ${motivo}`, orientacao: 'Revise o chamado antes de rodar. Este item não entra no modo automático.' };
+  }
+
+  /** Objeto do item enviado ao serviço. `confirmado: true` só no clique manual de um item somenteManual. */
+  function montarPedidoItem(item, { manual = false, campos = {} } = {}) {
+    const pedido = { id: item.id, ...campos };
+    if (manual === true && deveExcluirDoAutomatico(item)) pedido.confirmado = true;
+    return pedido;
+  }
+
   /** Motivo que impede de rodar um pedido de senha (null = liberado). `temLoginSga(chave)` diz se há login do SGA para a empresa. */
   function bloqueioSenha(item, temLoginSga) {
     if (!item || item.tipo !== 'alterar_senha_sga') return null;
@@ -421,7 +448,8 @@
       return null;
     }
 
-    async function rodar(itensParaRodar) {
+    // `manual`: execução pedida por clique em UM chamado (único caso que envia `confirmado`)
+    async function rodar(itensParaRodar, { manual = false } = {}) {
       setConfirmando(null);
       setConfirmandoTodos(false);
       const ids = itensParaRodar.map((x) => x.id);
@@ -435,7 +463,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoLista: item.foto && item.foto.multi ? c.fotoLista : undefined, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
+            return montarPedidoItem(item, { manual, campos: { dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoLista: item.foto && item.foto.multi ? c.fotoLista : undefined, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined } });
           }),
         });
         const jobId = d.jobId;
@@ -511,7 +539,7 @@
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
         .slice(0, auto.limite);
       if (!lote.length) return;
@@ -690,7 +718,7 @@
         rodape = e('div', { key: 'conf', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
           e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar em modo real? O chamado ficará atribuído ao titular do token e será solucionado no GLPI.'),
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item]) }, 'Confirmar'),
+            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item], { manual: true }) }, 'Confirmar'),
             e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => setConfirmando(null) }, 'Cancelar'),
           ]),
         ]);
@@ -707,7 +735,10 @@
 
       return e('div', { key: item.id, style: { ...S.card, animationDelay: Math.min(i, 10) * 35 + 'ms', borderColor: rodandoEste ? 'var(--accent)' : 'var(--border)' } }, [
         e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-          e('span', { key: 'tipo', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+          e('div', { key: 'tipo', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0 } }, [
+            e('span', { key: 't', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+            rotuloConfianca(item) ? e('span', { key: 'conf', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: 'var(--warn-tint)', color: 'var(--warn)', border: '1px solid var(--warn)' } }, rotuloConfianca(item)) : null,
+          ]),
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
             // colar o link na barra de endereço sempre funciona
@@ -721,6 +752,10 @@
           e('div', { key: 't', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.4 } }, item.titulo),
           e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5, marginTop: 4 } }, `${dataBr(item.abertoEm)} · ${item.requerente || ''} · ${item.statusNome}`),
         ]),
+        avisoConfianca(item) ? e('div', { key: 'confianca', role: 'status', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 } }, [
+          e('strong', { key: 't' }, avisoConfianca(item).titulo),
+          e('div', { key: 'o' }, avisoConfianca(item).orientacao),
+        ]) : null,
         detalhes,
         item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
         item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
@@ -736,7 +771,7 @@
     const naoRodar = lista.itens.filter((i) => !i.problemas.length && dispensados.includes(i.id));
     const visiveis = verOutros ? [...possiveis, ...naoRodar, ...manuais] : possiveis;
     // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento
-    const prontosTodos = possiveis.filter((i) => !falta(i) && !resultados[i.id] && !execDoChamado(i.id));
+    const prontosTodos = possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
 
     // cartões da barra do topo: mesma altura e mesmo desenho
     const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
@@ -860,5 +895,5 @@
 
   window.ChamadosView = ChamadosView;
   window.VerChamado = VerChamado; // a aba Resultados abre o mesmo painel
-  window.ChamadosSenhas = { nomeSistema, avisoSenha, bloqueioSenha, detalhesSenha, SELOS_REGRA }; // testados em app/test
+  window.ChamadosSenhas = { nomeSistema, avisoSenha, bloqueioSenha, detalhesSenha, SELOS_REGRA, rotuloConfianca, deveExcluirDoAutomatico, avisoConfianca, montarPedidoItem }; // testados em app/test
 })();
