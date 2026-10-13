@@ -231,7 +231,7 @@ app.post('/api/test-connection', asyncHandler(async (req, res) => {
 function tokenOuErro(body) {
   const { userToken } = body || {};
   if (typeof userToken !== 'string' || !userToken.trim() || userToken.length > 200) {
-    throw new ErroHttp(400, 'Informe seu token GLPI.');
+    throw new ErroHttp(400, 'Informe o token do GLPI.');
   }
   return userToken.trim();
 }
