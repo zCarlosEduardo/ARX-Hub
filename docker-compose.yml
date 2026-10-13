@@ -23,6 +23,11 @@ services:
     environment:
       DATABASE_URL: postgres://arxhub:${POSTGRES_PASSWORD:-arxhub_dev_password}@db:5432/arxhub
       PORT: "8317"
+      NODE_ENV: ${NODE_ENV:-production}
+      # Em produção o Hub se recusa a subir sem POSTGRES_PASSWORD (ver app/config.js).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      CHECK_INTERVAL_MS: ${CHECK_INTERVAL_MS:-15000}
+      CHECK_TIMEOUT_MS: ${CHECK_TIMEOUT_MS:-3000}
       GLPI_BASE_URL: ${GLPI_BASE_URL:-}
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
       GLPI_ENTITY_ID: ${GLPI_ENTITY_ID:-}
