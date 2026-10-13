@@ -134,35 +134,67 @@ app.post('/api/test-connection', asyncHandler(async (req, res) => {
 
 // GLPI: o App-Token fica só no servidor (env var); cada usuário informa seu
 // próprio User-Token no navegador (fica salvo em localStorage, nunca aqui).
-app.post('/api/glpi/lookup', async (req, res) => {
-  const { userToken } = req.body || {};
-  if (!userToken) return res.status(400).json({ error: 'Informe seu token GLPI.' });
-  try {
-    const data = await glpi.fetchLookup(userToken);
-    res.json(data);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+// O userToken nunca é gravado (glpi_tickets não tem coluna para ele), nem logado:
+// só a mensagem já sanitizada por glpi.js vai para o log e para a resposta.
+function tokenOuErro(body) {
+  const { userToken } = body || {};
+  if (typeof userToken !== 'string' || !userToken.trim() || userToken.length > 200) {
+    throw new ErroHttp(400, 'Informe seu token GLPI.');
   }
-});
+  return userToken.trim();
+}
 
-app.post('/api/glpi/ticket', async (req, res) => {
-  const {
-    userToken, titulo, descricao, categoriaId, requerenteId, atribuidoId,
-    categoriaLabel, requerenteLabel, atribuidoLabel,
-  } = req.body || {};
-  if (!userToken) return res.status(400).json({ error: 'Informe seu token GLPI.' });
+function textoLimitado(valor, campo, max, obrigatorio) {
+  if (valor === undefined || valor === null || valor === '') {
+    if (obrigatorio) throw new ErroHttp(400, `${campo} é obrigatório.`);
+    return '';
+  }
+  if (typeof valor !== 'string' || valor.length > max) throw new ErroHttp(400, `${campo} inválido (texto de até ${max} caracteres).`);
+  return valor;
+}
+
+function erroGlpi(err) {
+  console.error('[glpi]', err && err.message);
+  return new ErroHttp(400, (err && err.message) || 'Falha ao falar com o GLPI.');
+}
+
+app.post('/api/glpi/lookup', asyncHandler(async (req, res) => {
+  const userToken = tokenOuErro(req.body);
   try {
-    const id = await glpi.createTicket(userToken, { titulo, descricao, categoriaId, requerenteId, atribuidoId });
+    res.json(await glpi.fetchLookup(userToken));
+  } catch (err) {
+    throw erroGlpi(err);
+  }
+}));
+
+app.post('/api/glpi/ticket', asyncHandler(async (req, res) => {
+  const userToken = tokenOuErro(req.body);
+  const b = req.body;
+  const titulo = textoLimitado(b.titulo, 'Título', 255, true);
+  const descricao = textoLimitado(b.descricao, 'Descrição', 20000, false);
+  const categoriaLabel = textoLimitado(b.categoriaLabel, 'categoriaLabel', 300, false) || null;
+  const requerenteLabel = textoLimitado(b.requerenteLabel, 'requerenteLabel', 300, false) || null;
+  const atribuidoLabel = textoLimitado(b.atribuidoLabel, 'atribuidoLabel', 300, false) || null;
+  let id;
+  try {
+    id = await glpi.createTicket(userToken, {
+      titulo, descricao, categoriaId: b.categoriaId, requerenteId: b.requerenteId, atribuidoId: b.atribuidoId,
+    });
+  } catch (err) {
+    throw erroGlpi(err);
+  }
+  // O chamado já existe no GLPI: falha ao gravar o histórico local não pode virar erro para o usuário.
+  try {
     await pool.query(
       `INSERT INTO glpi_tickets (ticket_id, titulo, descricao, categoria_label, requerente_label, atribuido_label)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, titulo, descricao || '', categoriaLabel || null, requerenteLabel || null, atribuidoLabel || null]
+      [id, titulo, descricao, categoriaLabel, requerenteLabel, atribuidoLabel]
     );
-    res.json({ id, url: glpi.ticketUrl(id) });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('[glpi] chamado', id, 'criado, mas não gravei no histórico:', err.message);
   }
-});
+  res.json({ id, url: glpi.ticketUrl(id) });
+}));
 
 app.get('/api/glpi/history', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM glpi_tickets ORDER BY created_at DESC LIMIT 50');

@@ -57,12 +57,26 @@ async function killSession(sessionToken) {
   }
 }
 
+// O user_token é uma credencial pessoal: não pode aparecer em log, resposta de
+// erro nem banco. Se o GLPI (ou o fetch) ecoar o token numa mensagem de erro,
+// trocamos por [oculto] antes de o erro sair deste módulo.
+function sanitizar(mensagem, segredos) {
+  let texto = String(mensagem == null ? '' : mensagem);
+  for (const s of segredos) {
+    if (typeof s === 'string' && s.length >= 4) texto = texto.split(s).join('[oculto]');
+  }
+  return texto;
+}
+
 async function withSession(userToken, fn) {
-  const sessionToken = await initSession(userToken);
+  let sessionToken = null;
   try {
+    sessionToken = await initSession(userToken);
     return await fn(sessionToken);
+  } catch (err) {
+    throw new Error(sanitizar(err && err.message, [userToken, sessionToken]));
   } finally {
-    await killSession(sessionToken);
+    if (sessionToken) await killSession(sessionToken);
   }
 }
 
@@ -108,4 +122,4 @@ async function createTicket(userToken, { titulo, descricao, categoriaId, requere
   });
 }
 
-module.exports = { fetchLookup, createTicket, ticketUrl };
+module.exports = { fetchLookup, createTicket, ticketUrl, sanitizar };
