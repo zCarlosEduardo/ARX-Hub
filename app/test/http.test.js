@@ -36,3 +36,12 @@ test('erroFinal: erro de body-parser (status 400) responde 400', () => {
   erroFinal(() => {})(e, { method: 'POST', path: '/x' }, res, () => {});
   assert.equal(res.statusCode, 400);
 });
+
+test('erroFinal: erro de corpo não ecoa o conteúdo recebido nem loga', () => {
+  const logs = [];
+  const res = fakeRes();
+  const e = Object.assign(new SyntaxError('Unexpected token "tok-secreto"'), { status: 400, expose: true, type: 'entity.parse.failed' });
+  erroFinal((...a) => logs.push(a.join(' ')))(e, { method: 'POST', path: '/api/glpi/lookup' }, res, () => {});
+  assert.deepEqual(res.corpo, { error: 'JSON inválido.' });
+  assert.ok(!logs.join('').includes('tok-secreto'));
+});
