@@ -1,0 +1,154 @@
+// Cards dos pedidos de senha (senha_sistemas e alterar_senha_sga) da aba Chamados.
+// Renderiza com um React mínimo (sem DOM) e confere estrutura e textos. Não valida o visual.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const PUBLIC = path.join(__dirname, '..', 'public');
+const NOOP = () => {};
+const estado = { lista: null };
+
+const React = {
+  createElement(tipo, props, ...filhos) {
+    const p = { ...(props || {}) };
+    if (filhos.length) p.children = filhos.length === 1 ? filhos[0] : filhos;
+    return { tipo, props: p };
+  },
+  useState(init) {
+    if (init && typeof init === 'object' && 'itens' in init && 'perfis' in init && estado.lista) return [estado.lista, NOOP];
+    return [typeof init === 'function' ? init() : init, NOOP];
+  },
+  cloneElement: (el, props) => ({ tipo: el.tipo, props: { ...el.props, ...(props || {}) } }),
+  useRef: () => ({ current: null }),
+  useEffect: NOOP,
+  useCallback: (fn) => fn,
+};
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const SEM_UNIDADE = new Set(['fontWeight', 'opacity', 'lineHeight', 'flex', 'zIndex']);
+const valorCss = (k, v) => (typeof v === 'number' && v !== 0 && !SEM_UNIDADE.has(k) ? v + 'px' : v);
+const paraCss = (o) => Object.entries(o).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())}:${valorCss(k, v)}`).join(';');
+function html(no) {
+  if (no === null || no === undefined || no === false || no === true) return '';
+  if (Array.isArray(no)) return no.map(html).join('');
+  if (typeof no !== 'object') return esc(no);
+  const { tipo, props } = no;
+  if (typeof tipo === 'function') return html(tipo(props));
+  const attrs = Object.entries(props)
+    .filter(([k, v]) => k !== 'children' && k !== 'key' && k !== 'ref' && typeof v !== 'function' && v !== null && v !== undefined && v !== false)
+    .map(([k, v]) => ` ${k === 'className' ? 'class' : k}="${esc(k === 'style' ? paraCss(v) : v)}"`)
+    .join('');
+  return `<${tipo}${attrs}>${html(props.children)}</${tipo}>`;
+}
+
+const SGAS = [{ usuario: 'x', senha: 'y', empresas: ['arx'] }];
+globalThis.window = globalThis;
+globalThis.React = React;
+globalThis.location = { protocol: 'http:', hostname: 'localhost' };
+globalThis.localStorage = { getItem: () => null, setItem: NOOP };
+globalThis.sessionStorage = { getItem: () => null, setItem: NOOP };
+vm.runInThisContext(fs.readFileSync(path.join(PUBLIC, 'icons.js'), 'utf8'), { filename: 'icons.js' });
+globalThis.ArxAcessosHub = {
+  ler: () => ({ pronto: true, userToken: 't', sgas: SGAS, crm: null, senhaPadrao: '' }),
+  aoMudar: () => NOOP,
+  loginDaEmpresa: (sgas, chave) => sgas.find((l) => (l.empresas || []).includes(chave)) || null,
+  chavesDoLogin: (l) => l.empresas,
+  abrirEditor: NOOP,
+  EditorAcessos: () => null,
+};
+vm.runInThisContext(fs.readFileSync(path.join(PUBLIC, 'chamados.js'), 'utf8'), { filename: 'chamados.js' });
+const { nomeSistema, avisoSenha, bloqueioSenha } = window.ChamadosSenhas;
+
+const PROIBIDO = /NaN|undefined|\[object|—|–| - |\(s\)|>null</;
+const base = { id: 101, link: 'http://glpi/101', categoria: 'Senha', titulo: 'Pedido de senha', abertoEm: '2026-10-01 10:00:00', statusNome: 'Novo', requerente: 'Maria Souza', problemas: [] };
+const SENHA_SISTEMAS = { ...base, tipo: 'senha_sistemas', tipoNome: 'Senha de sistemas (resposta padrão)', sistemas: ['crm', 'ezchat', 'wint', 'mundiale', 'chat'] };
+const alterar = (identidade, extra) => ({
+  ...base, id: 202, tipo: 'alterar_senha_sga', tipoNome: 'Alterar senha do SGA', sistemas: ['sga'], outrosSistemas: ['crm', 'chat'],
+  senhaAlvo: { nome: 'João Pereira', usuario: 'joao.p', cpfMascarado: '***.123.456-**' }, empresaSga: { chave: 'arx', nome: 'ARX' }, identidade, ...extra,
+});
+const OK_PROPRIA = { ok: true, regra: 'mesma_pessoa', motivo: 'Mesma pessoa' };
+const OK_GESTAO = { ok: true, regra: 'gestao', motivo: 'Gestor do departamento' };
+const NEGADO = { ok: false, regra: null, motivo: 'Solicitante não é a mesma pessoa nem gestor do departamento' };
+
+function tela(itens) {
+  estado.lista = { carregando: false, erro: null, itens, usuario: { nome: 'Fulano' }, outros: 0, totalAbertos: itens.length, perfis: [], em: null };
+  try { return html(React.createElement(window.ChamadosView, {})); } finally { estado.lista = null; }
+}
+
+test('nomes amigáveis dos sistemas', () => {
+  assert.equal(nomeSistema('crm'), 'CRM (PowerCRM)');
+  assert.equal(nomeSistema('ezchat'), 'EzChat');
+  assert.equal(nomeSistema('wint'), 'Wint');
+  assert.equal(nomeSistema('mundiale'), 'Mundiale');
+  assert.equal(nomeSistema('chat'), 'Chat');
+  assert.equal(nomeSistema('outro'), 'outro');
+});
+
+test('avisoSenha e bloqueioSenha: só identidade não confirmada bloqueia', () => {
+  const tem = () => true;
+  assert.equal(avisoSenha(alterar(OK_PROPRIA)), null);
+  assert.equal(avisoSenha(alterar(OK_GESTAO)), null);
+  const a = avisoSenha(alterar(NEGADO));
+  assert.equal(a.texto, 'Este chamado não será executado');
+  assert.equal(a.motivo, NEGADO.motivo);
+  assert.ok(avisoSenha(alterar(undefined)), 'sem identidade bloqueia por segurança');
+  assert.equal(avisoSenha(SENHA_SISTEMAS), null);
+  assert.equal(bloqueioSenha(SENHA_SISTEMAS, () => false), null, 'resposta padrão não pede login');
+  assert.equal(bloqueioSenha(alterar(OK_PROPRIA), tem), null);
+  assert.ok(bloqueioSenha(alterar(NEGADO), tem));
+  assert.match(bloqueioSenha(alterar(OK_PROPRIA), () => false), /Marque ARX em um login do SGA/);
+  assert.match(bloqueioSenha(alterar(OK_PROPRIA, { empresaSga: null }), tem), /Marque Senha em um login do SGA/);
+});
+
+test('card senha_sistemas: chips com nomes amigáveis, sem campo extra e botão liberado', () => {
+  const h = tela([SENHA_SISTEMAS]);
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+  for (const n of ['CRM (PowerCRM)', 'EzChat', 'Wint', 'Mundiale', 'Chat']) assert.ok(h.includes(`>${n}<`), n);
+  assert.equal((h.match(/role="listitem"/g) || []).length, 5);
+  assert.ok(h.includes('Senha de sistemas (resposta padrão)'));
+  assert.ok(h.includes('Nenhuma senha é alterada'));
+  assert.ok(!h.includes('placeholder'), 'sem campo de texto extra');
+  assert.ok(!h.includes('disabled="true"'), 'botão Rodar liberado');
+});
+
+test('card alterar_senha_sga liberado: requerente x alvo, selo e empresa', () => {
+  for (const [id, selo] of [[OK_PROPRIA, 'Própria pessoa'], [OK_GESTAO, 'Gestão do departamento']]) {
+    const h = tela([alterar(id)]);
+    assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+    assert.ok(h.includes('>Requerente<') && h.includes('>Usuário alvo<'));
+    assert.ok(h.includes('>Maria Souza<') && h.includes('>João Pereira<'));
+    assert.ok(h.includes('Usuário joao.p') && h.includes('CPF ***.123.456-**'));
+    assert.ok(h.includes(`>${selo}<`), selo);
+    assert.ok(h.includes('var(--accent-soft)'));
+    assert.ok(!h.includes('role="alert"') && !h.includes('não será executado'));
+    assert.ok(h.includes('>ARX<'));
+    assert.ok(h.includes('>CRM (PowerCRM)<') && h.includes('>Chat<'));
+    assert.ok(h.includes('Recebem só a orientação'));
+    assert.ok(!h.includes('disabled="true"'), 'botão Rodar liberado');
+    assert.ok(!/senha=|"senha"/i.test(h));
+  }
+});
+
+test('card alterar_senha_sga com identidade negada: aviso âmbar e botão Rodar desabilitado', () => {
+  const h = tela([alterar(NEGADO)]);
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+  assert.ok(h.includes('role="alert"'));
+  assert.ok(h.includes(NEGADO.motivo) && h.includes('>Este chamado não será executado<'));
+  assert.ok(h.includes('var(--warn-tint)'));
+  assert.ok(!h.includes('>Própria pessoa<') && !h.includes('>Gestão do departamento<'));
+  assert.match(h, /<button[^>]*disabled="true"[^>]*>.*?Rodar<\/span>/);
+});
+
+test('card alterar_senha_sga sem login do SGA da empresa: botão desabilitado com a pendência', () => {
+  const h = tela([alterar(OK_PROPRIA, { empresaSga: { chave: 'outra', nome: 'Outra' } })]);
+  assert.ok(h.includes('Marque Outra em um login do SGA (Acessos)'));
+  assert.match(h, /<button[^>]*disabled="true"[^>]*>.*?Rodar<\/span>/);
+});
+
+test('valores vazios viram "Não informado"', () => {
+  const h = tela([alterar(OK_PROPRIA, { requerente: '', senhaAlvo: {} })]);
+  assert.ok((h.match(/Não informado/g) || []).length >= 3);
+  assert.ok(!PROIBIDO.test(h));
+});
