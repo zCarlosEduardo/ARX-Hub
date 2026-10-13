@@ -34,13 +34,17 @@ window.Icons = (function () {
     Inbox: () => [P('M22 12h-6l-2 3h-4l-2-3H2'), P('M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z')],
     LayoutDashboard: () => [RC(3, 3, 7, 9, 1), RC(14, 3, 7, 5, 1), RC(14, 12, 7, 9, 1), RC(3, 16, 7, 5, 1)],
     LifeBuoy: () => [C(12, 12, 10), C(12, 12, 4), L(4.93, 4.93, 9.17, 9.17), L(14.83, 14.83, 19.07, 19.07), L(14.83, 9.17, 19.07, 4.93), L(4.93, 19.07, 9.17, 14.83)],
+    Database: () => [P('M3 5a9 3 0 1 0 18 0a9 3 0 1 0 -18 0'), P('M3 5v14a9 3 0 0 0 18 0V5'), P('M3 12a9 3 0 0 0 18 0')],
+    Headset: () => [P('M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z'), P('M21 16v2a4 4 0 0 1-4 4h-5')],
+    ChevronDown: () => [PL('6 9 12 15 18 9')],
+    Eye: () => [P('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z'), C(12, 12, 3)],
     ArrowLeft: () => [L(19, 12, 5, 12), PL('12 19 5 12 12 5')],
   };
 
   function Icon(name, size, color, strokeWidth) {
     const factory = DEFS[name];
     if (!factory) return null;
-    const col = color || '#EDEDED';
+    const col = color || 'var(--text)';
     const kids = factory(col).map((el, i) => React.cloneElement(el, { key: i }));
     return e('svg', {
       width: size || 18,
@@ -58,13 +62,13 @@ window.Icons = (function () {
   return {
     Icon,
     NAMES: Object.keys(DEFS),
-    ICON_CHOICES: ['Workflow', 'Bot', 'Server', 'Container', 'Activity', 'FileText', 'Building2', 'Receipt', 'Users', 'BarChart3'],
+    ICON_CHOICES: ['Workflow', 'Bot', 'Server', 'Container', 'Activity', 'FileText', 'Building2', 'Receipt', 'Users', 'BarChart3', 'Headset', 'Database'],
     COLOR_CHOICES: ['#1E4A9E', '#6DBE6A', '#F5A524', '#F5514D', '#8B5CF6', '#14B8A6'],
     CATEGORY_CHOICES: [
-      { key: 'visto', label: 'Visto', color: '#7DD3FC' },
+      { key: 'visto', label: 'Visto', color: '#0284c7' },
       { key: 'sga', label: 'SGA', color: '#3B82F6' },
       { key: 'powercrm', label: 'PowerCRM', color: '#F5514D' },
-      { key: 'interno', label: 'Interno', color: '#9CA3AF' },
+      { key: 'interno', label: 'Interno', color: '#6b7280' },
       { key: 'db', label: 'Banco de Dados', color: '#8B5CF6' },
     ],
   };
