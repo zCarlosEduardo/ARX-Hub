@@ -37,9 +37,11 @@
     return `há ${Math.floor(h / 24)} d`;
   }
 
+  const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
   async function api(caminho, metodo) {
     const resp = await fetch(SERVICO + caminho, { method: metodo || 'GET', signal: AbortSignal.timeout ? AbortSignal.timeout(metodo === 'POST' ? 120000 : 15000) : undefined });
-    if (resp.status === 404) throw new Error('o chamados-glpi ainda não tem os alertas (serviço desatualizado?)');
+    if (resp.status === 404) throw new Error('o chamados-glpi não possui o recurso de alertas (serviço desatualizado)');
     const dados = await resp.json().catch(() => null);
     if (!resp.ok || !dados) throw new Error((dados && dados.error) || `HTTP ${resp.status}`);
     return dados;
@@ -138,7 +140,7 @@
     const dica =
       estado === 'fora' ? `Alertas indisponíveis: ${falha}`
         : estado === 'ok' ? (dados && dados.ultimaChecagem ? 'Alertas: tudo funcionando' : 'Alertas: aguardando a primeira checagem')
-          : `Alertas: ${[erros ? `${erros} erro(s)` : '', avisos ? `${avisos} aviso(s)` : ''].filter(Boolean).join(' e ')}`;
+          : `Alertas: ${[erros ? plural(erros, 'erro', 'erros') : '', avisos ? plural(avisos, 'aviso', 'avisos') : ''].filter(Boolean).join(' e ')}`;
 
     const cabecalho = e('div', { key: 'h', className: 'alertas-cabeca' }, [
       e('div', { key: 't', style: { minWidth: 0 } }, [
@@ -158,15 +160,15 @@
     if (falha) {
       corpo = e('div', { key: 'f', className: 'alertas-vazio' }, [
         e('span', { key: 'i', className: 'alertas-vazio-icone', style: { background: 'var(--hover-bg)' } }, Icon('WifiOff', 18, 'var(--muted)')),
-        e('div', { key: 't', className: 'alertas-vazio-titulo' }, 'Não deu pra ler os alertas'),
+        e('div', { key: 't', className: 'alertas-vazio-titulo' }, 'Falha ao ler os alertas'),
         e('div', { key: 'd', className: 'alertas-vazio-texto' }, `${falha[0].toUpperCase()}${falha.slice(1)}. Enquanto isso, nada é avisado aqui.`),
       ]);
     } else if (!total) {
       const ok = checagens.filter((c) => c.ok === true).length;
       corpo = e('div', { key: 'v', className: 'alertas-vazio' }, [
         e('span', { key: 'i', className: 'alertas-vazio-icone', style: { background: 'var(--accent-soft)' } }, iconeOk(18, 'var(--accent)')),
-        e('div', { key: 't', className: 'alertas-vazio-titulo' }, dados && dados.ultimaChecagem ? 'Tudo funcionando' : 'Ainda não checou'),
-        e('div', { key: 'd', className: 'alertas-vazio-texto' }, dados && dados.ultimaChecagem ? `${ok} de ${checagens.length} checagens ok.` : 'A primeira checagem roda logo depois que o serviço sobe.'),
+        e('div', { key: 't', className: 'alertas-vazio-titulo' }, dados && dados.ultimaChecagem ? 'Tudo funcionando' : 'Nenhuma checagem realizada'),
+        e('div', { key: 'd', className: 'alertas-vazio-texto' }, dados && dados.ultimaChecagem ? `${ok} de ${plural(checagens.length, 'checagem', 'checagens')} sem problema.` : 'A primeira checagem ocorre logo após a inicialização do serviço.'),
       ]);
     } else {
       corpo = e('div', { key: 'l', className: 'alertas-lista' }, alertas.map((a) => e(ItemAlerta, { key: a.id, a })));
@@ -186,7 +188,7 @@
         verChecagens ? e('div', { key: 'l', className: 'alertas-checagens' }, checagens.map((c) => e('div', { key: c.id, className: 'alertas-checagem' }, [
           e('span', { key: 'd', className: 'alertas-checagem-ponto', style: { background: corChecagem(c) } }),
           e('span', { key: 'n', style: { flex: 1, minWidth: 0 } }, c.nome),
-          c.ok == null ? e('span', { key: 'x', className: 'alertas-checagem-obs' }, 'sem como checar agora') : null,
+          c.ok == null ? e('span', { key: 'x', className: 'alertas-checagem-obs' }, 'checagem indisponível') : null,
         ]))) : null,
       ])
       : null;
