@@ -435,7 +435,7 @@
       setMenuOpenId(null);
       setConfirmDialog({
         title: 'Remover automação',
-        message: 'Tem certeza que deseja remover "' + (a ? a.name : 'esta automação') + '"? Essa ação não pode ser desfeita.',
+        message: 'Remover ' + (a ? 'a automação "' + a.name + '"' : 'esta automação') + '? A ação não pode ser desfeita.',
         confirmLabel: 'Remover',
         danger: true,
         onConfirm: async () => {
@@ -752,7 +752,7 @@
         ? e('div', { key: 'groups' }, [mainList.length ? cardGrid('main', mainList) : null, dbSection])
         : e('div', { key: 'empty', style: sx('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 20px;color:var(--muted-soft);text-align:center') }, [
             Icon('Inbox', 34, 'var(--muted-soft)', 1.3),
-            e('div', { key: 't', style: { fontSize: 14 } }, q ? 'Nenhuma automação encontrada' : 'Adicione sua primeira automação'),
+            e('div', { key: 't', style: { fontSize: 14 } }, q ? 'Nenhuma automação encontrada' : 'Nenhuma automação cadastrada'),
           ]),
     ]);
 
@@ -865,7 +865,7 @@
               })),
             ]),
             e('div', { key: 'category' }, [
-              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:8px;font-weight:600') }, 'Sistema (pode marcar mais de um)'),
+              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:8px;font-weight:600') }, 'Sistema (seleção múltipla)'),
               e('div', { key: 'row', style: sx('display:flex;flex-wrap:wrap;gap:8px') }, [
                 ...CATEGORY_CHOICES.map((c) => {
                   const selected = modalForm.categories.includes(c.key);
@@ -884,7 +884,7 @@
             ]),
             e('div', { key: 'desc' }, [
               e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'Descrição'),
-              e('textarea', { key: 'i', className: 'field-input', value: modalForm.description, onChange: (ev) => setModalField('description', ev.target.value), placeholder: 'O que essa automação faz?', rows: 2, style: sx('width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;resize:vertical;font-family:inherit') }),
+              e('textarea', { key: 'i', className: 'field-input', value: modalForm.description, onChange: (ev) => setModalField('description', ev.target.value), placeholder: 'Finalidade da automação', rows: 2, style: sx('width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;resize:vertical;font-family:inherit') }),
             ]),
             e('div', { key: 'test', style: sx('display:flex;align-items:center;gap:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 13px') }, [
               e('button', { key: 'btn', className: 'btn-outline', onClick: testConnection, style: sx('display:flex;align-items:center;gap:7px;padding:8px 13px;background:var(--secondary);border:1px solid var(--border);color:var(--text);border-radius:7px;font-weight:600;font-size:12.5px;cursor:pointer;flex-shrink:0') }, [Icon('Activity', 14), ' Testar conexão']),
@@ -976,8 +976,8 @@
     let glpiBody;
     if (!glpiToken) {
       glpiBody = e('div', { key: 'setup', style: sx('display:flex;flex-direction:column;gap:12px') }, [
-        e('div', { key: 'txt', style: sx('color:var(--muted);font-size:13px;line-height:1.5') }, 'Cole seu token pessoal do GLPI (Configurar → Meus tokens de API). Ele fica salvo só neste navegador, nunca é enviado a mais ninguém.'),
-        e('input', { key: 'tok', className: 'field-input', value: glpiTokenDraft, onChange: (ev) => setGlpiTokenDraft(ev.target.value), placeholder: 'Seu User-Token do GLPI', style: sx(selectStyle) }),
+        e('div', { key: 'txt', style: sx('color:var(--muted);font-size:13px;line-height:1.5') }, 'Informe o token pessoal do GLPI (Configurar → Meus tokens de API). O token fica salvo somente neste navegador e não é gravado no servidor.'),
+        e('input', { key: 'tok', className: 'field-input', value: glpiTokenDraft, onChange: (ev) => setGlpiTokenDraft(ev.target.value), placeholder: 'User-Token do GLPI', style: sx(selectStyle) }),
         e('button', { key: 'save', className: 'btn-primary', onClick: saveGlpiToken, style: sx('padding:10px;background:var(--primary);border:none;color:var(--primary-fg);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, 'Salvar token'),
       ]);
     } else if (glpiLookupLoading) {
@@ -1043,10 +1043,10 @@
         e('button', { className: 'btn-outline', onClick: loadGlpiHistory, style: sx('padding:9px;background:var(--secondary);border:1px solid var(--border);color:var(--text);border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer') }, 'Tentar novamente'),
       ]);
     } else if (glpiHistory.length === 0) {
-      glpiHistoryBody = e('div', { style: sx('color:var(--muted-soft);font-size:13px;text-align:center;padding:24px 0') }, 'Nenhum chamado aberto por aqui ainda.');
+      glpiHistoryBody = e('div', { style: sx('color:var(--muted-soft);font-size:13px;text-align:center;padding:24px 0') }, 'Nenhum chamado aberto até o momento.');
     } else {
       glpiHistoryBody = e('div', { style: sx('display:flex;flex-direction:column;gap:10px') }, glpiHistory.map((t) => {
-        const meta = [t.categoriaLabel, t.requerenteLabel ? 'Req: ' + t.requerenteLabel : null, t.atribuidoLabel ? 'Atrib: ' + t.atribuidoLabel : null].filter(Boolean).join(' · ');
+        const meta = [t.categoriaLabel, t.requerenteLabel ? 'Requerente: ' + t.requerenteLabel : null, t.atribuidoLabel ? 'Atribuído: ' + t.atribuidoLabel : null].filter(Boolean).join(' · ');
         return e('div', { key: t.id, style: sx('background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px') }, [
           e('div', { key: 'row', style: sx('display:flex;align-items:center;justify-content:space-between;gap:8px') }, [
             t.url
@@ -1070,7 +1070,7 @@
           : e('span', { key: 'ico', className: 'glpi-head-icon' }, Icon('Headset', 16, 'currentColor')),
         e('div', { key: 't', style: sx("font-weight:600;font-size:14.5px;flex:1") }, glpiView === 'history' ? 'Histórico de chamados' : 'Abrir chamado GLPI'),
         glpiView === 'form' ? e('button', { key: 'hist', title: 'Ver histórico', onClick: openGlpiHistory, className: 'icon-btn', style: sx('width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);cursor:pointer;border-radius:7px;flex-shrink:0') }, Icon('FileText', 15)) : null,
-        glpiToken ? e('button', { key: 'forget', onClick: forgetGlpiToken, style: sx('background:none;border:none;color:var(--muted-soft);font-size:11px;cursor:pointer;padding:0;margin-right:4px') }, 'Esquecer token') : null,
+        glpiToken ? e('button', { key: 'forget', onClick: forgetGlpiToken, style: sx('background:none;border:none;color:var(--muted-soft);font-size:11px;cursor:pointer;padding:0;margin-right:4px') }, 'Remover token') : null,
         e('button', { key: 'x', className: 'icon-btn', onClick: closeGlpiWidget, style: sx('width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);cursor:pointer;border-radius:7px;flex-shrink:0') }, Icon('X', 13)),
       ]),
       e('div', { key: 'body', style: sx('padding:16px') }, glpiView === 'history' ? glpiHistoryBody : glpiBody),
