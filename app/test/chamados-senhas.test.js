@@ -152,3 +152,66 @@ test('valores vazios viram "Não informado"', () => {
   assert.ok((h.match(/Não informado/g) || []).length >= 3);
   assert.ok(!PROIBIDO.test(h));
 });
+
+// ---------- confirmação manual (chamados de senha menos certos) ----------
+const { rotuloConfianca, deveExcluirDoAutomatico, montarPedidoItem, avisoConfianca } = window.ChamadosSenhas;
+const MEDIA = { confianca: 'media', somenteManual: true, motivoConfianca: 'título sem a palavra senha; pedido identificado pela descrição' };
+const ALTA = { confianca: 'alta', somenteManual: false, motivoConfianca: '' };
+
+test('rotuloConfianca e deveExcluirDoAutomatico: só somenteManual === true', () => {
+  assert.equal(rotuloConfianca({ ...SENHA_SISTEMAS, ...MEDIA }), 'Confirmação manual');
+  assert.equal(rotuloConfianca({ ...SENHA_SISTEMAS, ...ALTA }), null);
+  assert.equal(rotuloConfianca(SENHA_SISTEMAS), null, 'serviço antigo, sem o campo');
+  assert.equal(rotuloConfianca(null), null);
+  assert.equal(deveExcluirDoAutomatico({ ...SENHA_SISTEMAS, ...MEDIA }), true);
+  assert.equal(deveExcluirDoAutomatico({ ...SENHA_SISTEMAS, ...ALTA }), false);
+  assert.equal(deveExcluirDoAutomatico(SENHA_SISTEMAS), false);
+  assert.equal(deveExcluirDoAutomatico({ somenteManual: 'true' }), false, 'só o booleano true vale');
+  assert.equal(deveExcluirDoAutomatico(undefined), false);
+});
+
+test('avisoConfianca: motivo do serviço ou texto padrão', () => {
+  assert.equal(avisoConfianca({ ...MEDIA }).titulo, 'Confirmação manual: ' + MEDIA.motivoConfianca);
+  assert.equal(avisoConfianca({ ...MEDIA }).orientacao, 'Revise o chamado antes de rodar. Este item não entra no modo automático.');
+  assert.equal(avisoConfianca({ somenteManual: true, motivoConfianca: '  ' }).titulo, 'Confirmação manual: pedido identificado pela descrição');
+  assert.equal(avisoConfianca({ somenteManual: true }).titulo, 'Confirmação manual: pedido identificado pela descrição');
+  assert.equal(avisoConfianca(ALTA), null);
+});
+
+test('montarPedidoItem: confirmado só no clique manual de item somenteManual', () => {
+  const m = { ...SENHA_SISTEMAS, ...MEDIA };
+  assert.deepEqual(montarPedidoItem(m, { manual: true }), { id: 101, confirmado: true });
+  assert.deepEqual(montarPedidoItem(m, { manual: false }), { id: 101 });
+  assert.deepEqual(montarPedidoItem(m), { id: 101 });
+  assert.deepEqual(montarPedidoItem({ ...SENHA_SISTEMAS, ...ALTA }, { manual: true }), { id: 101 });
+  assert.deepEqual(montarPedidoItem(SENHA_SISTEMAS, { manual: true }), { id: 101 });
+  assert.ok(!('confirmado' in montarPedidoItem(m, { manual: false })));
+  assert.deepEqual(montarPedidoItem(m, { manual: true, campos: { roleId: 3, loginSga: 'x' } }), { id: 101, roleId: 3, loginSga: 'x', confirmado: true });
+});
+
+test('card de confirmação manual: chip, aviso âmbar com role status e Rodar liberado', () => {
+  const h = tela([{ ...SENHA_SISTEMAS, ...MEDIA }]);
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+  assert.ok(h.includes('>Confirmação manual<'), 'chip');
+  assert.ok(h.includes('role="status"'));
+  assert.ok(h.includes('Confirmação manual: ' + MEDIA.motivoConfianca));
+  assert.ok(h.includes('Revise o chamado antes de rodar. Este item não entra no modo automático.'));
+  assert.ok(h.includes('var(--warn-tint)'));
+  assert.ok(!/#[0-9a-fA-F]{6}[^"]*"[^>]*role="status"/.test(h));
+  assert.ok(!h.includes('disabled="true"'), 'Rodar continua liberado');
+});
+
+test('card de confiança alta ou sem o campo: sem chip nem aviso', () => {
+  for (const it of [{ ...SENHA_SISTEMAS, ...ALTA }, SENHA_SISTEMAS]) {
+    const h = tela([it]);
+    assert.ok(!h.includes('Confirmação manual') && !h.includes('role="status"'));
+  }
+});
+
+test('modo automático e lote: nenhum item somenteManual entra (lê o código)', () => {
+  const src = fs.readFileSync(path.join(PUBLIC, 'chamados.js'), 'utf8');
+  const usos = src.match(/deveExcluirDoAutomatico\(i\)/g) || [];
+  assert.equal(usos.length, 2, 'automático e "Rodar todos os prontos"');
+  assert.match(src, /rodar\(lote\)/);
+  assert.match(src, /onClick: \(\) => rodar\(\[item\], \{ manual: true \}\)/);
+});
