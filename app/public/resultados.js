@@ -59,11 +59,12 @@
     return isoLocal(d);
   }
   const num = (n) => Number(n || 0).toLocaleString('pt-BR');
-  const pct = (x) => (x === null || x === undefined ? '—' : (x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+  const plural = (n, um, varios) => `${num(n)} ${n === 1 ? um : varios}`;
+  const pct = (x) => (x === null || x === undefined ? 'Sem dados' : (x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
   const dataCurta = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
   const dataBr = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
   function duracao(seg) {
-    if (seg === null || seg === undefined) return '—';
+    if (seg === null || seg === undefined) return 'Sem dados';
     if (seg < 90) return `${seg} s`;
     if (seg < 3600) return `${Math.round(seg / 60)} min`;
     const h = Math.floor(seg / 3600);
@@ -92,7 +93,7 @@
     return e('div', { className: 'res-var', title: titulo, style: { display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12.5, fontWeight: 600, color: cor, flexWrap: 'wrap' } }, [
       e('span', { key: 's', 'aria-hidden': 'true' }, seta),
       e('span', { key: 't' }, texto),
-      e('span', { key: 'l', style: { fontWeight: 500, color: 'var(--muted-soft)', fontSize: 11.5 } }, `${leitura} vs. período anterior`),
+      e('span', { key: 'l', style: { fontWeight: 500, color: 'var(--muted-soft)', fontSize: 11.5 } }, `${leitura} em relação ao período anterior`),
     ]);
   }
   const semAnterior = (titulo) => e('div', { className: 'res-var', title: titulo, style: { fontSize: 12, color: 'var(--muted-soft)' } }, 'Sem execuções no período anterior para comparar.');
@@ -299,17 +300,17 @@
         return e('button', { key: col, style: { ...S.link, color: ativo ? 'var(--text)' : 'var(--muted)', fontSize: 11.5, whiteSpace: 'nowrap' }, 'aria-label': `Ordenar por ${rotulo}`, onClick: () => setOrdem(ativo ? { col, desc: !ordem.desc } : { col, desc: col !== 'nome' }) }, rotulo + (ativo ? (ordem.desc ? ' ▼' : ' ▲') : ''));
       };
       const avisos = [];
-      if (erro) avisos.push(e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, `Não consegui atualizar: ${erro} (mostrando a última busca).`));
-      if (t.testes) avisos.push(e('div', { key: 'tst', style: { color: 'var(--warn)', fontSize: 12.5 } }, `Inclui ${num(t.testes)} execução(ões) em modo teste: nada foi escrito no GLPI (concluído/erro pelo texto que iria pro chamado).`));
-      if (t.executandoParado) avisos.push(e('div', { key: 'par', style: { color: 'var(--warn)', fontSize: 12.5 } }, `${num(t.executandoParado)} execução(ões) ficaram em "executando" há mais de 3 h (provavelmente interrompidas).`));
-      else if (t.executando) avisos.push(e('div', { key: 'exe', style: { color: 'var(--muted)', fontSize: 12.5 } }, `${num(t.executando)} execução(ões) em andamento agora.`));
+      if (erro) avisos.push(e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, `Falha ao atualizar: ${erro}. Exibindo a última busca.`));
+      if (t.testes) avisos.push(e('div', { key: 'tst', style: { color: 'var(--warn)', fontSize: 12.5 } }, `Inclui ${plural(t.testes, 'execução', 'execuções')} em modo teste. Nada foi escrito no GLPI, e o resultado (concluído ou erro) vem do texto que seria enviado ao chamado.`));
+      if (t.executandoParado) avisos.push(e('div', { key: 'par', style: { color: 'var(--warn)', fontSize: 12.5 } }, `${plural(t.executandoParado, 'execução permanece', 'execuções permanecem')} em "executando" há mais de 3 h (provavelmente interrompidas).`));
+      else if (t.executando) avisos.push(e('div', { key: 'exe', style: { color: 'var(--muted)', fontSize: 12.5 } }, `${plural(t.executando, 'execução em andamento', 'execuções em andamento')} neste momento.`));
 
       return e('div', { key: 'painel', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, [
         avisos.length ? e('div', { key: 'av', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, avisos) : null,
         e('div', { key: 'kpis', className: 'res-kpis' }, [
-          e(Numero, { key: 'r', rotulo: 'Chamados resolvidos', icone: 'Activity', valor: num(t.concluido), variacao: kRes, sub: `de ${num(t.concluido + t.erro)} execuções finalizadas · ${num(t.chamados)} chamado(s) diferente(s)` }),
-          e(Numero, { key: 'e', rotulo: 'Taxa de erro', icone: 'AlertCircle', valor: pct(t.taxaErro), variacao: kErro, sub: `${num(t.erro)} execução(ões) com erro` }),
-          e(Numero, { key: 't', rotulo: 'Tempo economizado', selo: 'estimativa', valor: horasMin(te.minutos), variacao: kTempo, sub: 'Estimativa: chamados concluídos × minutos que levaria à mão (por tipo)' }),
+          e(Numero, { key: 'r', rotulo: 'Chamados resolvidos', icone: 'Activity', valor: num(t.concluido), variacao: kRes, sub: `de ${plural(t.concluido + t.erro, 'execução finalizada', 'execuções finalizadas')} · ${plural(t.chamados, 'chamado distinto', 'chamados distintos')}` }),
+          e(Numero, { key: 'e', rotulo: 'Taxa de erro', icone: 'AlertCircle', valor: pct(t.taxaErro), variacao: kErro, sub: plural(t.erro, 'execução com erro', 'execuções com erro') }),
+          e(Numero, { key: 't', rotulo: 'Tempo economizado', selo: 'estimativa', valor: horasMin(te.minutos), variacao: kTempo, sub: 'Estimativa: chamados concluídos × minutos do trabalho manual (por tipo)' }),
           e(Numero, { key: 'd', rotulo: 'Tempo médio de execução', icone: 'RefreshCw', valor: duracao(t.duracaoMediaSeg), variacao: kDur, sub: `mediana ${duracao(t.duracaoMedianaSeg)} · da aprovação ao fim (inclui fila)` }),
         ]),
         e('div', { key: 'sem', style: S.card }, [
@@ -336,7 +337,7 @@
           ),
         ]),
         e('div', { key: 'onde', style: S.card }, [
-          cabecalhoCard('Onde mais falha', 'Combinação de associação e tipo de chamado com mais erros no período. Clique no chamado de exemplo (o mais recente) para abrir no GLPI.'),
+          cabecalhoCard('Onde mais falha', 'Combinação de associação e tipo de chamado com mais erros no período. Clique no chamado de exemplo (o mais recente) para ver os detalhes.'),
           (d.falhas || []).length
             ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 12 } }, d.falhas.slice(0, 5).map((x, i) =>
                 e('div', { key: i, style: { display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '2px 12px', alignItems: 'baseline' } }, [
@@ -356,7 +357,7 @@
         ]),
         e('div', { key: 'falhas', className: 'page-grid' }, [
           e('div', { key: 'mot', style: S.card }, [
-            cabecalhoCard('Motivos de erro', 'Motivos de erro agrupados (sem nomes e números). Clique no chamado para abrir no GLPI.'),
+            cabecalhoCard('Motivos de erro', 'Motivos de erro agrupados, sem nomes e números. Clique no chamado para ver os detalhes.'),
             d.motivosErro.length
               ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, d.motivosErro.map((m, i) =>
                   e('div', { key: i }, [
@@ -378,7 +379,7 @@
           ]),
           e('div', { key: 'dir', style: { display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 } }, [
             e('div', { key: 'assoc', style: S.card }, [
-              cabecalhoCard('Por associação', `Clique no título da coluna para ordenar. "Alta" = taxa de erro de ${Math.round(TAXA_ALTA * 100)}% ou mais, com pelo menos ${MIN_FINALIZADAS_ALERTA} execuções finalizadas.`),
+              cabecalhoCard('Por associação', `Clique no título da coluna para ordenar. "Alta" indica taxa de erro de ${Math.round(TAXA_ALTA * 100)}% ou mais, com ao menos ${MIN_FINALIZADAS_ALERTA} execuções finalizadas.`),
               tabela([cabOrdem('nome', 'Associação'), cabOrdem('total', 'Execuções'), cabOrdem('erro', 'Erros'), cabOrdem('taxaErro', 'Taxa de erro')],
                 assocs.map((a) =>
                   e('tr', { key: a.nome + (a.associacaoId || ''), style: alta(a) ? { background: 'var(--error-tint)' } : null }, [
@@ -392,7 +393,7 @@
                   ])
                 )
               ),
-              d.associacoes.length > 10 ? e('button', { key: 'mais', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => setTodasAssoc((v) => !v) }, todasAssoc ? 'Mostrar só as 10 primeiras' : `Ver todas (${d.associacoes.length})`) : null,
+              d.associacoes.length > 10 ? e('button', { key: 'mais', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => setTodasAssoc((v) => !v) }, todasAssoc ? 'Mostrar apenas as 10 primeiras' : `Ver todas (${d.associacoes.length})`) : null,
             ]),
             d.aprovadores.length
               ? e('div', { key: 'apr', style: S.card }, [
@@ -409,15 +410,15 @@
 
     let corpo;
     if (!datasOk) {
-      corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Escolha as duas datas (a primeira antes da segunda).');
+      corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Informe as duas datas. A data inicial deve ser anterior à final.');
     } else if (erro && !dados) {
-      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui buscar os resultados: ' + erro);
+      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os resultados: ' + erro);
     } else if (!dados) {
       corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando resultados…']);
     } else if (!dados.totais.total) {
       corpo = e('div', { key: 'vazio', style: { ...S.card, alignItems: 'center', gap: 12, padding: '50px 20px', color: 'var(--muted-soft)', textAlign: 'center' } }, [
         e('span', { key: 'i', style: { display: 'flex' } }, Icon('BarChart3', 34, 'var(--muted-soft)', 1.3)),
-        e('div', { key: 't', style: { fontSize: 14, color: 'var(--text)', fontWeight: 600 } }, assocSel || tipoSel ? 'Nenhum chamado tratado com esses filtros neste período.' : 'Ainda não tem chamado tratado pelas automações neste período.'),
+        e('div', { key: 't', style: { fontSize: 14, color: 'var(--text)', fontWeight: 600 } }, assocSel || tipoSel ? 'Nenhum chamado tratado com esses filtros neste período.' : 'Nenhum chamado tratado pelas automações neste período.'),
         assocSel || tipoSel ? e('button', { key: 'lf', style: S.btnSec, onClick: () => { setAssocSel(''); setTipoSel(''); } }, 'Limpar filtros de associação e tipo') : null,
         e('div', { key: 's', style: { fontSize: 12.5, maxWidth: 520, lineHeight: 1.5 } },
           incluirTeste
