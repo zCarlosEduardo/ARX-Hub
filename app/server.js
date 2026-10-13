@@ -13,6 +13,29 @@ const HEARTBEAT_MS = 25000;
 
 const app = express();
 app.use(express.json());
+
+// Versão do front (hash da pasta public): a tela aberta consulta e recarrega quando muda. O index sai com
+// ?v=<versão> nos scripts e estilos, então um F5 comum já pede os arquivos novos (sem depender do cache).
+const { calcularVersao, injetarVersaoNoHtml } = require('./versao');
+const pastaPublic = path.join(__dirname, 'public');
+const versaoFront = calcularVersao(pastaPublic);
+let indexComVersao = null;
+app.get('/api/versao', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ versao: versaoFront });
+});
+app.get(['/', '/index.html'], (req, res, next) => {
+  try {
+    if (!indexComVersao) {
+      indexComVersao = injetarVersaoNoHtml(require('fs').readFileSync(path.join(pastaPublic, 'index.html'), 'utf8'), versaoFront);
+    }
+  } catch {
+    return next(); // sem index.html: o static responde 404
+  }
+  res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+  res.send(indexComVersao);
+});
+
 // /vendor e /assets têm nome sem hash: cache de 1 dia. O resto (js/css/html do
 // app) revalida por ETag a cada carga, para uma nova versão chegar sem limpar cache.
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -25,14 +48,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
   },
 }));
-
-// Versão do front (hash da pasta public): a tela aberta consulta e recarrega quando muda.
-const { calcularVersao } = require('./versao');
-const versaoFront = calcularVersao(path.join(__dirname, 'public'));
-app.get('/api/versao', (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.json({ versao: versaoFront });
-});
 
 const sseClients = new Set();
 

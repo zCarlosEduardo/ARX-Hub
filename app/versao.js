@@ -37,14 +37,46 @@ function calcularVersao(pastas) {
   return hash.digest('hex').slice(0, 12);
 }
 
-// Registra GET /api/versao e serve a pasta do front revalidando .html/.js/.css a cada carga
-// (ETag), para o "recarregar" nunca reaproveitar um app.js antigo do cache.
+// Acrescenta ?v=<versão> nos <script src> e <link href> LOCAIS (.js/.css) do HTML. Com isso, quando o front
+// muda, o navegador pede o arquivo novo mesmo que tenha uma cópia antiga "fresca" no cache (um F5 comum
+// basta). Ignora URLs externas (http, //), data: e as que já têm query string.
+function injetarVersaoNoHtml(html, versao) {
+  if (!versao) return html;
+  return html.replace(
+    /(<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+?\.(?:js|css))\2/gi,
+    (todo, antes, aspas, url) => {
+      if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(url)) return todo;
+      return `${antes}${aspas}${url}?v=${versao}${aspas}`;
+    }
+  );
+}
+
+// Registra GET /api/versao, serve o index.html com ?v= nos scripts/estilos e o resto da pasta do front
+// revalidando .html/.js/.css a cada carga (ETag), para o "recarregar" nunca reaproveitar um app.js antigo.
 function registrarVersao(app, express, pastaPublic) {
   let versao = calcularVersao(pastaPublic);
+  let indexPronto = null; // { versao, html }
+
+  const servirIndex = (req, res, next) => {
+    let html;
+    try {
+      if (!indexPronto || indexPronto.versao !== versao) {
+        const bruto = fs.readFileSync(path.join(pastaPublic, 'index.html'), 'utf8');
+        indexPronto = { versao, html: injetarVersaoNoHtml(bruto, versao) };
+      }
+      html = indexPronto.html;
+    } catch {
+      return next(); // sem index.html: deixa o static responder (404)
+    }
+    res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.send(html);
+  };
+
   app.get('/api/versao', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ versao });
   });
+  app.get(['/', '/index.html'], servirIndex);
   app.use(
     express.static(pastaPublic, {
       setHeaders(res, arquivo) {
@@ -55,4 +87,4 @@ function registrarVersao(app, express, pastaPublic) {
   return { recalcular: () => (versao = calcularVersao(pastaPublic)), obter: () => versao };
 }
 
-module.exports = { calcularVersao, registrarVersao };
+module.exports = { calcularVersao, registrarVersao, injetarVersaoNoHtml };
