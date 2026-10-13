@@ -303,7 +303,7 @@
         fotoNome: atual.fotoNome !== undefined ? atual.fotoNome : '',
         fotoDepartamento: atual.fotoDepartamento !== undefined ? atual.fotoDepartamento : '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
-        empresasCrm: atual.empresasCrm || (item.associacaoUsuario && item.associacaoUsuario.empresasCrm.length === 1 ? item.associacaoUsuario.empresasCrm : []),
+        empresasCrm: atual.empresasCrm || (item.associacaoUsuario ? item.associacaoUsuario.empresasCrm : []), // padrão: todas as bases (uma para cada)
       };
     };
     const mudarEscolha = (id, campos) => setEscolhas((x) => ({ ...x, [id]: { ...(x[id] || {}), ...campos } }));
@@ -588,7 +588,7 @@
             e('input', { key: 'i', value: c.loginSga, onChange: (ev) => mudarEscolha(item.id, { loginSga: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
           ]) : null,
           u.sistema === 'CRM' && bases.length > 1 ? e('div', { key: 'bases' }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Base do PowerCRM'),
+            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Bases do PowerCRM (cria uma para cada marcada)'),
             e('div', { key: 'c', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, bases.map((b) => {
               const sel = c.empresasCrm.includes(b);
               return e('button', { key: b, style: S.chip(sel), onClick: () => mudarEscolha(item.id, { empresasCrm: sel ? c.empresasCrm.filter((x) => x !== b) : [...c.empresasCrm, b] }) }, b);
