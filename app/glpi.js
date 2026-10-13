@@ -29,7 +29,7 @@ async function glpiFetch(path, options = {}) {
     data = text;
   }
   if (!res.ok) {
-    const msg = Array.isArray(data) ? data.join(' - ') : (data && data.message) || text || `HTTP ${res.status}`;
+    const msg = Array.isArray(data) ? data.join('; ') : (data && data.message) || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
   return data;
@@ -37,12 +37,12 @@ async function glpiFetch(path, options = {}) {
 
 async function initSession(userToken) {
   assertConfigured();
-  if (!userToken) throw new Error('Informe seu token GLPI.');
+  if (!userToken) throw new Error('Informe o token do GLPI.');
   const data = await glpiFetch('/initSession', {
     method: 'GET',
     headers: { 'App-Token': APP_TOKEN, Authorization: 'user_token ' + userToken },
   });
-  if (!data || !data.session_token) throw new Error('Não recebi session_token do GLPI — confira o token informado.');
+  if (!data || !data.session_token) throw new Error('O GLPI não devolveu o session_token. Confira o token informado.');
   return data.session_token;
 }
 

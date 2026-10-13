@@ -7,6 +7,8 @@
   const e = React.createElement;
   const { useState, useEffect, useCallback } = React;
   const { Icon } = window.Icons;
+  const { GraficoColunas } = window.Graficos;
+  const D = window.GraficosDados;
 
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
   const KEY = 'arxhub_disponibilidade_filtro';
@@ -52,11 +54,12 @@
     return isoLocal(d);
   };
   const num = (n) => Number(n || 0).toLocaleString('pt-BR');
+  const plural = (n, um, varios) => `${num(n)} ${n === 1 ? um : varios}`;
   const dataCurta = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
   const dataBr = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
-  const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+  const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Não informado');
   function duracao(seg) {
-    if (seg === null || seg === undefined) return '—';
+    if (seg === null || seg === undefined) return 'Sem dados';
     if (seg < 90) return `${seg} s`;
     if (seg < 5400) return `${Math.round(seg / 60)} min`;
     const h = Math.floor(seg / 3600);
@@ -64,12 +67,6 @@
     if (h < 48) return m ? `${h} h ${m} min` : `${h} h`;
     const d = Math.floor(h / 24);
     return `${d} d ${h % 24} h`;
-  }
-  function topoEixo(max) {
-    if (max <= 4) return 4;
-    const p = Math.pow(10, Math.floor(Math.log10(max)));
-    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
-    return 10 * p;
   }
 
   // ---------- peças ----------
@@ -84,35 +81,52 @@
     ]);
   }
 
-  /** Barras: quedas que começaram em cada dia (cor de erro). */
-  function GraficoDias({ dias }) {
-    const [foco, setFoco] = useState(null);
-    const topo = topoEixo(Math.max(1, ...dias.map((d) => d.quedas)));
-    const passoRotulo = Math.max(1, Math.ceil(dias.length / 13));
-    const ALT = 180;
-    const s = foco !== null ? dias[foco] : null;
-    const deslocar = foco === null ? '' : foco < dias.length / 4 ? 'translateX(-15%)' : foco > (dias.length * 3) / 4 ? 'translateX(-85%)' : 'translateX(-50%)';
-    return e('div', { className: 'res-grafico' }, [
-      e('div', { key: 'eixo', className: 'res-eixo', style: { height: ALT } }, [topo, topo / 2, 0].map((v) => e('span', { key: v }, num(v)))),
-      e('div', { key: 'area', className: 'res-area' }, [
-        e('div', { key: 'plot', className: 'res-plot', style: { height: ALT }, onMouseLeave: () => setFoco(null) }, [
-          ...[0, 0.5, 1].map((f) => e('div', { key: 'g' + f, className: 'res-grade', style: { bottom: f * 100 + '%' } })),
-          ...dias.map((d, i) =>
-            e('div', { key: d.dia, className: 'res-col' + (foco === i ? ' foco' : ''), onMouseEnter: () => setFoco(i), onFocus: () => setFoco(i), onBlur: () => setFoco(null), tabIndex: 0, 'aria-label': `${dataBr(d.dia)}: ${d.quedas} queda(s), ${duracao(d.tempoForaSeg)} fora` },
-              e('div', { className: 'res-pilha' }, d.quedas ? e('div', { key: 'q', className: 'res-seg res-erro', style: { height: Math.max(3, (d.quedas / topo) * ALT) } }) : null)
-            )
-          ),
-          s
-            ? e('div', { key: 'tip', className: 'res-tip', style: { left: `${((foco + 0.5) / dias.length) * 100}%`, transform: deslocar } }, [
-                e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, dataBr(s.dia)),
-                e('div', { key: 'q' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), `${num(s.quedas)} queda(s)`]),
-                s.quedas ? e('div', { key: 'f', style: { color: 'var(--muted)', marginTop: 2 } }, `${duracao(s.tempoForaSeg)} fora no total`) : null,
-              ])
-            : null,
-        ]),
-        e('div', { key: 'x', className: 'res-x' }, dias.map((d, i) => e('span', { key: d.dia, className: i % (passoRotulo * 3) ? 'res-x-sec' : '' }, i % passoRotulo === 0 ? dataCurta(d.dia) : ''))),
-      ]),
-    ]);
+  const SERIE_QUEDAS = [{ chave: 'quedas', cor: 'var(--error)', textura: true }];
+  const SERIE_TEMPO = [{ chave: 'tempo', cor: 'var(--error)' }];
+  const dataTip = (p) => e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, D.dataBr(p.dia));
+
+  /** Colunas: quedas que começaram em cada dia (hachurado, como o erro nos chamados). */
+  function GraficoQuedasDias({ dias }) {
+    const pontos = dias.map((x) => ({
+      chave: x.dia, dia: x.dia, rotulo: D.dataCurta(x.dia), valor: x.quedas, valores: { quedas: x.quedas }, quedas: x.quedas, tempoForaSeg: x.tempoForaSeg || 0,
+      aria: `${D.dataBr(x.dia)}: ${D.plural(x.quedas, 'queda', 'quedas')}${x.quedas ? `, ${D.duracaoLonga(x.tempoForaSeg)} fora do ar` : ''}.`,
+    }));
+    const topo = D.topoEixo(Math.max(1, ...pontos.map((p) => p.quedas)));
+    return e(GraficoColunas, {
+      pontos,
+      series: SERIE_QUEDAS,
+      escala: { topo, ticks: D.ticksEixo(topo) },
+      formatarTick: (t) => t.toLocaleString('pt-BR'),
+      ariaLabel: D.descricaoDias(pontos, 'Gráfico de colunas das quedas por dia', (v) => D.plural(v, 'queda', 'quedas')),
+      vazio: 'Nenhuma queda no período.',
+      tooltip: (p) => [
+        dataTip(p),
+        e('div', { key: 'q' }, [e('i', { key: 'i', className: 'res-sw res-erro', 'aria-hidden': 'true' }), D.plural(p.quedas, 'queda', 'quedas')]),
+        p.quedas ? e('div', { key: 'f', style: { color: 'var(--muted)', marginTop: 2 } }, `${D.duracaoLonga(p.tempoForaSeg)} fora do ar no total`) : null,
+      ],
+    });
+  }
+
+  /** Colunas: tempo fora do ar somado por dia (eixo em minutos ou horas). */
+  function GraficoTempoDias({ dias }) {
+    const pontos = dias.map((x) => ({
+      chave: x.dia, dia: x.dia, rotulo: D.dataCurta(x.dia), valor: x.tempoForaSeg || 0, valores: { tempo: x.tempoForaSeg || 0 }, quedas: x.quedas, tempoForaSeg: x.tempoForaSeg || 0,
+      aria: `${D.dataBr(x.dia)}: ${x.tempoForaSeg ? D.duracaoLonga(x.tempoForaSeg) + ' fora do ar' : 'sem tempo fora do ar'}.`,
+    }));
+    const escala = D.escalaDuracao(Math.max(0, ...pontos.map((p) => p.valor)));
+    return e(GraficoColunas, {
+      pontos,
+      series: SERIE_TEMPO,
+      escala,
+      formatarTick: D.formatarDuracaoCurta,
+      ariaLabel: D.descricaoDias(pontos, 'Gráfico de colunas do tempo fora do ar por dia', D.duracaoLonga),
+      vazio: 'Nenhum tempo fora do ar no período.',
+      tooltip: (p) => [
+        dataTip(p),
+        e('div', { key: 'f' }, [e('i', { key: 'i', className: 'res-sw', style: { background: 'var(--error)' }, 'aria-hidden': 'true' }), `${D.duracaoLonga(p.tempoForaSeg)} fora do ar`]),
+        e('div', { key: 'q', style: { color: 'var(--muted)', marginTop: 2 } }, D.plural(p.quedas, 'queda', 'quedas')),
+      ],
+    });
   }
 
   const tabela = (cabecalhos, linhas) =>
@@ -142,7 +156,7 @@
         const q = new URLSearchParams({ desde: filtro.desde, ate: filtro.ate });
         if (soErros) q.set('nivel', 'erro');
         const resp = await fetch(`${SERVICO}/api/alertas/historico?${q}`);
-        if (resp.status === 404) throw new Error('o chamados-glpi ainda não tem o histórico de alertas (serviço desatualizado?)');
+        if (resp.status === 404) throw new Error('o chamados-glpi não possui o histórico de alertas (serviço desatualizado)');
         const dados = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(dados.error || `HTTP ${resp.status}`);
         setEstado({ carregando: false, dados, erro: null, em: new Date() });
@@ -175,7 +189,7 @@
               e('input', { key: 'b', type: 'date', className: 'field-input', value: datas.ate, min: datas.desde, onChange: (ev) => setDatas((d) => ({ ...d, ate: ev.target.value })), style: S.input, 'aria-label': 'Até' }),
             ])
           : null,
-        e('button', { key: 'er', style: S.chip(soErros), onClick: () => setSoErros((v) => !v), title: 'Esconde os avisos (token sem permissão, erro de login...) e deixa só o que parou de vez' }, 'Só quedas (erros)'),
+        e('button', { key: 'er', style: S.chip(soErros), onClick: () => setSoErros((v) => !v), title: 'Oculta os avisos (token sem permissão, erro de login etc.) e mantém apenas o que parou' }, 'Só quedas (erros)'),
         e('button', { key: 'rf', style: S.btnSec, disabled: carregando, onClick: buscar }, [
           e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
           e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
@@ -189,17 +203,21 @@
       const nomeSel = chaveSel && (d.porServico.find((x) => x.chave === chaveSel) || {}).titulo;
       return e('div', { key: 'painel', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, [
         e('div', { key: 'kpis', className: 'res-kpis', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 } }, [
-          e(Numero, { key: 'q', rotulo: 'Quedas no período', valor: num(t.quedas), icone: 'AlertCircle', cor: t.abertas ? 'var(--error)' : undefined, sub: t.quedas ? `${num(t.erros)} parada(s) e ${num(t.avisos)} aviso(s) em ${num(t.itensAfetados)} item(ns)${t.abertas ? ` · ${t.abertas} ainda com problema agora` : ''}` : 'Nada parou neste período.' }),
+          e(Numero, { key: 'q', rotulo: 'Quedas no período', valor: num(t.quedas), icone: 'AlertCircle', cor: t.abertas ? 'var(--error)' : undefined, sub: t.quedas ? `${plural(t.erros, 'parada', 'paradas')} e ${plural(t.avisos, 'aviso', 'avisos')} em ${plural(t.itensAfetados, 'item', 'itens')}${t.abertas ? ` · ${plural(t.abertas, 'ainda com problema', 'ainda com problema')} neste momento` : ''}` : 'Nada parou neste período.' }),
           e(Numero, { key: 'f', rotulo: 'Tempo fora do ar', valor: t.quedas ? duracao(t.tempoForaSeg) : '0', icone: 'Activity', sub: 'Soma de todas as quedas (do começo até a volta, ou até agora se ainda estiver fora).' }),
-          e(Numero, { key: 'm', rotulo: 'Tempo médio para voltar', valor: duracao(t.tempoMedioParaVoltarSeg), icone: 'RefreshCw', sub: t.tempoMedioParaVoltarSeg === null ? 'Ainda não voltou nenhuma queda neste período.' : 'Média entre o problema aparecer e ele sumir.' }),
-          e(Numero, { key: 'x', rotulo: 'Maior queda', valor: t.quedas ? duracao(t.maiorQuedaSeg) : '—', icone: 'BarChart3', sub: 'A queda que ficou mais tempo fora no período.' }),
+          e(Numero, { key: 'm', rotulo: 'Tempo médio para voltar', valor: duracao(t.tempoMedioParaVoltarSeg), icone: 'RefreshCw', sub: t.tempoMedioParaVoltarSeg === null ? 'Nenhuma queda foi normalizada neste período.' : 'Média entre o início do problema e a normalização.' }),
+          e(Numero, { key: 'x', rotulo: 'Maior queda', valor: t.quedas ? duracao(t.maiorQuedaSeg) : 'Sem dados', icone: 'BarChart3', sub: 'A queda que ficou mais tempo fora no período.' }),
         ]),
         e('div', { key: 'graf', style: S.card }, [
-          cabecalhoCard('Quedas por dia', 'Cada queda conta no dia em que começou. Passe o mouse numa barra para ver o tempo fora.'),
-          e(GraficoDias, { key: 'g', dias: d.porDia }),
+          cabecalhoCard('Quedas por dia', 'Cada queda conta no dia em que começou. Posicione o cursor ou use o teclado sobre um dia para ver o tempo fora do ar.'),
+          e(GraficoQuedasDias, { key: 'g', dias: d.porDia }),
+        ]),
+        e('div', { key: 'tempo', style: S.card }, [
+          cabecalhoCard('Tempo fora do ar por dia', 'Soma da duração das quedas que começaram em cada dia.'),
+          e(GraficoTempoDias, { key: 'g', dias: d.porDia }),
         ]),
         e('div', { key: 'serv', style: S.card }, [
-          cabecalhoCard('Por serviço', 'Quantas vezes cada um parou e quanto levou para voltar. Clique numa linha para ver só as quedas dele.'),
+          cabecalhoCard('Por serviço', 'Quantidade de paradas por serviço e tempo até a normalização. Clique em uma linha para filtrar as quedas do serviço.'),
           d.porServico.length
             ? tabela(['Serviço', 'Quedas', 'Tempo fora', 'Voltou em (média)', 'Última queda', 'Última volta', 'Agora'],
                 d.porServico.map((s) =>
@@ -209,7 +227,7 @@
                     e('td', { key: 'f' }, duracao(s.tempoForaSeg)),
                     e('td', { key: 'm' }, duracao(s.tempoMedioParaVoltarSeg)),
                     e('td', { key: 'u' }, quando(s.ultimaQuedaEm)),
-                    e('td', { key: 'v' }, s.ultimaVoltaEm ? quando(s.ultimaVoltaEm) : '—'),
+                    e('td', { key: 'v' }, s.ultimaVoltaEm ? quando(s.ultimaVoltaEm) : 'Não informado'),
                     e('td', { key: 'a' }, s.abertas ? e('span', { style: S.tag('#F5514D') }, 'com problema') : e('span', { style: S.tag('#6DBE6A') }, 'ok')),
                   ])
                 )
@@ -235,13 +253,13 @@
             : e('div', { key: 'v', style: { color: 'var(--muted-soft)', fontSize: 13 } }, 'Nenhuma queda para mostrar.'),
         ]),
         e('div', { key: 'nota', style: { color: 'var(--muted-soft)', fontSize: 12, lineHeight: 1.5 } },
-          `O monitor confere tudo a cada poucos minutos: o horário de início e de volta tem essa margem, e uma queda mais curta que isso pode passar sem registro. ${d.naFila ? `${d.naFila} evento(s) ainda esperando para serem gravados (banco-central fora do ar).` : ''}`),
+          `O monitor verifica os serviços a cada poucos minutos. Os horários de início e de retorno têm essa margem, e quedas mais curtas podem não ser registradas. ${d.naFila ? `${plural(d.naFila, 'evento aguarda', 'eventos aguardam')} gravação (banco-central fora do ar).` : ''}`),
       ]);
     }
 
     let corpo;
-    if (!datasOk) corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Escolha as duas datas (a primeira antes da segunda).');
-    else if (erro && !dados) corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui buscar o histórico: ' + erro);
+    if (!datasOk) corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Informe as duas datas. A data inicial deve ser anterior à final.');
+    else if (erro && !dados) corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar o histórico: ' + erro);
     else if (!dados) corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando o histórico…']);
     else corpo = painel(dados);
 
@@ -249,4 +267,5 @@
   }
 
   window.DisponibilidadeView = DisponibilidadeView;
+  window.DisponibilidadeGraficos = { GraficoQuedasDias, GraficoTempoDias }; // usados nos testes de renderização
 })();

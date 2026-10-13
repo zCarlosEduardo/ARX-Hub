@@ -7,6 +7,8 @@
   const e = React.createElement;
   const { useState, useEffect, useCallback } = React;
   const { Icon } = window.Icons;
+  const { GraficoSemanas, BarrasHorizontais, Legenda } = window.Graficos;
+  const D = window.GraficosDados;
 
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
   const KEY_PERIODO = 'arxhub_resultados_periodo';
@@ -59,11 +61,12 @@
     return isoLocal(d);
   }
   const num = (n) => Number(n || 0).toLocaleString('pt-BR');
-  const pct = (x) => (x === null || x === undefined ? '—' : (x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+  const plural = (n, um, varios) => `${num(n)} ${n === 1 ? um : varios}`;
+  const pct = (x) => (x === null || x === undefined ? 'Sem dados' : (x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
   const dataCurta = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
   const dataBr = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
   function duracao(seg) {
-    if (seg === null || seg === undefined) return '—';
+    if (seg === null || seg === undefined) return 'Sem dados';
     if (seg < 90) return `${seg} s`;
     if (seg < 3600) return `${Math.round(seg / 60)} min`;
     const h = Math.floor(seg / 3600);
@@ -75,13 +78,6 @@
     if (min < 60) return `${(Math.round(min * 10) / 10).toLocaleString('pt-BR')} min`;
     return (min / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
   }
-  /** Topo "redondo" do eixo (4, 5, 10, 20, 25, 50...). */
-  function topoEixo(max) {
-    if (max <= 4) return 4;
-    const p = Math.pow(10, Math.floor(Math.log10(max)));
-    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
-    return 10 * p;
-  }
 
   // ---------- peças ----------
   /** Variação contra o período anterior: seta + valor (cor + texto). melhora = true/false/null (sem mudança/sem dado). */
@@ -92,7 +88,7 @@
     return e('div', { className: 'res-var', title: titulo, style: { display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12.5, fontWeight: 600, color: cor, flexWrap: 'wrap' } }, [
       e('span', { key: 's', 'aria-hidden': 'true' }, seta),
       e('span', { key: 't' }, texto),
-      e('span', { key: 'l', style: { fontWeight: 500, color: 'var(--muted-soft)', fontSize: 11.5 } }, `${leitura} vs. período anterior`),
+      e('span', { key: 'l', style: { fontWeight: 500, color: 'var(--muted-soft)', fontSize: 11.5 } }, `${leitura} em relação ao período anterior`),
     ]);
   }
   const semAnterior = (titulo) => e('div', { className: 'res-var', title: titulo, style: { fontSize: 12, color: 'var(--muted-soft)' } }, 'Sem execuções no período anterior para comparar.');
@@ -112,58 +108,6 @@
       e('div', { key: 'v', style: { fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' } }, valor),
       variacao ? e('div', { key: 'va' }, variacao) : null,
       e('div', { key: 'su', style: { fontSize: 12, color: 'var(--muted-soft)', lineHeight: 1.4 } }, sub),
-    ]);
-  }
-
-  const Legenda = () =>
-    e('div', { className: 'res-legenda' }, [
-      e('span', { key: 'c' }, [e('i', { key: 'i', className: 'res-sw res-ok' }), 'Concluído']),
-      e('span', { key: 'e' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), 'Erro']),
-    ]);
-
-  /** Barras empilhadas por semana: concluído embaixo, erro (hachurado) em cima. */
-  function GraficoSemanas({ semanas }) {
-    const [foco, setFoco] = useState(null);
-    const topo = topoEixo(Math.max(1, ...semanas.map((s) => s.concluido + s.erro)));
-    const passoRotulo = Math.ceil(semanas.length / 13);
-    const ALT = 180;
-    const s = foco !== null ? semanas[foco] : null;
-    const fimSemana = (iso) => {
-      const d = new Date(iso + 'T00:00:00');
-      d.setDate(d.getDate() + 6);
-      return isoLocal(d);
-    };
-    const deslocar = foco === null ? '' : foco < semanas.length / 4 ? 'translateX(-15%)' : foco > (semanas.length * 3) / 4 ? 'translateX(-85%)' : 'translateX(-50%)';
-    return e('div', { className: 'res-grafico' }, [
-      e('div', { key: 'eixo', className: 'res-eixo', style: { height: ALT } }, [topo, topo / 2, 0].map((v) => e('span', { key: v }, num(v)))),
-      e('div', { key: 'area', className: 'res-area' }, [
-        e('div', { key: 'plot', className: 'res-plot', style: { height: ALT }, onMouseLeave: () => setFoco(null) }, [
-          ...[0, 0.5, 1].map((f) => e('div', { key: 'g' + f, className: 'res-grade', style: { bottom: f * 100 + '%' } })),
-          ...semanas.map((sem, i) => {
-            const hOk = (sem.concluido / topo) * ALT;
-            const hErro = (sem.erro / topo) * ALT;
-            return e('div', { key: sem.semana, className: 'res-col' + (foco === i ? ' foco' : ''), onMouseEnter: () => setFoco(i), onFocus: () => setFoco(i), onBlur: () => setFoco(null), tabIndex: 0, 'aria-label': `Semana de ${dataBr(sem.semana)}: ${sem.concluido} concluídos, ${sem.erro} com erro` },
-              e('div', { className: 'res-pilha' }, [
-                sem.erro ? e('div', { key: 'e', className: 'res-seg res-erro', style: { height: Math.max(3, hErro) } }) : null,
-                sem.concluido ? e('div', { key: 'c', className: 'res-seg res-ok', style: { height: Math.max(3, hOk) } }) : null,
-              ])
-            );
-          }),
-          s
-            ? e('div', { key: 'tip', className: 'res-tip', style: { left: `${((foco + 0.5) / semanas.length) * 100}%`, transform: deslocar } }, [
-                e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, `${dataBr(s.semana)} a ${dataBr(fimSemana(s.semana))}`),
-                e('div', { key: 'c' }, [e('i', { key: 'i', className: 'res-sw res-ok' }), `${num(s.concluido)} concluído(s)`]),
-                e('div', { key: 'e' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), `${num(s.erro)} com erro`]),
-                s.executando ? e('div', { key: 'x', style: { color: 'var(--muted)' } }, `${num(s.executando)} sem fim (executando)`) : null,
-                s.concluido + s.erro ? e('div', { key: 'tx', style: { color: 'var(--muted)', marginTop: 2 } }, `Taxa de erro: ${pct(s.erro / (s.concluido + s.erro))}`) : null,
-              ])
-            : null,
-        ]),
-        e('div', { key: 'x', className: 'res-x' }, semanas.map((sem, i) =>
-          // tela estreita: só um rótulo a cada 3 dos que aparecem (classe res-x-sec some no CSS)
-          e('span', { key: sem.semana, className: i % (passoRotulo * 3) ? 'res-x-sec' : '' }, i % passoRotulo === 0 ? dataCurta(sem.semana) : '')
-        )),
-      ]),
     ]);
   }
 
@@ -284,6 +228,33 @@
       const kTempo = va && mk(va.tempoEconomizado.diferencaMin, horasMin, false, pctVar(va.tempoEconomizado.percentual), horasMin(va.tempoEconomizado.anteriorMin) + ' (estimativa)');
       const kDur = va && mk(va.duracaoMediaSeg.diferencaSeg, duracao, true, '', duracao(va.duracaoMediaSeg.anterior));
       const maxMotivo = Math.max(1, ...d.motivosErro.map((m) => m.total));
+      const motivos = D.motivosComPercentual(d.motivosErro, t.erro);
+      const legendaCE = e(Legenda, { key: 'lg', itens: [{ rotulo: 'Concluído', classe: 'res-ok' }, { rotulo: 'Erro', classe: 'res-erro' }] });
+      const detalheErro = (x) => (x.finalizadas ? `${num(x.finalizadas)} · ${pct(x.taxaErro)} de erro` : 'Sem execuções finalizadas');
+      const tiposOrd = D.ordenarTipos(d.tipos, d.nomesTipos);
+      const rank = D.rankingAssociacoes(d.associacoes, 8);
+      const chartsDuas = e('div', { key: 'duas', className: 'res-duas' }, [
+        e('div', { key: 'dt', style: S.card }, [
+          cabecalhoCard('Distribuição por tipo', 'Execuções finalizadas por tipo de chamado, do maior para o menor volume. A parte hachurada indica erro.'),
+          legendaCE,
+          e(BarrasHorizontais, {
+            key: 'b',
+            itens: tiposOrd.map((x) => ({ chave: x.tipo, rotulo: x.nome, valores: { concluido: x.concluido, erro: x.erro }, total: x.finalizadas, detalhe: detalheErro(x) })),
+            ariaLabel: `Barras por tipo de chamado, ${D.plural(tiposOrd.length, 'tipo', 'tipos')}, do maior para o menor volume de execuções finalizadas.`,
+            vazio: 'Nenhuma execução finalizada no período.',
+          }),
+        ]),
+        e('div', { key: 'da', style: S.card }, [
+          cabecalhoCard('Associações com mais erros', rank.restantes ? `Exibindo ${rank.itens.length} de ${rank.total} associações, ordenadas por erros e, no empate, por volume. A tabela "Por associação" lista todas.` : 'Associações ordenadas por erros e, no empate, por volume.'),
+          legendaCE,
+          e(BarrasHorizontais, {
+            key: 'b',
+            itens: rank.itens.map((a) => ({ chave: a.nome + (a.associacaoId || ''), rotulo: a.nome, valores: { concluido: a.concluido, erro: a.erro }, total: a.finalizadas, detalhe: a.finalizadas ? `${plural(a.erro, 'erro', 'erros')} de ${num(a.finalizadas)} · ${pct(a.taxaErro)}` : 'Sem execuções finalizadas' })),
+            ariaLabel: `Barras das ${D.plural(rank.itens.length, 'associação', 'associações')} com mais erros no período.`,
+            vazio: 'Nenhuma associação com execuções no período.',
+          }),
+        ]),
+      ]);
       const fin = (a) => a.concluido + a.erro;
       const alta = (a) => fin(a) >= MIN_FINALIZADAS_ALERTA && a.taxaErro !== null && a.taxaErro >= TAXA_ALTA;
       const valorOrdem = (a) => (ordem.col === 'nome' ? String(a.nome).toLowerCase() : ordem.col === 'taxaErro' ? (a.taxaErro === null ? -1 : a.taxaErro) : a[ordem.col]);
@@ -299,26 +270,26 @@
         return e('button', { key: col, style: { ...S.link, color: ativo ? 'var(--text)' : 'var(--muted)', fontSize: 11.5, whiteSpace: 'nowrap' }, 'aria-label': `Ordenar por ${rotulo}`, onClick: () => setOrdem(ativo ? { col, desc: !ordem.desc } : { col, desc: col !== 'nome' }) }, rotulo + (ativo ? (ordem.desc ? ' ▼' : ' ▲') : ''));
       };
       const avisos = [];
-      if (erro) avisos.push(e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, `Não consegui atualizar: ${erro} (mostrando a última busca).`));
-      if (t.testes) avisos.push(e('div', { key: 'tst', style: { color: 'var(--warn)', fontSize: 12.5 } }, `Inclui ${num(t.testes)} execução(ões) em modo teste: nada foi escrito no GLPI (concluído/erro pelo texto que iria pro chamado).`));
-      if (t.executandoParado) avisos.push(e('div', { key: 'par', style: { color: 'var(--warn)', fontSize: 12.5 } }, `${num(t.executandoParado)} execução(ões) ficaram em "executando" há mais de 3 h (provavelmente interrompidas).`));
-      else if (t.executando) avisos.push(e('div', { key: 'exe', style: { color: 'var(--muted)', fontSize: 12.5 } }, `${num(t.executando)} execução(ões) em andamento agora.`));
+      if (erro) avisos.push(e('div', { key: 'err', style: { color: 'var(--error)', fontSize: 12.5 } }, `Falha ao atualizar: ${erro}. Exibindo a última busca.`));
+      if (t.testes) avisos.push(e('div', { key: 'tst', style: { color: 'var(--warn)', fontSize: 12.5 } }, `Inclui ${plural(t.testes, 'execução', 'execuções')} em modo teste. Nada foi escrito no GLPI, e o resultado (concluído ou erro) vem do texto que seria enviado ao chamado.`));
+      if (t.executandoParado) avisos.push(e('div', { key: 'par', style: { color: 'var(--warn)', fontSize: 12.5 } }, `${plural(t.executandoParado, 'execução permanece', 'execuções permanecem')} em "executando" há mais de 3 h (provavelmente interrompidas).`));
+      else if (t.executando) avisos.push(e('div', { key: 'exe', style: { color: 'var(--muted)', fontSize: 12.5 } }, `${plural(t.executando, 'execução em andamento', 'execuções em andamento')} neste momento.`));
 
       return e('div', { key: 'painel', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, [
         avisos.length ? e('div', { key: 'av', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, avisos) : null,
         e('div', { key: 'kpis', className: 'res-kpis' }, [
-          e(Numero, { key: 'r', rotulo: 'Chamados resolvidos', icone: 'Activity', valor: num(t.concluido), variacao: kRes, sub: `de ${num(t.concluido + t.erro)} execuções finalizadas · ${num(t.chamados)} chamado(s) diferente(s)` }),
-          e(Numero, { key: 'e', rotulo: 'Taxa de erro', icone: 'AlertCircle', valor: pct(t.taxaErro), variacao: kErro, sub: `${num(t.erro)} execução(ões) com erro` }),
-          e(Numero, { key: 't', rotulo: 'Tempo economizado', selo: 'estimativa', valor: horasMin(te.minutos), variacao: kTempo, sub: 'Estimativa: chamados concluídos × minutos que levaria à mão (por tipo)' }),
+          e(Numero, { key: 'r', rotulo: 'Chamados resolvidos', icone: 'Activity', valor: num(t.concluido), variacao: kRes, sub: `de ${plural(t.concluido + t.erro, 'execução finalizada', 'execuções finalizadas')} · ${plural(t.chamados, 'chamado distinto', 'chamados distintos')}` }),
+          e(Numero, { key: 'e', rotulo: 'Taxa de erro', icone: 'AlertCircle', valor: pct(t.taxaErro), variacao: kErro, sub: plural(t.erro, 'execução com erro', 'execuções com erro') }),
+          e(Numero, { key: 't', rotulo: 'Tempo economizado', selo: 'estimativa', valor: horasMin(te.minutos), variacao: kTempo, sub: 'Estimativa: chamados concluídos × minutos do trabalho manual (por tipo)' }),
           e(Numero, { key: 'd', rotulo: 'Tempo médio de execução', icone: 'RefreshCw', valor: duracao(t.duracaoMediaSeg), variacao: kDur, sub: `mediana ${duracao(t.duracaoMedianaSeg)} · da aprovação ao fim (inclui fila)` }),
         ]),
         e('div', { key: 'sem', style: S.card }, [
           e('div', { key: 'h', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
-            cabecalhoCard('Resolvidos por semana', 'Execuções finalizadas por semana (segunda a domingo). Passe o mouse numa barra para ver os números.'),
-            e(Legenda, { key: 'l' }),
+            cabecalhoCard('Resolvidos por semana', 'Execuções por semana (segunda a domingo) e taxa de erro semanal. Posicione o cursor ou use o teclado sobre uma semana para ver os números.'),
           ]),
-          e(GraficoSemanas, { key: 'g', semanas: d.semanas }),
+          e(GraficoSemanas, { key: 'g', semanas: d.semanas, anterior: ant }),
         ]),
+        chartsDuas,
         e('div', { key: 'tipos', style: S.card }, [
           cabecalhoCard('Por tipo de chamado', `Tempo economizado é estimativa: ${Object.entries(te.minutosManuais).map(([k, v]) => `${nomeTipo(k)} ${v} min`).join(' · ')} por chamado concluído.`),
           tabela(['Tipo', 'Execuções', 'Resolvidos', 'Erros', 'Taxa de erro', 'Tempo médio', 'Economizado (estim.)'],
@@ -336,7 +307,7 @@
           ),
         ]),
         e('div', { key: 'onde', style: S.card }, [
-          cabecalhoCard('Onde mais falha', 'Combinação de associação e tipo de chamado com mais erros no período. Clique no chamado de exemplo (o mais recente) para abrir no GLPI.'),
+          cabecalhoCard('Onde mais falha', 'Combinação de associação e tipo de chamado com mais erros no período. Clique no chamado de exemplo (o mais recente) para ver os detalhes.'),
           (d.falhas || []).length
             ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 12 } }, d.falhas.slice(0, 5).map((x, i) =>
                 e('div', { key: i, style: { display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '2px 12px', alignItems: 'baseline' } }, [
@@ -356,12 +327,13 @@
         ]),
         e('div', { key: 'falhas', className: 'page-grid' }, [
           e('div', { key: 'mot', style: S.card }, [
-            cabecalhoCard('Motivos de erro', 'Motivos de erro agrupados (sem nomes e números). Clique no chamado para abrir no GLPI.'),
+            cabecalhoCard('Motivos de erro', 'Motivos de erro agrupados, sem nomes e números. Clique no chamado para ver os detalhes.'),
             d.motivosErro.length
-              ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, d.motivosErro.map((m, i) =>
+              ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, motivos.map((m, i) =>
                   e('div', { key: i }, [
                     e('div', { key: 'r', style: { display: 'flex', alignItems: 'baseline', gap: 10 } }, [
                       e('span', { key: 'n', style: { fontWeight: 600, fontSize: 15, minWidth: 28, fontVariantNumeric: 'tabular-nums' } }, num(m.total)),
+                      e('span', { key: 'p', title: 'Participação nos erros do período', style: { fontSize: 12, color: 'var(--muted)', minWidth: 36, fontVariantNumeric: 'tabular-nums' } }, D.formatarPct(m.pct, 0)),
                       e('span', { key: 't', style: { fontSize: 13, lineHeight: 1.4, flex: 1, minWidth: 0, overflowWrap: 'anywhere' } }, m.motivo),
                     ]),
                     e('div', { key: 'b', style: { margin: '6px 0 6px 38px' } }, e(Barrinha, { fracao: m.total / maxMotivo })),
@@ -378,7 +350,7 @@
           ]),
           e('div', { key: 'dir', style: { display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 } }, [
             e('div', { key: 'assoc', style: S.card }, [
-              cabecalhoCard('Por associação', `Clique no título da coluna para ordenar. "Alta" = taxa de erro de ${Math.round(TAXA_ALTA * 100)}% ou mais, com pelo menos ${MIN_FINALIZADAS_ALERTA} execuções finalizadas.`),
+              cabecalhoCard('Por associação', `Clique no título da coluna para ordenar. "Alta" indica taxa de erro de ${Math.round(TAXA_ALTA * 100)}% ou mais, com ao menos ${MIN_FINALIZADAS_ALERTA} execuções finalizadas.`),
               tabela([cabOrdem('nome', 'Associação'), cabOrdem('total', 'Execuções'), cabOrdem('erro', 'Erros'), cabOrdem('taxaErro', 'Taxa de erro')],
                 assocs.map((a) =>
                   e('tr', { key: a.nome + (a.associacaoId || ''), style: alta(a) ? { background: 'var(--error-tint)' } : null }, [
@@ -392,7 +364,7 @@
                   ])
                 )
               ),
-              d.associacoes.length > 10 ? e('button', { key: 'mais', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => setTodasAssoc((v) => !v) }, todasAssoc ? 'Mostrar só as 10 primeiras' : `Ver todas (${d.associacoes.length})`) : null,
+              d.associacoes.length > 10 ? e('button', { key: 'mais', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => setTodasAssoc((v) => !v) }, todasAssoc ? 'Mostrar apenas as 10 primeiras' : `Ver todas (${d.associacoes.length})`) : null,
             ]),
             d.aprovadores.length
               ? e('div', { key: 'apr', style: S.card }, [
@@ -409,15 +381,15 @@
 
     let corpo;
     if (!datasOk) {
-      corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Escolha as duas datas (a primeira antes da segunda).');
+      corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Informe as duas datas. A data inicial deve ser anterior à final.');
     } else if (erro && !dados) {
-      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui buscar os resultados: ' + erro);
+      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os resultados: ' + erro);
     } else if (!dados) {
       corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando resultados…']);
     } else if (!dados.totais.total) {
       corpo = e('div', { key: 'vazio', style: { ...S.card, alignItems: 'center', gap: 12, padding: '50px 20px', color: 'var(--muted-soft)', textAlign: 'center' } }, [
         e('span', { key: 'i', style: { display: 'flex' } }, Icon('BarChart3', 34, 'var(--muted-soft)', 1.3)),
-        e('div', { key: 't', style: { fontSize: 14, color: 'var(--text)', fontWeight: 600 } }, assocSel || tipoSel ? 'Nenhum chamado tratado com esses filtros neste período.' : 'Ainda não tem chamado tratado pelas automações neste período.'),
+        e('div', { key: 't', style: { fontSize: 14, color: 'var(--text)', fontWeight: 600 } }, assocSel || tipoSel ? 'Nenhum chamado tratado com esses filtros neste período.' : 'Nenhum chamado tratado pelas automações neste período.'),
         assocSel || tipoSel ? e('button', { key: 'lf', style: S.btnSec, onClick: () => { setAssocSel(''); setTipoSel(''); } }, 'Limpar filtros de associação e tipo') : null,
         e('div', { key: 's', style: { fontSize: 12.5, maxWidth: 520, lineHeight: 1.5 } },
           incluirTeste

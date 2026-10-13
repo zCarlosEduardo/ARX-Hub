@@ -40,6 +40,7 @@
       // sem storage: vale só enquanto a tela estiver aberta
     }
   };
+  const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
   /** Copia texto pra área de transferência (o Hub abre em http: sem navigator.clipboard, então cai no execCommand). */
@@ -101,7 +102,7 @@
     const corte = !aberto && !recolhidoTodo ? { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: linhas || 4, overflow: 'hidden' } : {};
     return e('div', null, [
       recolhidoTodo && !aberto ? null : e('pre', { key: 't', style: { ...estilo, ...corte } }, texto),
-      longo ? e('button', { key: 'b', style: { ...S.link, fontSize: 11.5, marginTop: 4 }, onClick: () => setAberto((a) => !a) }, aberto ? 'recolher' : (rotulo || 'ver mais')) : null,
+      longo ? e('button', { key: 'b', style: { ...S.link, fontSize: 11.5, marginTop: 4 }, onClick: () => setAberto((a) => !a) }, aberto ? 'Recolher' : (rotulo || 'Ver mais')) : null,
     ]);
   }
 
@@ -148,11 +149,11 @@
         cor = COR_EXEC[x.status] || 'var(--muted)';
         topo = [
           e('span', { key: 's', style: { fontWeight: 700, fontSize: 12.5, color: cor } }, 'Automação · ' + (NOME_EXEC[x.status] || x.status)),
-          x.teste && x.status !== 'teste' ? e('span', { key: 'm', style: S.tag('#F5A524') }, 'modo teste') : null,
+          x.teste && x.status !== 'teste' ? e('span', { key: 'm', style: S.tag('#F5A524') }, 'Modo teste') : null,
         ];
         corpo = [
           e('div', { key: 'q', style: { fontSize: 12, color: 'var(--muted)' } }, [x.tipo ? x.tipo : null, x.por ? 'aprovado por ' + x.por : null].filter(Boolean).join(' · ') || 'Execução da automação'),
-          x.resultado ? e(TextoRecolhivel, { key: 'r', texto: x.resultado, recolhidoTodo: true, rotulo: 'ver resultado' }) : null,
+          x.resultado ? e(TextoRecolhivel, { key: 'r', texto: x.resultado, recolhidoTodo: true, rotulo: 'Ver resultado' }) : null,
         ];
       } else {
         cor = x.k === 'aberto' ? 'var(--muted)' : x.de === 'solucao' ? '#6DBE6A' : '#3B82F6';
@@ -179,14 +180,14 @@
     if (d.carregando) {
       miolo = e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 20, 'var(--accent)')), 'Lendo o chamado no GLPI…']);
     } else if (d.erro) {
-      miolo = e('div', { style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui ler o chamado: ' + d.erro);
+      miolo = e('div', { style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao ler o chamado: ' + d.erro);
     } else {
       miolo = e('div', null, [
         secao('Descrição'),
-        e('div', { key: 'desc', style: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 18 } }, c.descricao ? e(TextoRecolhivel, { texto: c.descricao, linhas: 8 }) : faixa('(sem descrição)')),
+        e('div', { key: 'desc', style: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 18 } }, c.descricao ? e(TextoRecolhivel, { texto: c.descricao, linhas: 8 }) : faixa('Sem descrição')),
         secao('Linha do tempo'),
         h.carregando ? faixa('Buscando as execuções da automação…') : null,
-        h.erro ? faixa('Não consegui buscar as execuções da automação: ' + h.erro, 'var(--warn)') : null,
+        h.erro ? faixa('Falha ao buscar as execuções da automação: ' + h.erro, 'var(--warn)') : null,
         e('div', { key: 'tl', style: { position: 'relative', marginLeft: 5, paddingLeft: 16, borderLeft: '2px solid var(--border)', marginTop: 6 } }, linha.map(evento)),
         !h.carregando && !h.erro && !h.itens.length ? faixa('A automação ainda não rodou neste chamado.') : null,
       ]);
@@ -203,10 +204,10 @@
             e('span', { key: 'c', style: S.tag('#3B82F6') }, (c && c.categoria) || item.categoria || '(sem categoria)'),
             e('span', { key: 's', style: S.tag(c && c.status >= 5 ? '#6DBE6A' : '#F5A524') }, (c && c.statusNome) || item.statusNome),
           ]),
-          e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `Requerente: ${(c && c.requerente) || item.requerente || '?'} · aberto em ${dataBr((c && c.abertoEm) || item.abertoEm)}`),
+          e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `Requerente: ${(c && c.requerente) || item.requerente || 'Não informado'} · aberto em ${dataBr((c && c.abertoEm) || item.abertoEm)}`),
           e('div', { key: 'b', style: { display: 'flex', gap: 14, alignItems: 'center' } }, [
-            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'link copiado' : 'copiar link')]),
-            e('a', { key: 'g', href: (c && c.link) || item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' } }, [Icon('ExternalLink', 12), e('span', { key: 't' }, 'abrir no GLPI')]),
+            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'Link copiado' : 'Copiar link')]),
+            e('a', { key: 'g', href: (c && c.link) || item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' } }, [Icon('ExternalLink', 12), e('span', { key: 't' }, 'Abrir no GLPI')]),
           ]),
         ]),
         e('div', { key: 'corpo', style: { flex: 1, overflowY: 'auto', padding: '14px 16px 40px' } }, miolo),
@@ -336,11 +337,11 @@
           const linhas = c.fotoLista.split('\n').map((l) => l.trim()).filter(Boolean);
           const padrao = item.foto.fotos.map((x) => `${x.nome} | ${x.departamento}`).join('\n');
           if (!linhas.length || linhas.some((l) => !l.split('|')[0].trim() || !(l.split('|')[1] || '').trim())) return 'Cada linha da lista precisa de Nome | DEPARTAMENTO';
-          if (item.foto.fotos.some((x) => x.duvida) && c.fotoLista === padrao) return 'Confira/edite a lista de fotos (há linhas em dúvida)';
+          if (item.foto.fotos.some((x) => x.duvida) && c.fotoLista === padrao) return 'Confira a lista de fotos: há linhas em dúvida';
           return null;
         }
-        if (item.foto.duvidaNome && !c.fotoNome.trim()) return 'Digite o nome que vai na foto';
-        if (item.foto.duvidaDepto && !c.fotoDepartamento.trim()) return 'Digite o departamento que vai na foto';
+        if (item.foto.duvidaNome && !c.fotoNome.trim()) return 'Informe o nome da foto';
+        if (item.foto.duvidaDepto && !c.fotoDepartamento.trim()) return 'Informe o departamento da foto';
         return null;
       }
       if (item.tipo !== 'cadastro_usuario') return null;
@@ -375,7 +376,7 @@
         const jobId = d.jobId;
         // chamados que já estavam rodando em outra execução (outro computador): não rodam aqui
         const ign = new Map((d.ignorados || []).map((i) => [i.id, i.por]));
-        if (ign.size) setResultados((r) => ({ ...r, ...Object.fromEntries([...ign].map(([id, por]) => [id, { ok: false, status: 'nao_rodou', texto: `Já estava sendo executado por outra execução${por ? ` (${por})` : ''}. Atualize a lista pra ver o resultado.` }])) }));
+        if (ign.size) setResultados((r) => ({ ...r, ...Object.fromEntries([...ign].map(([id, por]) => [id, { ok: false, status: 'nao_rodou', texto: `Já estava em execução em outra sessão${por ? ` (${por})` : ''}. Atualize a lista para ver o resultado.` }])) }));
         ids.splice(0, ids.length, ...ids.filter((x) => !ign.has(x)));
         const mudar = (fn) => setExecucoes((ex) => (ex[jobId] ? { ...ex, [jobId]: fn(ex[jobId]) } : ex));
         setExecucoes((ex) => ({ ...ex, [jobId]: { jobId, ids, linhas: [], fim: null } }));
@@ -399,11 +400,11 @@
         fonte.onerror = () => {
           if (fonte.readyState === EventSource.CLOSED) {
             fechar();
-            mudar((x) => ({ ...x, fim: x.fim || { error: 'conexão com o serviço caiu' } }));
+            mudar((x) => ({ ...x, fim: x.fim || { error: 'conexão com o serviço interrompida' } }));
           }
         };
       } catch (err) {
-        setResultados((r) => ({ ...r, ...Object.fromEntries(ids.map((id) => [id, { ok: false, status: 'erro', texto: `Não iniciou: ${err.message}` }])) }));
+        setResultados((r) => ({ ...r, ...Object.fromEntries(ids.map((id) => [id, { ok: false, status: 'erro', texto: `Falha ao iniciar: ${err.message}` }])) }));
       }
     }
 
@@ -487,12 +488,12 @@
         const f = item.foto;
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
           e('div', { key: 'r' }, [
-            e('strong', { key: 'n' }, f.duvidaNome ? '(nome a digitar)' : f.nome),
-            e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' · ' + (f.duvidaDepto ? '(departamento a digitar)' : f.departamento)),
+            e('strong', { key: 'n' }, f.duvidaNome ? '(nome a informar)' : f.nome),
+            e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' · ' + (f.duvidaDepto ? '(departamento a informar)' : f.departamento)),
             !f.duvidaDepto && f.departamentoOrigem === 'planilha' ? e('span', { key: 'o', style: { color: 'var(--muted)' } }, ' (pela lista de funcionários)') : null,
           ]),
           e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Gera a foto de perfil (arte com nome e departamento), anexa no chamado e soluciona.'),
-          (f.duvidaNome || f.duvidaDepto) && f.motivos.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, 'Na dúvida, digite abaixo (não roda no automático): ' + f.motivos.join('; ') + '.') : null,
+          (f.duvidaNome || f.duvidaDepto) && f.motivos.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, 'Há dúvida (não roda no automático): ' + f.motivos.join('; ') + '. Preencha abaixo.') : null,
           f.outraPessoa && !f.duvidaDepto ? e('div', { key: 'o2', style: { color: 'var(--warn)', fontSize: 12 } }, 'A foto é para outra pessoa, não o solicitante.') : null,
           f.duvidaNome ? e('div', { key: 'nome' }, [
             e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Nome na foto'),
@@ -509,10 +510,10 @@
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
       } else if (item.tipo === 'erro_exportar_modelo') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
-          e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || '?'}`),
+          e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || 'Não informado'}`),
           item.descricaoErro ? e('div', { key: 'd', style: { color: 'var(--muted)' } }, item.descricaoErro) : null,
           e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Busca o código FIPE no card do PowerCRM (só roda com 1 card) e cadastra o modelo no SGA.'),
-          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição. Só cadastra se achar o card (1 só) e a FIPE; modelo que já existe é respondido como "Modelo já cadastrado".'),
+          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição. Só cadastra se encontrar um único card e a FIPE; modelo já existente recebe a resposta "Modelo já cadastrado".'),
         ]);
       } else if (item.tipo === 'cadastro_modelo' && item.modelo) {
         const f = item.modelo.fipe;
@@ -520,15 +521,15 @@
           e('strong', { key: 'n' }, `FIPE ${item.modelo.codigoFipe}`),
           f ? e('div', { key: 'm' }, `${f.marca} · ${f.modelo}`) : null,
           f ? e('div', { key: 't', style: { color: 'var(--muted)' } }, `${f.tipoNome}${f.combustivel ? ' · ' + f.combustivel : ''} · cadastra só no SGA`) : null,
-          item.modelo.fipeErro ? e('div', { key: 'e', style: { color: 'var(--warn)' } }, 'Não consegui consultar a FIPE agora: ' + item.modelo.fipeErro) : null,
+          item.modelo.fipeErro ? e('div', { key: 'e', style: { color: 'var(--warn)' } }, 'Falha ao consultar a FIPE: ' + item.modelo.fipeErro) : null,
         ]);
       } else if (item.tipo === 'cadastro_consultor' && item.consultor) {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
-          e('strong', { key: 'n' }, item.consultor.nome || '?'),
-          e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${item.consultor.cpfMascarado || '?'} · ${item.consultor.email || 'sem e-mail'}`),
+          e('strong', { key: 'n' }, item.consultor.nome || 'Não informado'),
+          e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${item.consultor.cpfMascarado || 'Não informado'} · ${item.consultor.email || 'e-mail não informado'}`),
           item.cooperativa
             ? e('div', { key: 'k', style: { marginTop: 6 } }, [
-                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, `Cooperativa no SGA — o chamado diz "${item.cooperativa.informada}"`),
+                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, `Cooperativa no SGA (o chamado informa "${item.cooperativa.informada}")`),
                 e('select', { key: 's', value: c.cooperativa, onChange: (ev) => mudarEscolha(item.id, { cooperativa: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
                   e('option', { key: '', value: '' }, 'Escolha a cooperativa…'),
                   item.cooperativa.sugestoes.length && !item.cooperativa.exata
@@ -538,13 +539,13 @@
                 ]),
                 item.cooperativa.exata ? e('div', { key: 'ok', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, 'O nome do chamado é igual ao do SGA.') : null,
               ])
-            : e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || '?')),
+            : e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || 'Não informado')),
           item.baseCrm
             ? e('div', { key: 'crm', style: { marginTop: 6 } }, [
                 e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Base do PowerCRM'),
                 e('select', { key: 's', value: c.baseCrm, onChange: (ev) => mudarEscolha(item.id, { baseCrm: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } },
                   item.baseCrm.opcoes.map((b, i) => e('option', { key: b, value: b }, i === 0 ? b + ' (principal)' : b))),
-                e('div', { key: 'n', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, item.baseCrm.pedida ? 'O chamado pede esta base.' : 'O chamado não diz a base: vale a principal.'),
+                e('div', { key: 'n', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, item.baseCrm.pedida ? 'Base informada no chamado.' : 'O chamado não informa a base. Será usada a principal.'),
               ])
             : null,
         ]);
@@ -555,7 +556,7 @@
         const sga = sel.some((b) => b.temSga);
         const crm = sel.filter((b) => b.temPowercrm).map((b) => b.label);
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
-          e('strong', { key: 'n' }, p.nome || '?'),
+          e('strong', { key: 'n' }, p.nome || 'Não informado'),
           e('div', { key: 'b', style: { color: p.busca === 'CPF' ? 'var(--muted)' : 'var(--warn)' } }, p.busca === 'CPF' ? `Busca pelo CPF ${p.cpfMascarado}` : 'Busca pelo nome (o chamado não tem CPF)'),
           e('div', { key: 'q', style: { color: 'var(--muted)' } }, item.altStatus.qual === 'usuario' ? 'Colaborador interno' : 'Consultor/voluntário'),
           e('div', { key: 's' }, [sga ? 'SGA: inativar' : null, crm.length ? `PowerCRM (${crm.join(', ')}): bloquear` : null].filter(Boolean).join(' · ')),
@@ -566,7 +567,7 @@
               return e('button', { key: b.chave, style: S.chip(marcada), onClick: () => mudarEscolha(item.id, { extrasAlt: marcada ? c.extrasAlt.filter((x) => x !== b.chave) : [...c.extrasAlt, b.chave] }) }, b.label);
             })),
           ]) : null,
-          p.outrosSistemas ? e('div', { key: 'o', style: { color: 'var(--warn)', fontSize: 12 } }, 'Cita chats/outros sistemas: ficam fora (só SGA e CRM); vai como observação na solução.') : null,
+          p.outrosSistemas ? e('div', { key: 'o', style: { color: 'var(--warn)', fontSize: 12 } }, 'Cita chats e outros sistemas, que ficam fora (somente SGA e CRM). Vai como observação na solução.') : null,
         ]);
       } else if (item.tipo === 'cadastro_usuario' && item.usuario) {
         const u = item.usuario;
@@ -575,9 +576,9 @@
           e('div', { key: 'i' }, [
             e('span', { key: 's', style: S.tag(u.sistema === 'SGA' ? '#3B82F6' : '#F5514D') }, u.sistema === 'CRM' ? 'PowerCRM' : u.sistema),
             ' ',
-            e('strong', { key: 'n' }, u.nomeCadastro || u.nome || '?'), // como vai ficar cadastrado ("ARX - ...")
-            e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || '?'} · ${u.email || 'sem e-mail'}`),
-            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'sem função'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.solicitanteDepto ? ` Solicitante do departamento ${u.solicitanteDepto}${u.avisoDepto ? ', diferente da aba da lista: confira o perfil' : ''}.` : ''}${u.ambos ? ' O chamado cita SGA e CRM: faz só o primeiro citado.' : ''}` ) : null,
+            e('strong', { key: 'n' }, u.nomeCadastro || u.nome || 'Não informado'), // como vai ficar cadastrado ("ARX - ...")
+            e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || 'Não informado'} · ${u.email || 'e-mail não informado'}`),
+            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'função não informada'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.solicitanteDepto ? ` Solicitante do departamento ${u.solicitanteDepto}${u.avisoDepto ? ', diferente da aba da lista: confira o perfil' : ''}.` : ''}${u.ambos ? ' O chamado cita SGA e CRM; apenas o primeiro citado é processado.' : ''}` ) : null,
           ]),
           e('select', { key: 'perfil', value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
             e('option', { key: '', value: '' }, 'Perfil (departamento · role)…'),
@@ -602,12 +603,12 @@
         rodape = e('div', { key: 'res', style: { borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 12.5 } }, [
           e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' ? 'var(--warn)' : 'var(--accent)' } },
             res.status === 'teste'
-              ? `Teste: ${res.ok ? 'daria certo' : 'daria erro'}`
+              ? `Teste: execução ${res.ok ? 'sem erro' : 'com erro'}`
               : res.status === 'concluido'
                 ? 'Solucionado no GLPI'
                 : res.status === 'nao_rodou'
-                  ? 'Não rodou (falta configurar)'
-                  : 'Erro: devolutiva no chamado (pendente)'),
+                  ? 'Não executado: configuração pendente'
+                  : 'Erro: devolutiva pendente no chamado'),
           e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
           res.status !== 'concluido'
             ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Rodar novamente')])
@@ -616,13 +617,13 @@
       } else if (rodandoEste) {
         rodape = e('div', { key: 'rod', style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--muted)' } }, [
           e('span', { key: 'sp', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14)),
-          e('span', { key: 't', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, (execEste.linhas[execEste.linhas.length - 1] || 'Rodando…').replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '')),
+          e('span', { key: 't', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, (execEste.linhas[execEste.linhas.length - 1] || 'Em execução…').replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '')),
         ]);
       } else if (confirmando === item.id) {
         rodape = e('div', { key: 'conf', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
-          e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar de verdade? O chamado fica atribuído a você e é solucionado no GLPI.'),
+          e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar em modo real? O chamado ficará atribuído ao titular do token e será solucionado no GLPI.'),
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item]) }, 'Sim, rodar'),
+            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item]) }, 'Confirmar'),
             e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => setConfirmando(null) }, 'Cancelar'),
           ]),
         ]);
@@ -632,7 +633,7 @@
           pendente ? e('div', { key: 'f', style: { fontSize: 12, color: 'var(--warn)' } }, pendente) : null,
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
             e('button', { key: 'r', disabled: bloqueado, style: { ...S.btnPrim, flex: 1, opacity: bloqueado ? 0.45 : 1, cursor: bloqueado ? 'not-allowed' : 'pointer' }, onClick: () => setConfirmando(item.id) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, 'Rodar')]),
-            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => dispensar(item.id, !dispensados.includes(item.id)) }, dispensados.includes(item.id) ? 'Voltar pra lista' : 'Não rodar'),
+            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => dispensar(item.id, !dispensados.includes(item.id)) }, dispensados.includes(item.id) ? 'Voltar para a lista' : 'Não rodar'),
           ]),
         ]);
       }
@@ -643,8 +644,8 @@
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
             // colar o link na barra de endereço sempre funciona
-            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Eye', 13), e('span', { key: 't' }, 'ver chamado')]),
-            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'link copiado' : 'copiar link')]),
+            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Eye', 13), e('span', { key: 't' }, 'Ver chamado')]),
+            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'Link copiado' : 'Copiar link')]),
             e('a', { key: 'a', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
           ]),
         ]),
@@ -655,7 +656,7 @@
         ]),
         detalhes,
         item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
-        item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
+        item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
         rodape,
       ]);
     }
@@ -676,7 +677,7 @@
     // faixa abaixo da barra: confirmação, tipos que rodam sozinhos, erro e estado do automático
     const faixaAuto = (confirmandoAuto || auto.ativo || erroAuto) ? e('div', { key: 'faixa', style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', marginBottom: 16, borderRadius: 10, border: '1px solid ' + (confirmandoAuto ? 'var(--warn)' : 'var(--border)'), background: confirmandoAuto ? 'var(--warn-tint)' : 'transparent', fontSize: 12.5 } }, [
       confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-        e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Vai rodar DE VERDADE, até ${auto.limite} por vez, sem pedir confirmação.`),
+        e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Os chamados serão processados em modo real, até ${auto.limite} por vez, sem confirmação individual.`),
         e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
         e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
       ]) : null,
@@ -688,7 +689,7 @@
         }),
       ]) : null,
       erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-      auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ligado: roda os prontos assim que aparecem (verifica o GLPI a cada 30 s), até ${auto.limite} por vez. Deixe esta aba aberta.`) : null,
+      auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ativo: processa os chamados prontos assim que aparecem (verificação no GLPI a cada 30 s), até ${auto.limite} por vez. Mantenha esta aba aberta.`) : null,
     ]) : null;
 
     const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
@@ -696,7 +697,7 @@
         e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
         e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
           lista.usuario
-            ? `${possiveis.length} pra rodar · ${lista.totalAbertos} abertos na entidade Sistemas · você aprova como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}${verificadoEm ? ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR') : ''}`
+            ? `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} na entidade Sistemas · aprovação como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}${verificadoEm ? ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR') : ''}`
             : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
       ]),
       e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
@@ -721,8 +722,8 @@
         prontosTodos.length > 1
           ? confirmandoTodos
             ? e('div', { key: 'todos', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
-                e('span', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, `Rodar ${prontosTodos.length}${modoTeste ? ' em modo teste' : ' de verdade'}?`),
-                e('button', { key: 's', style: S.btnPrim, onClick: () => rodar(prontosTodos) }, 'Sim'),
+                e('span', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, `Rodar ${prontosTodos.length}${modoTeste ? ' em modo teste' : ' em modo real'}?`),
+                e('button', { key: 's', style: S.btnPrim, onClick: () => rodar(prontosTodos) }, 'Confirmar'),
                 e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoTodos(false) }, 'Cancelar'),
               ])
             : e('button', { key: 'todos', style: { ...S.btnPrim, height: 40 }, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
@@ -737,13 +738,13 @@
 
     let corpo;
     if (lista.erro) {
-      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Não consegui buscar os chamados: ' + lista.erro);
+      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os chamados: ' + lista.erro);
     } else if (!lista.usuario && lista.carregando) {
       corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
     } else if (!visiveis.length) {
       corpo = e('div', { key: 'vazio', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '50px 20px', color: 'var(--muted-soft)', textAlign: 'center' } }, [
         Icon('Inbox', 34, 'var(--muted-soft)', 1.3),
-        e('div', { key: 't', style: { fontSize: 14 } }, 'Nenhum chamado pra rodar agora.'),
+        e('div', { key: 't', style: { fontSize: 14 } }, 'Nenhum chamado disponível para rodar.'),
         e('div', { key: 's', style: { fontSize: 12.5 } }, 'Aparecem aqui: Fechamento p/ cobrança, Cadastro de consultor, Cadastro de usuário (SGA/CRM), Inativação de consultor e Bloqueio de acesso da entidade Sistemas.'),
       ]);
     } else {
@@ -753,7 +754,7 @@
     const extras = [];
     if (manuais.length || naoRodar.length) {
       extras.push(e('button', { key: 'outros', style: { ...S.link, marginTop: 14 }, onClick: () => setVerOutros((v) => !v) },
-        verOutros ? 'Mostrar só os que dá pra rodar' : `Ver também ${manuais.length ? `${manuais.length} que precisam de análise manual` : ''}${manuais.length && naoRodar.length ? ' e ' : ''}${naoRodar.length ? `${naoRodar.length} marcados como "Não rodar"` : ''}`));
+        verOutros ? 'Mostrar apenas os disponíveis para rodar' : `Exibir também ${manuais.length ? `${manuais.length} para análise manual` : ''}${manuais.length && naoRodar.length ? ' e ' : ''}${naoRodar.length ? `${naoRodar.length} ${naoRodar.length === 1 ? 'marcado' : 'marcados'} como "Não rodar"` : ''}`));
     }
     if (mensagensGerais.length) {
       extras.push(e('div', { key: 'msgs', style: { ...S.card, marginTop: 18 } }, mensagensGerais.map((m, i) =>
@@ -767,18 +768,18 @@
     const listaExec = Object.values(execucoes).reverse();
     if (listaExec.length) {
       extras.push(e('div', { key: 'execs', style: { ...S.card, marginTop: 18, gap: 8 } }, [
-        e('div', { key: 'h', style: { fontWeight: 600, fontSize: 13.5 } }, `Execuções${rodandoAlgo ? ` · ${listaExec.filter((x) => !x.fim).length} rodando` : ''}`),
+        e('div', { key: 'h', style: { fontWeight: 600, fontSize: 13.5 } }, `Execuções${rodandoAlgo ? ` · ${listaExec.filter((x) => !x.fim).length} em execução` : ''}`),
         ...listaExec.map((x) => {
           const aberto = !!logsAbertos[x.jobId];
           return e('div', { key: x.jobId, style: { borderTop: '1px solid var(--border)', paddingTop: 8 } }, [
             e('div', { key: 'r', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
               e('div', { key: 't', style: { fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 } }, [
                 !x.fim ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 13)) : null,
-                e('span', { key: 'n' }, `${x.ids.map((id) => '#' + id).join(', ')} · ${x.fim ? (x.fim.error ? 'erro' : 'concluída') : 'rodando…'}`),
+                e('span', { key: 'n' }, `${x.ids.map((id) => '#' + id).join(', ')} · ${x.fim ? (x.fim.error ? 'erro' : 'concluída') : 'em execução…'}`),
               ]),
               e('div', { key: 'b', style: { display: 'flex', gap: 12 } }, [
                 !x.fim ? e('button', { key: 'p', style: { ...S.link, color: 'var(--error)' }, onClick: () => fetch(`${SERVICO}/api/parar/${x.jobId}`, { method: 'POST' }).catch(() => {}) }, 'Parar') : null,
-                e('button', { key: 'v', style: S.link, onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !aberto })) }, aberto ? 'Esconder log' : 'Ver log'),
+                e('button', { key: 'v', style: S.link, onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !aberto })) }, aberto ? 'Ocultar log' : 'Ver log'),
               ]),
             ]),
             aberto ? e('pre', { key: 'l', style: { margin: '8px 0 0', maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'pre-wrap', color: 'var(--muted)' } }, x.linhas.join('\n') || 'Aguardando…') : null,

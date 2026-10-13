@@ -402,7 +402,7 @@
       if (todas.length && logins.some((l) => l.empresas && !l.empresas.length)) return setErro('Cada login do SGA precisa de ao menos uma empresa marcada.');
       if ((a.crm.usuario || a.crm.senha) && !(a.crm.usuario && a.crm.senha)) return setErro('Informe o usuário e a senha do PowerCRM (ou deixe os dois vazios).');
       if (exigirChamados) {
-        if (!a.userToken) return setErro('Informe o seu token do GLPI.');
+        if (!a.userToken) return setErro('Informe o token do GLPI.');
         if (!logins.length) return setErro('Informe ao menos um login do SGA.');
         if (!a.crm.usuario || !a.crm.senha) return setErro('Informe o usuário e a senha do PowerCRM.');
       }
@@ -431,9 +431,9 @@
       e('div', { key: 'h' }, [
         moldura === 'card' ? e('div', { key: 't', style: { fontWeight: 600, fontSize: 16 } }, exigirChamados ? 'Acessos para rodar os chamados' : 'Meus acessos') : null,
         e('div', { key: 's', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: moldura === 'card' ? 4 : 0, lineHeight: 1.5 } },
-          'Ficam salvos só neste navegador. As automações abertas no Hub recebem os logins do SGA, do PowerCRM e a senha padrão; o token do GLPI fica só aqui (aba Chamados: quem é dono do token é quem aprova, e o chamado fica atribuído a essa pessoa).'),
+          'Os dados ficam salvos somente neste navegador. As automações abertas no Hub recebem os logins do SGA, do PowerCRM e a senha padrão. O token do GLPI não sai deste navegador. Na aba Chamados, o titular do token é quem aprova, e o chamado fica atribuído a essa pessoa.'),
       ]),
-      campo(exigirChamados ? 'Seu token de usuário do GLPI' : 'Seu token de usuário do GLPI (aba Chamados)', inp(a.userToken, (v) => mudar((x) => ((x.userToken = v.trim()), x)), { type: 'password', autoComplete: 'new-password', placeholder: 'Minhas configurações → Chaves de acesso remoto' }), 'tk'),
+      campo(exigirChamados ? 'Token de usuário do GLPI' : 'Token de usuário do GLPI (aba Chamados)', inp(a.userToken, (v) => mudar((x) => ((x.userToken = v.trim()), x)), { type: 'password', autoComplete: 'new-password', placeholder: 'Minhas configurações → Chaves de acesso remoto' }), 'tk'),
       e('div', { key: 'sga-t', style: { ...S.label, marginBottom: -6 } }, 'Logins do SGA (cada um com as empresas em que funciona)'),
       ...a.sgas.map((l, i) =>
         e('div', { key: 'sga' + i, className: 'acessos-login', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg)' } }, [
@@ -449,7 +449,7 @@
                 const sel = (l.empresas || todas).includes(emp.chave);
                 return e('button', { key: emp.chave, type: 'button', style: S.chip(sel), onClick: () => alternarEmpresa(i, emp.chave) }, emp.nome);
               }))
-            : e('div', { key: 'emp', style: { fontSize: 12, color: 'var(--muted)' } }, carregando ? 'Carregando as empresas…' : 'Não consegui carregar a lista de empresas; este login vale para todas.'),
+            : e('div', { key: 'emp', style: { fontSize: 12, color: 'var(--muted)' } }, carregando ? 'Carregando as empresas…' : 'Falha ao carregar a lista de empresas. Este login vale para todas.'),
         ])
       ),
       e('button', { key: 'sga-add', type: 'button', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => mudar((x) => (x.sgas.push({ usuario: '', senha: '', empresas: [] }), x)) }, '+ Adicionar outro login do SGA'),
