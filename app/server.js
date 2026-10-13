@@ -50,78 +50,87 @@ async function sweepAll() {
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/events', async (req, res) => {
+app.get('/api/events', asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
   sseClients.add(res);
-  const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
-  res.write(`data: ${JSON.stringify(rows.map(rowToAutomation))}\n\n`);
   req.on('close', () => sseClients.delete(res));
-});
+  const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
+  res.write(`data: ${JSON.stringify(rows.map(rowToAutomation))}
 
-app.get('/api/automations', async (req, res) => {
+`);
+}));
+
+app.get('/api/automations', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
   res.json(rows.map(rowToAutomation));
-});
+}));
 
-app.post('/api/automations', async (req, res) => {
-  const { name, url, container, description, icon, color, categories } = req.body || {};
-  if (!name || !name.trim() || !url || !url.trim()) {
-    return res.status(400).json({ error: 'name e url são obrigatórios' });
-  }
+function idOuErro(req) {
+  const id = validarId(req.params.id);
+  if (id === null) throw new ErroHttp(400, 'id inválido');
+  return id;
+}
+
+function dadosOuErro(req) {
+  const r = validarAutomacao(req.body);
+  if (!r.ok) throw new ErroHttp(400, r.error);
+  return r.valor;
+}
+
+app.post('/api/automations', asyncHandler(async (req, res) => {
+  const d = dadosOuErro(req);
   const { rows } = await pool.query(
     `INSERT INTO automations (name, url, container, description, icon, color, categories, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, 'checking') RETURNING *`,
-    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E', Array.isArray(categories) ? categories : []]
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories]
   );
   const created = rows[0];
   broadcastAutomations().catch(() => {});
   checkAndPersist(created.id, created.url).then(() => broadcastAutomations()).catch(() => {});
   res.status(201).json(rowToAutomation(created));
-});
+}));
 
-app.put('/api/automations/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const { name, url, container, description, icon, color, categories } = req.body || {};
-  if (!name || !name.trim() || !url || !url.trim()) {
-    return res.status(400).json({ error: 'name e url são obrigatórios' });
-  }
+app.put('/api/automations/:id', asyncHandler(async (req, res) => {
+  const id = idOuErro(req);
+  const d = dadosOuErro(req);
   const { rows } = await pool.query(
     `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, updated_at=now()
      WHERE id=$8 RETURNING *`,
-    [name.trim(), url.trim(), container || '', description || '', icon || 'Workflow', color || '#1E4A9E', Array.isArray(categories) ? categories : [], id]
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, id]
   );
-  if (!rows.length) return res.status(404).json({ error: 'não encontrado' });
+  if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const updated = rows[0];
   broadcastAutomations().catch(() => {});
   checkAndPersist(updated.id, updated.url).then(() => broadcastAutomations()).catch(() => {});
   res.json(rowToAutomation(updated));
-});
+}));
 
-app.delete('/api/automations/:id', async (req, res) => {
-  const id = Number(req.params.id);
+app.delete('/api/automations/:id', asyncHandler(async (req, res) => {
+  const id = idOuErro(req);
   await pool.query('DELETE FROM automations WHERE id=$1', [id]);
   broadcastAutomations().catch(() => {});
   res.status(204).end();
-});
+}));
 
-app.post('/api/automations/:id/check', async (req, res) => {
-  const id = Number(req.params.id);
+app.post('/api/automations/:id/check', asyncHandler(async (req, res) => {
+  const id = idOuErro(req);
   const { rows } = await pool.query('SELECT id, url FROM automations WHERE id=$1', [id]);
-  if (!rows.length) return res.status(404).json({ error: 'não encontrado' });
+  if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const status = await checkAndPersist(id, rows[0].url);
   broadcastAutomations().catch(() => {});
   res.json({ id, status });
-});
+}));
 
-app.post('/api/test-connection', async (req, res) => {
-  const { url } = req.body || {};
-  if (!url || !url.trim()) return res.status(400).json({ error: 'url é obrigatória' });
-  const status = await checkUrl(url.trim());
+app.post('/api/test-connection', asyncHandler(async (req, res) => {
+  // Só valida o formato da URL; restringir hosts fica para quando o Hub tiver autenticação.
+  const v = validarUrlTeste((req.body || {}).url);
+  if (!v.ok) throw new ErroHttp(400, v.error);
+  const status = await checkUrl(v.valor);
   res.json({ status });
-});
+}));
 
 // GLPI: o App-Token fica só no servidor (env var); cada usuário informa seu
 // próprio User-Token no navegador (fica salvo em localStorage, nunca aqui).
@@ -155,7 +164,7 @@ app.post('/api/glpi/ticket', async (req, res) => {
   }
 });
 
-app.get('/api/glpi/history', async (req, res) => {
+app.get('/api/glpi/history', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM glpi_tickets ORDER BY created_at DESC LIMIT 50');
   res.json(rows.map((r) => ({
     id: r.id,
@@ -168,7 +177,10 @@ app.get('/api/glpi/history', async (req, res) => {
     createdAt: r.created_at,
     url: glpi.ticketUrl(r.ticket_id),
   })));
-});
+}));
+
+// Sempre por último: converte qualquer erro das rotas em JSON {error}.
+app.use(erroFinal());
 
 async function start() {
   await waitForDb();
