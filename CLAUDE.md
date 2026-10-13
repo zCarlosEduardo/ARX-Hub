@@ -4,7 +4,7 @@
 Painel central das automações ARX: lista as automações (cada uma é um container em `../ARX-Automacoes`), mostra se estão no ar (varredura periódica + SSE) e abre chamados no GLPI. Repositório irmão: `../ARX-Automacoes` (regras gerais do projeto no `CLAUDE.md` de lá).
 
 ## Stack
-Express 4 + Postgres (`pg`) no servidor; front em React UMD **sem build** (`app/public/*.js`, tudo em `window`, ordem de carga: icons, acessos, alertas, chamados, disponibilidade, resultados, app).
+Express 4 + Postgres (`pg`) no servidor; front em React UMD **sem build** (`app/public/*.js`, tudo em `window`, ordem de carga: icons, acessos, alertas, chamados, graficos-dados, graficos, disponibilidade, resultados, app; cálculos dos gráficos em `graficos-dados.js`, testados em `app/test`).
 
 ## Comandos
 ```bash
