@@ -2,23 +2,67 @@ const path = require('path');
 const express = require('express');
 const { pool, init, waitForDb, rowToAutomation } = require('./db');
 const glpi = require('./glpi');
+const { validarId, validarAutomacao, validarUrlTeste } = require('./validacao');
+const { asyncHandler, ErroHttp, erroFinal } = require('./http');
 
-const PORT = process.env.PORT || 8317;
-const CHECK_INTERVAL_MS = 5000;
-const CHECK_TIMEOUT_MS = 3000;
+const { lerConfig, verificarSenhaProducao } = require('./config');
+const { calcularMudancas } = require('./varredura');
+
+const { port: PORT, checkIntervalMs: CHECK_INTERVAL_MS, checkTimeoutMs: CHECK_TIMEOUT_MS } = lerConfig();
+const HEARTBEAT_MS = 25000;
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// /vendor e /assets têm nome sem hash: cache de 1 dia. O resto (js/css/html do
+// app) revalida por ETag a cada carga, para uma nova versão chegar sem limpar cache.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, caminho) {
+    const p = caminho.split(path.sep).join('/');
+    if (p.includes('/public/vendor/') || p.includes('/public/assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 const sseClients = new Set();
 
+// Cache em memória da lista de automações: GET /api/automations, o SSE e o
+// broadcast leem daqui em vez de consultar o banco a cada ciclo. É invalidado
+// em POST/PUT/DELETE e quando a varredura muda algum status.
+let cacheLista = null;
+function invalidarCache() { cacheLista = null; }
+
+async function listarAutomacoes() {
+  if (!cacheLista) {
+    const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
+    const lista = rows.map(rowToAutomation);
+    cacheLista = { lista, json: JSON.stringify(lista) };
+  }
+  return cacheLista;
+}
+
+function escreverSse(res, texto) {
+  try {
+    res.write(texto);
+  } catch {
+    // conexão já quebrada: não espera pelo 'close' para tirar o cliente do conjunto
+    sseClients.delete(res);
+  }
+}
+
 async function broadcastAutomations() {
   if (sseClients.size === 0) return;
-  const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
-  const payload = `data: ${JSON.stringify(rows.map(rowToAutomation))}\n\n`;
-  for (const res of sseClients) res.write(payload);
+  const { json } = await listarAutomacoes();
+  const payload = `data: ${json}\n\n`;
+  for (const res of sseClients) escreverSse(res, payload);
 }
+
+// Heartbeat: proxies e o navegador derrubam conexões SSE ociosas.
+setInterval(() => {
+  for (const res of sseClients) escreverSse(res, ': ping\n\n');
+}, HEARTBEAT_MS).unref();
 
 async function checkUrl(url) {
   try {
@@ -27,25 +71,50 @@ async function checkUrl(url) {
       redirect: 'follow',
       signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
     });
-    return res ? 'online' : 'offline';
+    // Qualquer resposta HTTP = no ar. Descarta o corpo para liberar a conexão.
+    if (res.body) res.body.cancel().catch(() => {});
+    return 'online';
   } catch (err) {
+    // Rede/timeout (TypeError "fetch failed", TimeoutError, AbortError) = offline.
+    // Qualquer outra coisa é bug nosso: loga, mas ainda responde offline.
+    if (!(err instanceof TypeError) && err.name !== 'TimeoutError' && err.name !== 'AbortError') {
+      console.error('[checkUrl] erro inesperado em', url, err);
+    }
     return 'offline';
   }
 }
 
+// Grava vários status num único UPDATE. O filtro por url evita sobrescrever o
+// status de uma automação cuja URL foi editada enquanto a varredura rodava.
+async function gravarStatus(mudancas) {
+  if (!mudancas.length) return;
+  await pool.query(
+    `UPDATE automations a SET status = v.status, last_checked_at = now()
+     FROM unnest($1::bigint[], $2::text[], $3::text[]) AS v(id, url, status)
+     WHERE a.id = v.id AND a.url = v.url`,
+    [mudancas.map((m) => m.id), mudancas.map((m) => m.url), mudancas.map((m) => m.status)]
+  );
+  invalidarCache();
+}
+
+// Só grava se o status mudou (a UI não usa last_checked_at, então ele só
+// avança nas mudanças). Retorna o status verificado.
 async function checkAndPersist(id, url) {
   const status = await checkUrl(url);
-  await pool.query(
-    'UPDATE automations SET status = $1, last_checked_at = now() WHERE id = $2',
-    [status, id]
-  );
+  const { lista } = await listarAutomacoes();
+  const atual = lista.filter((a) => a.id === id).map((a) => ({ ...a, url }));
+  await gravarStatus(calcularMudancas(atual, new Map([[id, status]])));
   return status;
 }
 
 async function sweepAll() {
-  const { rows } = await pool.query('SELECT id, url FROM automations');
-  await Promise.allSettled(rows.map((r) => checkAndPersist(r.id, r.url)));
-  await broadcastAutomations().catch(() => {});
+  const { lista } = await listarAutomacoes();
+  const resultados = new Map();
+  await Promise.all(lista.map(async (a) => resultados.set(a.id, await checkUrl(a.url))));
+  const mudancas = calcularMudancas(lista, resultados);
+  if (!mudancas.length) return;
+  await gravarStatus(mudancas);
+  await broadcastAutomations();
 }
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -57,15 +126,12 @@ app.get('/api/events', asyncHandler(async (req, res) => {
   res.flushHeaders();
   sseClients.add(res);
   req.on('close', () => sseClients.delete(res));
-  const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
-  res.write(`data: ${JSON.stringify(rows.map(rowToAutomation))}
-
-`);
+  const { json } = await listarAutomacoes();
+  escreverSse(res, `data: ${json}\n\n`);
 }));
 
 app.get('/api/automations', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
-  res.json(rows.map(rowToAutomation));
+  res.json((await listarAutomacoes()).lista);
 }));
 
 function idOuErro(req) {
@@ -88,6 +154,7 @@ app.post('/api/automations', asyncHandler(async (req, res) => {
     [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories]
   );
   const created = rows[0];
+  invalidarCache();
   broadcastAutomations().catch(() => {});
   checkAndPersist(created.id, created.url).then(() => broadcastAutomations()).catch(() => {});
   res.status(201).json(rowToAutomation(created));
@@ -103,6 +170,7 @@ app.put('/api/automations/:id', asyncHandler(async (req, res) => {
   );
   if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const updated = rows[0];
+  invalidarCache();
   broadcastAutomations().catch(() => {});
   checkAndPersist(updated.id, updated.url).then(() => broadcastAutomations()).catch(() => {});
   res.json(rowToAutomation(updated));
@@ -111,6 +179,7 @@ app.put('/api/automations/:id', asyncHandler(async (req, res) => {
 app.delete('/api/automations/:id', asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   await pool.query('DELETE FROM automations WHERE id=$1', [id]);
+  invalidarCache();
   broadcastAutomations().catch(() => {});
   res.status(204).end();
 }));
@@ -215,10 +284,13 @@ app.get('/api/glpi/history', asyncHandler(async (req, res) => {
 app.use(erroFinal());
 
 async function start() {
+  const senha = verificarSenhaProducao();
+  if (!senha.ok) throw new Error(senha.error);
+  if (senha.aviso) console.warn(senha.aviso);
   await waitForDb();
   await init();
-  await sweepAll().catch(() => {});
-  setInterval(() => sweepAll().catch(() => {}), CHECK_INTERVAL_MS);
+  await sweepAll().catch((err) => console.error('[varredura]', err.message));
+  setInterval(() => sweepAll().catch((err) => console.error('[varredura]', err.message)), CHECK_INTERVAL_MS);
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
 }
 
