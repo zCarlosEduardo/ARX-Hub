@@ -7,6 +7,8 @@
   const e = React.createElement;
   const { useState, useEffect, useCallback } = React;
   const { Icon } = window.Icons;
+  const { GraficoColunas } = window.Graficos;
+  const D = window.GraficosDados;
 
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
   const KEY = 'arxhub_disponibilidade_filtro';
@@ -66,12 +68,6 @@
     const d = Math.floor(h / 24);
     return `${d} d ${h % 24} h`;
   }
-  function topoEixo(max) {
-    if (max <= 4) return 4;
-    const p = Math.pow(10, Math.floor(Math.log10(max)));
-    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
-    return 10 * p;
-  }
 
   // ---------- peças ----------
   function Numero({ rotulo, valor, sub, icone, cor }) {
@@ -85,35 +81,52 @@
     ]);
   }
 
-  /** Barras: quedas que começaram em cada dia (cor de erro). */
-  function GraficoDias({ dias }) {
-    const [foco, setFoco] = useState(null);
-    const topo = topoEixo(Math.max(1, ...dias.map((d) => d.quedas)));
-    const passoRotulo = Math.max(1, Math.ceil(dias.length / 13));
-    const ALT = 180;
-    const s = foco !== null ? dias[foco] : null;
-    const deslocar = foco === null ? '' : foco < dias.length / 4 ? 'translateX(-15%)' : foco > (dias.length * 3) / 4 ? 'translateX(-85%)' : 'translateX(-50%)';
-    return e('div', { className: 'res-grafico' }, [
-      e('div', { key: 'eixo', className: 'res-eixo', style: { height: ALT } }, [topo, topo / 2, 0].map((v) => e('span', { key: v }, num(v)))),
-      e('div', { key: 'area', className: 'res-area' }, [
-        e('div', { key: 'plot', className: 'res-plot', style: { height: ALT }, onMouseLeave: () => setFoco(null) }, [
-          ...[0, 0.5, 1].map((f) => e('div', { key: 'g' + f, className: 'res-grade', style: { bottom: f * 100 + '%' } })),
-          ...dias.map((d, i) =>
-            e('div', { key: d.dia, className: 'res-col' + (foco === i ? ' foco' : ''), onMouseEnter: () => setFoco(i), onFocus: () => setFoco(i), onBlur: () => setFoco(null), tabIndex: 0, 'aria-label': `${dataBr(d.dia)}: ${d.quedas} queda(s), ${duracao(d.tempoForaSeg)} fora` },
-              e('div', { className: 'res-pilha' }, d.quedas ? e('div', { key: 'q', className: 'res-seg res-erro', style: { height: Math.max(3, (d.quedas / topo) * ALT) } }) : null)
-            )
-          ),
-          s
-            ? e('div', { key: 'tip', className: 'res-tip', style: { left: `${((foco + 0.5) / dias.length) * 100}%`, transform: deslocar } }, [
-                e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, dataBr(s.dia)),
-                e('div', { key: 'q' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), `${num(s.quedas)} queda(s)`]),
-                s.quedas ? e('div', { key: 'f', style: { color: 'var(--muted)', marginTop: 2 } }, `${duracao(s.tempoForaSeg)} fora no total`) : null,
-              ])
-            : null,
-        ]),
-        e('div', { key: 'x', className: 'res-x' }, dias.map((d, i) => e('span', { key: d.dia, className: i % (passoRotulo * 3) ? 'res-x-sec' : '' }, i % passoRotulo === 0 ? dataCurta(d.dia) : ''))),
-      ]),
-    ]);
+  const SERIE_QUEDAS = [{ chave: 'quedas', cor: 'var(--error)', textura: true }];
+  const SERIE_TEMPO = [{ chave: 'tempo', cor: 'var(--error)' }];
+  const dataTip = (p) => e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, D.dataBr(p.dia));
+
+  /** Colunas: quedas que começaram em cada dia (hachurado, como o erro nos chamados). */
+  function GraficoQuedasDias({ dias }) {
+    const pontos = dias.map((x) => ({
+      chave: x.dia, dia: x.dia, rotulo: D.dataCurta(x.dia), valor: x.quedas, valores: { quedas: x.quedas }, quedas: x.quedas, tempoForaSeg: x.tempoForaSeg || 0,
+      aria: `${D.dataBr(x.dia)}: ${D.plural(x.quedas, 'queda', 'quedas')}${x.quedas ? `, ${D.duracaoLonga(x.tempoForaSeg)} fora do ar` : ''}.`,
+    }));
+    const topo = D.topoEixo(Math.max(1, ...pontos.map((p) => p.quedas)));
+    return e(GraficoColunas, {
+      pontos,
+      series: SERIE_QUEDAS,
+      escala: { topo, ticks: D.ticksEixo(topo) },
+      formatarTick: (t) => t.toLocaleString('pt-BR'),
+      ariaLabel: D.descricaoDias(pontos, 'Gráfico de colunas das quedas por dia', (v) => D.plural(v, 'queda', 'quedas')),
+      vazio: 'Nenhuma queda no período.',
+      tooltip: (p) => [
+        dataTip(p),
+        e('div', { key: 'q' }, [e('i', { key: 'i', className: 'res-sw res-erro', 'aria-hidden': 'true' }), D.plural(p.quedas, 'queda', 'quedas')]),
+        p.quedas ? e('div', { key: 'f', style: { color: 'var(--muted)', marginTop: 2 } }, `${D.duracaoLonga(p.tempoForaSeg)} fora do ar no total`) : null,
+      ],
+    });
+  }
+
+  /** Colunas: tempo fora do ar somado por dia (eixo em minutos ou horas). */
+  function GraficoTempoDias({ dias }) {
+    const pontos = dias.map((x) => ({
+      chave: x.dia, dia: x.dia, rotulo: D.dataCurta(x.dia), valor: x.tempoForaSeg || 0, valores: { tempo: x.tempoForaSeg || 0 }, quedas: x.quedas, tempoForaSeg: x.tempoForaSeg || 0,
+      aria: `${D.dataBr(x.dia)}: ${x.tempoForaSeg ? D.duracaoLonga(x.tempoForaSeg) + ' fora do ar' : 'sem tempo fora do ar'}.`,
+    }));
+    const escala = D.escalaDuracao(Math.max(0, ...pontos.map((p) => p.valor)));
+    return e(GraficoColunas, {
+      pontos,
+      series: SERIE_TEMPO,
+      escala,
+      formatarTick: D.formatarDuracaoCurta,
+      ariaLabel: D.descricaoDias(pontos, 'Gráfico de colunas do tempo fora do ar por dia', D.duracaoLonga),
+      vazio: 'Nenhum tempo fora do ar no período.',
+      tooltip: (p) => [
+        dataTip(p),
+        e('div', { key: 'f' }, [e('i', { key: 'i', className: 'res-sw', style: { background: 'var(--error)' }, 'aria-hidden': 'true' }), `${D.duracaoLonga(p.tempoForaSeg)} fora do ar`]),
+        e('div', { key: 'q', style: { color: 'var(--muted)', marginTop: 2 } }, D.plural(p.quedas, 'queda', 'quedas')),
+      ],
+    });
   }
 
   const tabela = (cabecalhos, linhas) =>
@@ -196,8 +209,12 @@
           e(Numero, { key: 'x', rotulo: 'Maior queda', valor: t.quedas ? duracao(t.maiorQuedaSeg) : 'Sem dados', icone: 'BarChart3', sub: 'A queda que ficou mais tempo fora no período.' }),
         ]),
         e('div', { key: 'graf', style: S.card }, [
-          cabecalhoCard('Quedas por dia', 'Cada queda conta no dia em que começou. Passe o mouse numa barra para ver o tempo fora.'),
-          e(GraficoDias, { key: 'g', dias: d.porDia }),
+          cabecalhoCard('Quedas por dia', 'Cada queda conta no dia em que começou. Posicione o cursor ou use o teclado sobre um dia para ver o tempo fora do ar.'),
+          e(GraficoQuedasDias, { key: 'g', dias: d.porDia }),
+        ]),
+        e('div', { key: 'tempo', style: S.card }, [
+          cabecalhoCard('Tempo fora do ar por dia', 'Soma da duração das quedas que começaram em cada dia.'),
+          e(GraficoTempoDias, { key: 'g', dias: d.porDia }),
         ]),
         e('div', { key: 'serv', style: S.card }, [
           cabecalhoCard('Por serviço', 'Quantidade de paradas por serviço e tempo até a normalização. Clique em uma linha para filtrar as quedas do serviço.'),
@@ -250,4 +267,5 @@
   }
 
   window.DisponibilidadeView = DisponibilidadeView;
+  window.DisponibilidadeGraficos = { GraficoQuedasDias, GraficoTempoDias }; // usados nos testes de renderização
 })();

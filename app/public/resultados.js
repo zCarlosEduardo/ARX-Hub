@@ -7,6 +7,8 @@
   const e = React.createElement;
   const { useState, useEffect, useCallback } = React;
   const { Icon } = window.Icons;
+  const { GraficoSemanas, BarrasHorizontais, Legenda } = window.Graficos;
+  const D = window.GraficosDados;
 
   const SERVICO = `${location.protocol}//${location.hostname}:4013`;
   const KEY_PERIODO = 'arxhub_resultados_periodo';
@@ -76,13 +78,6 @@
     if (min < 60) return `${(Math.round(min * 10) / 10).toLocaleString('pt-BR')} min`;
     return (min / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
   }
-  /** Topo "redondo" do eixo (4, 5, 10, 20, 25, 50...). */
-  function topoEixo(max) {
-    if (max <= 4) return 4;
-    const p = Math.pow(10, Math.floor(Math.log10(max)));
-    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
-    return 10 * p;
-  }
 
   // ---------- peças ----------
   /** Variação contra o período anterior: seta + valor (cor + texto). melhora = true/false/null (sem mudança/sem dado). */
@@ -113,58 +108,6 @@
       e('div', { key: 'v', style: { fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' } }, valor),
       variacao ? e('div', { key: 'va' }, variacao) : null,
       e('div', { key: 'su', style: { fontSize: 12, color: 'var(--muted-soft)', lineHeight: 1.4 } }, sub),
-    ]);
-  }
-
-  const Legenda = () =>
-    e('div', { className: 'res-legenda' }, [
-      e('span', { key: 'c' }, [e('i', { key: 'i', className: 'res-sw res-ok' }), 'Concluído']),
-      e('span', { key: 'e' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), 'Erro']),
-    ]);
-
-  /** Barras empilhadas por semana: concluído embaixo, erro (hachurado) em cima. */
-  function GraficoSemanas({ semanas }) {
-    const [foco, setFoco] = useState(null);
-    const topo = topoEixo(Math.max(1, ...semanas.map((s) => s.concluido + s.erro)));
-    const passoRotulo = Math.ceil(semanas.length / 13);
-    const ALT = 180;
-    const s = foco !== null ? semanas[foco] : null;
-    const fimSemana = (iso) => {
-      const d = new Date(iso + 'T00:00:00');
-      d.setDate(d.getDate() + 6);
-      return isoLocal(d);
-    };
-    const deslocar = foco === null ? '' : foco < semanas.length / 4 ? 'translateX(-15%)' : foco > (semanas.length * 3) / 4 ? 'translateX(-85%)' : 'translateX(-50%)';
-    return e('div', { className: 'res-grafico' }, [
-      e('div', { key: 'eixo', className: 'res-eixo', style: { height: ALT } }, [topo, topo / 2, 0].map((v) => e('span', { key: v }, num(v)))),
-      e('div', { key: 'area', className: 'res-area' }, [
-        e('div', { key: 'plot', className: 'res-plot', style: { height: ALT }, onMouseLeave: () => setFoco(null) }, [
-          ...[0, 0.5, 1].map((f) => e('div', { key: 'g' + f, className: 'res-grade', style: { bottom: f * 100 + '%' } })),
-          ...semanas.map((sem, i) => {
-            const hOk = (sem.concluido / topo) * ALT;
-            const hErro = (sem.erro / topo) * ALT;
-            return e('div', { key: sem.semana, className: 'res-col' + (foco === i ? ' foco' : ''), onMouseEnter: () => setFoco(i), onFocus: () => setFoco(i), onBlur: () => setFoco(null), tabIndex: 0, 'aria-label': `Semana de ${dataBr(sem.semana)}: ${sem.concluido} concluídos, ${sem.erro} com erro` },
-              e('div', { className: 'res-pilha' }, [
-                sem.erro ? e('div', { key: 'e', className: 'res-seg res-erro', style: { height: Math.max(3, hErro) } }) : null,
-                sem.concluido ? e('div', { key: 'c', className: 'res-seg res-ok', style: { height: Math.max(3, hOk) } }) : null,
-              ])
-            );
-          }),
-          s
-            ? e('div', { key: 'tip', className: 'res-tip', style: { left: `${((foco + 0.5) / semanas.length) * 100}%`, transform: deslocar } }, [
-                e('div', { key: 't', style: { fontWeight: 600, marginBottom: 4 } }, `${dataBr(s.semana)} a ${dataBr(fimSemana(s.semana))}`),
-                e('div', { key: 'c' }, [e('i', { key: 'i', className: 'res-sw res-ok' }), `${num(s.concluido)} concluído(s)`]),
-                e('div', { key: 'e' }, [e('i', { key: 'i', className: 'res-sw res-erro' }), `${num(s.erro)} com erro`]),
-                s.executando ? e('div', { key: 'x', style: { color: 'var(--muted)' } }, `${num(s.executando)} sem fim (executando)`) : null,
-                s.concluido + s.erro ? e('div', { key: 'tx', style: { color: 'var(--muted)', marginTop: 2 } }, `Taxa de erro: ${pct(s.erro / (s.concluido + s.erro))}`) : null,
-              ])
-            : null,
-        ]),
-        e('div', { key: 'x', className: 'res-x' }, semanas.map((sem, i) =>
-          // tela estreita: só um rótulo a cada 3 dos que aparecem (classe res-x-sec some no CSS)
-          e('span', { key: sem.semana, className: i % (passoRotulo * 3) ? 'res-x-sec' : '' }, i % passoRotulo === 0 ? dataCurta(sem.semana) : '')
-        )),
-      ]),
     ]);
   }
 
@@ -285,6 +228,33 @@
       const kTempo = va && mk(va.tempoEconomizado.diferencaMin, horasMin, false, pctVar(va.tempoEconomizado.percentual), horasMin(va.tempoEconomizado.anteriorMin) + ' (estimativa)');
       const kDur = va && mk(va.duracaoMediaSeg.diferencaSeg, duracao, true, '', duracao(va.duracaoMediaSeg.anterior));
       const maxMotivo = Math.max(1, ...d.motivosErro.map((m) => m.total));
+      const motivos = D.motivosComPercentual(d.motivosErro, t.erro);
+      const legendaCE = e(Legenda, { key: 'lg', itens: [{ rotulo: 'Concluído', classe: 'res-ok' }, { rotulo: 'Erro', classe: 'res-erro' }] });
+      const detalheErro = (x) => (x.finalizadas ? `${num(x.finalizadas)} · ${pct(x.taxaErro)} de erro` : 'Sem execuções finalizadas');
+      const tiposOrd = D.ordenarTipos(d.tipos, d.nomesTipos);
+      const rank = D.rankingAssociacoes(d.associacoes, 8);
+      const chartsDuas = e('div', { key: 'duas', className: 'res-duas' }, [
+        e('div', { key: 'dt', style: S.card }, [
+          cabecalhoCard('Distribuição por tipo', 'Execuções finalizadas por tipo de chamado, do maior para o menor volume. A parte hachurada indica erro.'),
+          legendaCE,
+          e(BarrasHorizontais, {
+            key: 'b',
+            itens: tiposOrd.map((x) => ({ chave: x.tipo, rotulo: x.nome, valores: { concluido: x.concluido, erro: x.erro }, total: x.finalizadas, detalhe: detalheErro(x) })),
+            ariaLabel: `Barras por tipo de chamado, ${D.plural(tiposOrd.length, 'tipo', 'tipos')}, do maior para o menor volume de execuções finalizadas.`,
+            vazio: 'Nenhuma execução finalizada no período.',
+          }),
+        ]),
+        e('div', { key: 'da', style: S.card }, [
+          cabecalhoCard('Associações com mais erros', rank.restantes ? `Exibindo ${rank.itens.length} de ${rank.total} associações, ordenadas por erros e, no empate, por volume. A tabela "Por associação" lista todas.` : 'Associações ordenadas por erros e, no empate, por volume.'),
+          legendaCE,
+          e(BarrasHorizontais, {
+            key: 'b',
+            itens: rank.itens.map((a) => ({ chave: a.nome + (a.associacaoId || ''), rotulo: a.nome, valores: { concluido: a.concluido, erro: a.erro }, total: a.finalizadas, detalhe: a.finalizadas ? `${plural(a.erro, 'erro', 'erros')} de ${num(a.finalizadas)} · ${pct(a.taxaErro)}` : 'Sem execuções finalizadas' })),
+            ariaLabel: `Barras das ${D.plural(rank.itens.length, 'associação', 'associações')} com mais erros no período.`,
+            vazio: 'Nenhuma associação com execuções no período.',
+          }),
+        ]),
+      ]);
       const fin = (a) => a.concluido + a.erro;
       const alta = (a) => fin(a) >= MIN_FINALIZADAS_ALERTA && a.taxaErro !== null && a.taxaErro >= TAXA_ALTA;
       const valorOrdem = (a) => (ordem.col === 'nome' ? String(a.nome).toLowerCase() : ordem.col === 'taxaErro' ? (a.taxaErro === null ? -1 : a.taxaErro) : a[ordem.col]);
@@ -315,11 +285,11 @@
         ]),
         e('div', { key: 'sem', style: S.card }, [
           e('div', { key: 'h', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
-            cabecalhoCard('Resolvidos por semana', 'Execuções finalizadas por semana (segunda a domingo). Passe o mouse numa barra para ver os números.'),
-            e(Legenda, { key: 'l' }),
+            cabecalhoCard('Resolvidos por semana', 'Execuções por semana (segunda a domingo) e taxa de erro semanal. Posicione o cursor ou use o teclado sobre uma semana para ver os números.'),
           ]),
-          e(GraficoSemanas, { key: 'g', semanas: d.semanas }),
+          e(GraficoSemanas, { key: 'g', semanas: d.semanas, anterior: ant }),
         ]),
+        chartsDuas,
         e('div', { key: 'tipos', style: S.card }, [
           cabecalhoCard('Por tipo de chamado', `Tempo economizado é estimativa: ${Object.entries(te.minutosManuais).map(([k, v]) => `${nomeTipo(k)} ${v} min`).join(' · ')} por chamado concluído.`),
           tabela(['Tipo', 'Execuções', 'Resolvidos', 'Erros', 'Taxa de erro', 'Tempo médio', 'Economizado (estim.)'],
@@ -359,10 +329,11 @@
           e('div', { key: 'mot', style: S.card }, [
             cabecalhoCard('Motivos de erro', 'Motivos de erro agrupados, sem nomes e números. Clique no chamado para ver os detalhes.'),
             d.motivosErro.length
-              ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, d.motivosErro.map((m, i) =>
+              ? e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, motivos.map((m, i) =>
                   e('div', { key: i }, [
                     e('div', { key: 'r', style: { display: 'flex', alignItems: 'baseline', gap: 10 } }, [
                       e('span', { key: 'n', style: { fontWeight: 600, fontSize: 15, minWidth: 28, fontVariantNumeric: 'tabular-nums' } }, num(m.total)),
+                      e('span', { key: 'p', title: 'Participação nos erros do período', style: { fontSize: 12, color: 'var(--muted)', minWidth: 36, fontVariantNumeric: 'tabular-nums' } }, D.formatarPct(m.pct, 0)),
                       e('span', { key: 't', style: { fontSize: 13, lineHeight: 1.4, flex: 1, minWidth: 0, overflowWrap: 'anywhere' } }, m.motivo),
                     ]),
                     e('div', { key: 'b', style: { margin: '6px 0 6px 38px' } }, e(Barrinha, { fracao: m.total / maxMotivo })),
