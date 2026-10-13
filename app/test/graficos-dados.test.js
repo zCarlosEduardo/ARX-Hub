@@ -257,3 +257,43 @@ test('plural', () => {
   assert.equal(G.plural(0, 'queda', 'quedas'), '0 quedas');
   assert.equal(G.plural(1234, 'queda', 'quedas'), '1.234 quedas');
 });
+
+test('descricaoColunas resume o gráfico semanal para leitores de tela', () => {
+  const pontos = G.pontosSemanas([
+    { semana: '2026-09-14', concluido: 3, erro: 1, executando: 0 },
+    { semana: '2026-09-21', concluido: 6, erro: 2, executando: 1 },
+  ]);
+  const t = G.descricaoColunas(pontos, { media: 10, semanas: 5, total: 50 });
+  assert.match(t, /de 14\/09 a 21\/09 \(2 semanas\)/);
+  assert.match(t, /9 concluídas, 3 com erro, 1 em execução/);
+  assert.match(t, /Semana com mais execuções: 21\/09, com 9\./);
+  assert.match(t, /Média semanal do período anterior: 10 execuções finalizadas\./);
+  assert.ok(!/NaN|undefined|null/.test(t));
+  assert.match(G.descricaoColunas([], null), /sem dados/);
+});
+
+test('descricaoTaxa informa taxa geral e maior taxa', () => {
+  const pontos = G.pontosSemanas([
+    { semana: '2026-09-14', concluido: 3, erro: 1 },
+    { semana: '2026-09-21', concluido: 6, erro: 2 },
+    { semana: '2026-09-28', concluido: 0, erro: 0 },
+  ]);
+  const t = G.descricaoTaxa(pontos);
+  assert.match(t, /Taxa geral: 25%/);
+  assert.match(t, /Maior taxa: 14\/09, com 25%/);
+  assert.match(G.descricaoTaxa(G.pontosSemanas([{ semana: '2026-09-14' }])), /sem execuções finalizadas/);
+});
+
+test('descricaoDias resume uma série diária', () => {
+  const pontos = [
+    { rotulo: '01/10', valor: 0 },
+    { rotulo: '02/10', valor: 3 },
+    { rotulo: '03/10', valor: 1 },
+  ];
+  const t = G.descricaoDias(pontos, 'Gráfico de colunas das quedas por dia', (v) => G.plural(v, 'queda', 'quedas'));
+  assert.match(t, /de 01\/10 a 03\/10 \(3 dias\)/);
+  assert.match(t, /Total: 4 quedas\./);
+  assert.match(t, /Maior valor: 02\/10, com 3 quedas\./);
+  assert.match(G.descricaoDias([{ rotulo: '01/10', valor: 0 }], 'Gráfico X', String), /nenhum registro/);
+  assert.match(G.descricaoDias([], 'Gráfico X', String), /nenhum registro/);
+});

@@ -222,7 +222,38 @@
     return { topo: topoUnidades * unidade, ticks: ticksEixo(topoUnidades).map((t) => t * unidade) };
   }
 
+  /** Texto de leitura (aria-label) do gráfico semanal de colunas. */
+  function descricaoColunas(pontos, referencia) {
+    const r = resumoSemanas(pontos);
+    if (!r.semanas) return 'Gráfico de colunas por semana, sem dados.';
+    const partes = [
+      `Gráfico de colunas empilhadas por semana, de ${r.inicio} a ${r.fim} (${plural(r.semanas, 'semana', 'semanas')}).`,
+      `Total: ${plural(r.concluido, 'concluída', 'concluídas')}, ${plural(r.erro, 'com erro', 'com erro')}${r.executando ? `, ${plural(r.executando, 'em execução', 'em execução')}` : ''}.`,
+    ];
+    if (r.maior) partes.push(`Semana com mais execuções: ${r.maior.rotulo}, com ${num(r.maior.soma)}.`);
+    if (referencia) partes.push(`Média semanal do período anterior: ${NF(referencia.media, { maximumFractionDigits: 1 })} execuções finalizadas.`);
+    return partes.join(' ');
+  }
+
+  /** Texto de leitura (aria-label) do gráfico de linha da taxa de erro semanal. */
+  function descricaoTaxa(pontos) {
+    const r = resumoSemanas(pontos);
+    const com = pontos.filter((p) => p.taxaErro !== null);
+    if (!com.length) return 'Gráfico de linha da taxa de erro por semana, sem execuções finalizadas.';
+    const maior = com.reduce((m, p) => (p.taxaErro > m.taxaErro ? p : m), com[0]);
+    return `Gráfico de linha da taxa de erro por semana, de ${r.inicio} a ${r.fim}. Taxa geral: ${formatarPct(fracao(r.erro, r.erro + r.concluido))}. Maior taxa: ${maior.rotulo}, com ${formatarPct(maior.taxaErro)}.`;
+  }
+
+  /** Texto de leitura de uma série diária. pontos: [{ rotulo, valor }]. */
+  function descricaoDias(pontos, titulo, formatar) {
+    const soma = pontos.reduce((s, p) => s + inteiro(p.valor), 0);
+    if (!pontos.length || !soma) return `${titulo}: nenhum registro no período.`;
+    const maior = pontos.reduce((m, p) => (p.valor > m.valor ? p : m), pontos[0]);
+    return `${titulo}, de ${pontos[0].rotulo} a ${pontos[pontos.length - 1].rotulo} (${plural(pontos.length, 'dia', 'dias')}). Total: ${formatar(soma)}. Maior valor: ${maior.rotulo}, com ${formatar(maior.valor)}.`;
+  }
+
   const api = {
+    descricaoColunas, descricaoTaxa, descricaoDias,
     plural, topoEixo, ticksEixo, topoPercentual, ticksPercentual, fracao, formatarPct, dataCurta, dataBr, fimDaSemana, segundaDa,
     pontosSemanas, resumoSemanas, passoRotulos, empilhar, caminhoColuna, mediaSemanalAnterior, ordenarTipos, rankingAssociacoes,
     motivosComPercentual, formatarDuracaoCurta, duracaoLonga, escalaDuracao,
