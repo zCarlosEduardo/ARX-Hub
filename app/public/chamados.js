@@ -43,6 +43,70 @@
   const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
+  // ---------- pedidos de senha (senha_sistemas e alterar_senha_sga) ----------
+  const NOMES_SISTEMA = { crm: 'CRM (PowerCRM)', ezchat: 'EzChat', wint: 'Wint', mundiale: 'Mundiale', chat: 'Chat', sga: 'SGA' };
+  const nomeSistema = (chave) => NOMES_SISTEMA[chave] || String(chave);
+  const SELOS_REGRA = { mesma_pessoa: 'Própria pessoa', gestao: 'Gestão do departamento' };
+  const textoOuNaoInformado = (v) => (v === null || v === undefined || String(v).trim() === '' ? 'Não informado' : String(v));
+
+  /** Aviso do card "Alterar senha do SGA": só existe quando a identidade não foi confirmada. */
+  function avisoSenha(item) {
+    if (!item || item.tipo !== 'alterar_senha_sga') return null;
+    const id = item.identidade;
+    if (id && id.ok === true) return null;
+    return { motivo: textoOuNaoInformado(id && id.motivo), texto: 'Este chamado não será executado' };
+  }
+
+  /** Motivo que impede de rodar um pedido de senha (null = liberado). `temLoginSga(chave)` diz se há login do SGA para a empresa. */
+  function bloqueioSenha(item, temLoginSga) {
+    if (!item || item.tipo !== 'alterar_senha_sga') return null;
+    if (avisoSenha(item)) return 'Identidade não confirmada: este chamado não será executado';
+    if (!item.empresaSga || !temLoginSga(item.empresaSga.chave)) return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
+    return null;
+  }
+
+  /** Bloco de detalhes do card dos dois tipos de senha. */
+  function detalhesSenha(item) {
+    const caixa = { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 };
+    const rotulo = (chave, t) => e('div', { key: chave, style: { ...S.label, marginBottom: 0 } }, t);
+    const chips = (lista, chave) => e('div', { key: chave, role: 'list', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+      lista.map((s) => e('span', { key: s, role: 'listitem', style: { ...S.chip(false), cursor: 'default' } }, nomeSistema(s))));
+    const sistemas = Array.isArray(item.sistemas) ? item.sistemas : [];
+    const listaSistemas = sistemas.length ? chips(sistemas, 'sis') : e('div', { key: 'sis', style: { color: 'var(--muted)' } }, 'Não informado');
+    if (item.tipo === 'senha_sistemas') {
+      return e('div', { key: 'det', style: caixa }, [
+        rotulo('l', 'Sistemas citados'),
+        listaSistemas,
+        e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Responde com o texto "Esqueci minha senha" e soluciona o chamado. Nenhuma senha é alterada.'),
+      ]);
+    }
+    const alvo = item.senhaAlvo || {};
+    const outros = Array.isArray(item.outrosSistemas) ? item.outrosSistemas : [];
+    const aviso = avisoSenha(item);
+    const regra = item.identidade && item.identidade.ok === true ? SELOS_REGRA[item.identidade.regra] : null;
+    const bloco = (chave, titulo, linhas) => e('div', { key: chave, style: { minWidth: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 2, overflowWrap: 'anywhere' } }, [
+      e('div', { key: 'l', style: { ...S.label, marginBottom: 2 } }, titulo),
+      ...linhas.map((x, i) => e('div', { key: i, style: i === 0 ? { fontWeight: 600 } : { color: 'var(--muted)', fontSize: 12 } }, x)),
+    ]);
+    return e('div', { key: 'det', style: caixa }, [
+      e('div', { key: 'par', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } }, [
+        bloco('req', 'Requerente', [textoOuNaoInformado(item.requerente)]),
+        bloco('alvo', 'Usuário alvo', [textoOuNaoInformado(alvo.nome), `Usuário ${textoOuNaoInformado(alvo.usuario)}`, `CPF ${textoOuNaoInformado(alvo.cpfMascarado)}`]),
+      ]),
+      regra ? e('div', { key: 'selo', style: { display: 'flex' } }, e('span', { style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--accent-soft)', color: 'var(--accent-fg)' } }, regra)) : null,
+      aviso ? e('div', { key: 'aviso', role: 'alert', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 2 } }, [
+        e('div', { key: 'm' }, aviso.motivo),
+        e('strong', { key: 't' }, aviso.texto),
+      ]) : null,
+      e('div', { key: 'emp' }, [e('span', { key: 'l', style: { color: 'var(--muted)' } }, 'Empresa no SGA: '), e('strong', { key: 'n' }, textoOuNaoInformado(item.empresaSga && item.empresaSga.nome))]),
+      rotulo('sl', 'Sistemas citados'),
+      listaSistemas,
+      outros.length ? rotulo('ol', 'Recebem só a orientação "Esqueci minha senha"') : null,
+      outros.length ? chips(outros, 'out') : null,
+      e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Troca a senha do usuário alvo no SGA e soluciona o chamado. A senha não passa pelo Hub.'),
+    ]);
+  }
+
   /** Copia texto pra área de transferência (o Hub abre em http: sem navigator.clipboard, então cai no execCommand). */
   async function copiarTexto(texto) {
     try {
@@ -80,7 +144,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', foto_perfil: '#D946EF' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', senha_sistemas: '#64748B', alterar_senha_sga: '#06B6D4', foto_perfil: '#D946EF' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -311,6 +375,7 @@
 
     /** O que ainda falta escolher no card pra poder rodar. */
     function falta(item) {
+      if (item.tipo === 'alterar_senha_sga') return bloqueioSenha(item, (chave) => !!loginDaEmpresa(acessos.sgas, chave));
       if (item.altStatus) {
         const precisaSga = item.altStatus.bases.some((b) => b.temSga);
         if (precisaSga && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
@@ -506,6 +571,8 @@
             f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
           ]) : null,
         ]);
+      } else if (item.tipo === 'senha_sistemas' || item.tipo === 'alterar_senha_sga') {
+        detalhes = detalhesSenha(item);
       } else if (item.tipo === 'senha_crm') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
       } else if (item.tipo === 'erro_exportar_modelo') {
@@ -793,4 +860,5 @@
 
   window.ChamadosView = ChamadosView;
   window.VerChamado = VerChamado; // a aba Resultados abre o mesmo painel
+  window.ChamadosSenhas = { nomeSistema, avisoSenha, bloqueioSenha, detalhesSenha, SELOS_REGRA }; // testados em app/test
 })();
