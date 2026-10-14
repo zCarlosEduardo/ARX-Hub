@@ -11,6 +11,26 @@
   const { Icon } = window.Icons;
 
   const Hub = window.ArxAcessosHub; // acessos.js: dono dos acessos do Hub
+  const Cache = window.ChamadosCache; // chamados-cache.js: pré-carga e lista em memória/localStorage
+  const TEXTO_AGUARDANDO = 'Aguardando a atualização da lista';
+
+  /** Forma de `lista` usada pela tela, a partir do estado do cache. `guardado`: lista antiga, ainda não confirmada. */
+  function listaDoCache(s) {
+    const d = s.dados;
+    return {
+      carregando: s.carregando,
+      erro: s.erro,
+      itens: d ? d.itens : [],
+      usuario: d ? d.usuario : null,
+      outros: d ? d.outros : 0,
+      totalAbertos: d ? d.totalAbertos : 0,
+      perfis: d ? d.perfis || [] : [],
+      entidades: d ? Cache.puro.entidadesDaLista(d) : [],
+      tempos: s.tempos,
+      em: s.em,
+      guardado: !!d && !s.fresco,
+    };
+  }
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
   // identifica esta aba pro servidor (a "vaga" do modo automático é de um computador de cada vez)
@@ -308,7 +328,9 @@
   // ---------- Aba ----------
   function ChamadosView() {
     const [acessos, setAcessos] = useState(Hub.ler);
-    const [lista, setLista] = useState({ carregando: false, erro: null, itens: [], usuario: null, outros: 0, totalAbertos: 0, perfis: [], em: null });
+    // a lista vem do cache (pré-carga): ao montar já mostra o que existir; `setLista` só acompanha o cache
+    const [lista, setLista] = useState(listaDoCache(Cache.store.estado()));
+    const [filtroEntidade, setFiltroEntidade] = useState(''); // '' = todas
     const [dispensados, setDispensados] = useState(() => ler(KEY_DISPENSADOS, []));
     const [verOutros, setVerOutros] = useState(false);
     const [modoTeste, setModoTeste] = useState(() => ler(KEY_MODO_TESTE, true));
@@ -344,26 +366,26 @@
     const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
     const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
     const pronto = !!acessos.pronto;
+    const mostrarEntidade = lista.entidades.length > 1; // com uma entidade só nada novo aparece
+    const entidadeAtiva = mostrarEntidade && lista.entidades.includes(filtroEntidade) ? filtroEntidade : '';
 
     // salvo em "Meus acessos" (cabeçalho), no botão "Acessos" daqui ou em outra aba
     useEffect(() => Hub.aoMudar(setAcessos), []);
 
-    const buscar = useCallback(async () => {
-      if (!acessos.userToken) return;
-      setLista((l) => ({ ...l, carregando: true, erro: null }));
-      try {
-        const d = await api('/api/chamados', { glpi: { userToken: acessos.userToken } });
-        assinaturaRef.current = d.assinatura || '';
-        setLista({ carregando: false, erro: null, itens: d.itens, usuario: d.usuario, outros: d.outros, totalAbertos: d.totalAbertos, perfis: d.perfis || [], em: new Date() });
-      } catch (err) {
-        setLista((l) => ({ ...l, carregando: false, erro: err.message }));
-      }
-    }, [acessos.userToken]);
+    // acompanha o cache: pré-carga, lista guardada, lista nova e erro chegam por aqui
+    useEffect(() => {
+      const aplicar = (s) => { assinaturaRef.current = s.assinatura || ''; setLista(listaDoCache(s)); };
+      aplicar(Cache.store.estado());
+      return Cache.store.assinar(aplicar);
+    }, []);
 
-    // puxa ao entrar e de 2 em 2 minutos (menos durante uma execução)
+    // uma busca por vez, no cache (a mesma da pré-carga); a assinatura conhecida vai junto
+    const buscar = useCallback(() => Cache.store.buscar(), []);
+
+    // ao entrar só busca se a lista não for fresca (a pré-carga já costuma ter trazido); depois, polling leve
     useEffect(() => {
       if (!pronto) return undefined;
-      buscar();
+      Cache.store.garantir();
       // a cada 30 s só pergunta ao servidor se algo mudou no GLPI (1 busca leve) e recarrega a lista
       // inteira só se mudou; por segurança recarrega tudo a cada 5 min mesmo sem mudança
       let volta = 0;
@@ -379,7 +401,7 @@
         }
       }, 30000);
       return () => clearInterval(t);
-    }, [pronto, buscar]);
+    }, [pronto, buscar, acessos.userToken]);
     useEffect(() => () => fontesRef.current.forEach((f) => f.close()), []);
 
     const escolha = (item) => {
@@ -452,6 +474,7 @@
     async function rodar(itensParaRodar, { manual = false } = {}) {
       setConfirmando(null);
       setConfirmandoTodos(false);
+      if (lista.guardado) return; // nunca roda em cima da lista guardada (pode estar desatualizada)
       const ids = itensParaRodar.map((x) => x.id);
       try {
         const d = await api('/api/executar', {
@@ -537,7 +560,7 @@
     // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam
     // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
     useEffect(() => {
-      if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
+      if (!auto.ativo || !pronto || lista.carregando || lista.guardado || rodandoAlgo) return;
       const lote = lista.itens
         .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
@@ -545,7 +568,7 @@
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
       rodar(lote);
-    }, [auto, pronto, lista.carregando, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
+    }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
 
     if (!pronto) {
       return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
@@ -557,7 +580,7 @@
       const execEste = execDoChamado(item.id);
       const rodandoEste = !!execEste;
       const c = escolha(item);
-      const pendente = item.problemas.length ? null : falta(item);
+      const pendente = item.problemas.length ? null : lista.guardado ? TEXTO_AGUARDANDO : falta(item);
       const pode = !item.problemas.length && !pendente;
 
       let detalhes = null;
@@ -737,6 +760,7 @@
         e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
           e('div', { key: 'tipo', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0 } }, [
             e('span', { key: 't', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+            mostrarEntidade && item.entidade ? e('span', { key: 'ent', title: 'Entidade no GLPI', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, border: '1px solid var(--border)', color: 'var(--muted)' } }, item.entidade) : null,
             rotuloConfianca(item) ? e('span', { key: 'conf', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: 'var(--warn-tint)', color: 'var(--warn)', border: '1px solid var(--warn)' } }, rotuloConfianca(item)) : null,
           ]),
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
@@ -766,12 +790,14 @@
     // ---------- tela de cards ----------
     // Só aparece o que dá pra fazer; o resto (dados faltando, sistema não
     // automatizado...) fica atrás de um link, pra análise manual.
-    const possiveis = lista.itens.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
-    const manuais = lista.itens.filter((i) => i.problemas.length);
-    const naoRodar = lista.itens.filter((i) => !i.problemas.length && dispensados.includes(i.id));
+    const itensDaEntidade = Cache.puro.filtrarPorEntidade(lista.itens, entidadeAtiva);
+    const possiveis = itensDaEntidade.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
+    const manuais = itensDaEntidade.filter((i) => i.problemas.length);
+    const naoRodar = itensDaEntidade.filter((i) => !i.problemas.length && dispensados.includes(i.id));
     const visiveis = verOutros ? [...possiveis, ...naoRodar, ...manuais] : possiveis;
-    // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento
-    const prontosTodos = possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
+    // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento;
+    // nenhum enquanto a lista for a guardada (só a lista confirmada pelo servidor roda)
+    const prontosTodos = lista.guardado ? [] : possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
 
     // cartões da barra do topo: mesma altura e mesmo desenho
     const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
@@ -797,10 +823,17 @@
     const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
       e('div', { key: 't' }, [
         e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
-          lista.usuario
-            ? `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} na entidade Sistemas · aprovação como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}${verificadoEm ? ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR') : ''}`
-            : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
+        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } }, lista.usuario ? [
+          e('span', { key: 'a' }, `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} ${mostrarEntidade ? 'em ' + plural(lista.entidades.length, 'entidade', 'entidades') : 'na entidade ' + (lista.entidades[0] || 'Sistemas')} · aprovação como ${lista.usuario.nome}`),
+          // o tooltip do carimbo mostra quanto durou a leitura do GLPI (só quando o servidor mede)
+          lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR')}`) : null,
+          verificadoEm ? e('span', { key: 'v' }, ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR')) : null,
+          // região viva sempre presente para o leitor de tela anunciar a troca
+          e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8, color: 'var(--muted)' } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),
+        ] : [
+          e('span', { key: 'a' }, 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
+          e('span', { key: 'vivo', 'aria-live': 'polite' }, ''),
+        ]),
       ]),
       e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
         e('label', { key: 'mt', title: modoTeste ? 'Modo teste: nada é escrito no GLPI' : 'Modo real: o resultado é gravado no GLPI', style: { ...cartaoTopo(modoTeste, 'var(--warn)', 'var(--warn-tint)'), cursor: 'pointer' } }, [
@@ -838,8 +871,22 @@
       ]),
     ]);
 
+    const horaGuardada = lista.em ? lista.em.toLocaleTimeString('pt-BR') : 'Não informado';
+    const comListaGuardada = lista.guardado && lista.itens.length > 0;
+    const avisoGuardada = lista.erro && comListaGuardada
+      ? e('div', { key: 'aviso-guardada', role: 'alert', style: { fontSize: 12.5, color: 'var(--warn)', marginBottom: 14 } }, `Não foi possível atualizar a lista: ${lista.erro}. Mostrando a lista guardada às ${horaGuardada}. Nada roda até a lista ser atualizada.`)
+      : null;
+    // filtro por entidade: só existe com mais de uma entidade na lista
+    const barraEntidade = mostrarEntidade
+      ? e('div', { key: 'filtro-entidade', role: 'group', 'aria-label': 'Filtrar por entidade', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 14 } }, [
+        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Entidade:'),
+        e('button', { key: 'todas', 'aria-pressed': entidadeAtiva === '', style: S.chip(entidadeAtiva === ''), onClick: () => setFiltroEntidade('') }, 'Todas'),
+        ...lista.entidades.map((nome) => e('button', { key: nome, 'aria-pressed': entidadeAtiva === nome, style: S.chip(entidadeAtiva === nome), onClick: () => setFiltroEntidade(nome) }, nome)),
+      ])
+      : null;
+
     let corpo;
-    if (lista.erro) {
+    if (lista.erro && !comListaGuardada) {
       corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os chamados: ' + lista.erro);
     } else if (!lista.usuario && lista.carregando) {
       corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
@@ -890,7 +937,7 @@
       ]));
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, avisoGuardada, barraEntidade, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
   }
 
   window.ChamadosView = ChamadosView;
