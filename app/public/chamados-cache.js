@@ -93,10 +93,99 @@
     return nome ? itens.filter((i) => i.entidade === nome) : itens;
   }
 
-  const estadoVazio = () => ({ dados: null, fresco: false, carregando: false, erro: null, em: null, assinatura: '', tempos: null });
+  const DEBOUNCE_AVISO_MS = 600; // várias mensagens em rajada viram uma busca só
+  const ESPERA_INICIAL_MS = 5000; // reabertura quando o servidor fecha o canal (ex.: 404 em servidor antigo)
+  const ESPERA_MAXIMA_MS = 5 * 60 * 1000;
 
-  /** Armazenamento da lista. Tudo injetável para teste (acessos, storage, rede, relógio). */
-  function criar({ hub, storage, buscarApi, agora = () => Date.now() }) {
+  /** Interpreta uma mensagem do canal: true só para {"tipo":"mudou"} em JSON válido; nunca lança. */
+  function ehAvisoDeMudanca(ev) {
+    try {
+      const d = JSON.parse(ev && ev.data);
+      return !!d && typeof d === 'object' && d.tipo === 'mudou';
+    } catch {
+      return false; // ping, texto solto ou JSON quebrado: não é aviso
+    }
+  }
+
+  /**
+   * Canal de avisos (SSE) do chamados-glpi. Só avisa "mudou"; quem busca é `aoBuscar`.
+   * O EventSource reconecta sozinho em queda de rede; se o servidor fechar de vez (readyState 2, como
+   * no 404 de um serviço antigo) reabre aqui com espera crescente. Sem EventSource (`criarFonte` nulo)
+   * ou com erro na criação, não faz nada e o polling de /api/mudou segue como reserva.
+   */
+  function criarCanal({ url, criarFonte, aoBuscar, aoEstado = () => {}, setTimer = setTimeout, clearTimer = clearTimeout, debounceMs = DEBOUNCE_AVISO_MS }) {
+    let fonte = null;
+    let aberto = false; // quer o canal ligado
+    let conectado = false;
+    let teveQueda = false; // já caiu ou falhou antes: ao conectar de novo pode ter perdido avisos
+    let timerBusca = null;
+    let timerReabrir = null;
+    let espera = ESPERA_INICIAL_MS;
+
+    const mudarEstado = (v) => {
+      if (conectado === v) return;
+      conectado = v;
+      try { aoEstado(v); } catch { /* ouvinte com defeito não derruba o canal */ }
+    };
+    const agendarBusca = () => {
+      if (timerBusca) clearTimer(timerBusca);
+      timerBusca = setTimer(() => { timerBusca = null; try { aoBuscar(); } catch { /* a busca trata os próprios erros */ } }, debounceMs);
+    };
+    function conectar() {
+      timerReabrir = null;
+      if (!aberto || fonte || typeof criarFonte !== 'function') return;
+      let f;
+      try {
+        f = criarFonte(url);
+      } catch {
+        return; // sem suporte ou bloqueado: fica só o polling
+      }
+      if (!f) return;
+      fonte = f;
+      f.onopen = () => {
+        if (fonte !== f) return;
+        espera = ESPERA_INICIAL_MS;
+        mudarEstado(true);
+        if (teveQueda) { teveQueda = false; agendarBusca(); }
+      };
+      f.onmessage = (ev) => {
+        if (fonte !== f) return;
+        if (ehAvisoDeMudanca(ev)) agendarBusca();
+      };
+      f.onerror = () => {
+        if (fonte !== f) return;
+        mudarEstado(false);
+        teveQueda = true;
+        if (f.readyState !== 2) return; // reconectando: o navegador cuida
+        try { f.close(); } catch { /* já fechada */ }
+        fonte = null;
+        timerReabrir = setTimer(conectar, espera);
+        espera = Math.min(espera * 2, ESPERA_MAXIMA_MS);
+      };
+    }
+    return {
+      abrir() { aberto = true; if (!fonte && !timerReabrir) conectar(); },
+      fechar() {
+        aberto = false;
+        if (timerBusca) clearTimer(timerBusca);
+        if (timerReabrir) clearTimer(timerReabrir);
+        timerBusca = null;
+        timerReabrir = null;
+        const f = fonte;
+        fonte = null;
+        teveQueda = false;
+        espera = ESPERA_INICIAL_MS;
+        if (f) { try { f.close(); } catch { /* já fechada */ } }
+        mudarEstado(false);
+      },
+      conectado: () => conectado,
+    };
+  }
+
+  const estadoVazio = () => ({ dados: null, fresco: false, carregando: false, erro: null, em: null, assinatura: '', tempos: null, aoVivo: false });
+
+  /** Armazenamento da lista. Tudo injetável para teste (acessos, storage, rede, relógio, canal de avisos). */
+  function criar({ hub, storage, buscarApi, agora = () => Date.now(), criarFonte = null, urlEventos = '', setTimer, clearTimer }) {
     let s = estadoVazio();
     let emVoo = null;
     let tokenAtual = '';
@@ -125,7 +214,7 @@
             s = { ...s, fresco: true, carregando: false, erro: null, em: new Date(agora()), assinatura: d.assinatura || s.assinatura, tempos: d.tempos || s.tempos };
             guardar(storage, s.dados, token, agora());
           } else if (d && Array.isArray(d.itens)) {
-            s = { dados: d, fresco: true, carregando: false, erro: null, em: new Date(agora()), assinatura: d.assinatura || '', tempos: d.tempos || null };
+            s = { dados: d, fresco: true, carregando: false, erro: null, em: new Date(agora()), assinatura: d.assinatura || '', tempos: d.tempos || null, aoVivo: s.aoVivo };
             guardar(storage, d, token, agora());
           } else {
             throw new Error('Resposta inválida do serviço de chamados');
@@ -143,6 +232,29 @@
       return emVoo;
     }
 
+    // Aviso do webhook: busca na hora, reaproveitando a busca em voo. Se ela já estava a caminho, o aviso
+    // pode ter chegado depois de o servidor ler o GLPI; então repete uma vez ao terminar.
+    let repetindo = false;
+    function buscarPorAviso() {
+      if (!tokenAtual) return;
+      if (!emVoo) { buscar(); return; }
+      if (repetindo) return;
+      repetindo = true;
+      const g = geracao;
+      emVoo.then(() => {
+        repetindo = false;
+        if (g === geracao) buscar();
+      });
+    }
+    const canal = criarCanal({
+      url: urlEventos,
+      criarFonte,
+      aoBuscar: buscarPorAviso,
+      aoEstado: (v) => { if (s.aoVivo !== v) { s = { ...s, aoVivo: v }; avisar(); } },
+      setTimer,
+      clearTimer,
+    });
+
     /** Busca só se a lista não for fresca ou estiver mais velha que `maxIdadeMs`. */
     function garantir(maxIdadeMs = 15000) {
       if (emVoo) return emVoo;
@@ -157,13 +269,18 @@
       tokenAtual = token;
       geracao++;
       emVoo = null;
+      repetindo = false;
+      canal.fechar();
       s = estadoVazio();
       if (token) {
         const g = carregarGuardado(storage, token, agora());
         if (g) s = { ...estadoVazio(), dados: g.dados, em: new Date(g.em), assinatura: g.dados.assinatura || '' };
       }
       avisar();
-      if (token) buscar();
+      if (token) {
+        canal.abrir();
+        buscar();
+      }
     }
 
     function iniciar() {
@@ -192,13 +309,14 @@
     return dados;
   }
 
-  const puro = { hashToken, registroParaGravar, guardar, carregarGuardado, textoTempos, entidadesDaLista, filtrarPorEntidade, LIMITE_IDADE_MS, LIMITE_BYTES };
+  const puro = { criarCanal, ehAvisoDeMudanca, hashToken, registroParaGravar, guardar, carregarGuardado, textoTempos, entidadesDaLista, filtrarPorEntidade, LIMITE_IDADE_MS, LIMITE_BYTES };
   const api = { criar, puro };
 
   let storageReal = null;
   try { storageReal = window.localStorage; } catch { storageReal = null; }
   if (window.ArxAcessosHub) {
-    api.store = criar({ hub: window.ArxAcessosHub, storage: storageReal, buscarApi: apiReal });
+    const criarFonte = typeof window.EventSource === 'function' ? (url) => new window.EventSource(url) : null;
+    api.store = criar({ hub: window.ArxAcessosHub, storage: storageReal, buscarApi: apiReal, criarFonte, urlEventos: `${SERVICO}/api/eventos` });
     if (!window.CHAMADOS_CACHE_MANUAL) api.store.iniciar();
   }
   window.ChamadosCache = api;
