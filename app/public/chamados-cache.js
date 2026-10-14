@@ -133,7 +133,8 @@
           avisar();
         } catch (err) {
           if (minha !== geracao) return;
-          s = { ...s, fresco: false, carregando: false, erro: err && err.message ? err.message : 'Falha ao buscar os chamados' };
+          // `fresco` fica como estava: uma falha de rede não faz uma lista recém-confirmada virar "guardada"
+          s = { ...s, carregando: false, erro: err && err.message ? err.message : 'Falha ao buscar os chamados' };
           avisar();
         } finally {
           if (minha === geracao) emVoo = null;

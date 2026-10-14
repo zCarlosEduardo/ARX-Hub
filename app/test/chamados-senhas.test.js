@@ -58,6 +58,8 @@ globalThis.ArxAcessosHub = {
   abrirEditor: NOOP,
   EditorAcessos: () => null,
 };
+globalThis.CHAMADOS_CACHE_MANUAL = true; // sem pré-carga nem rede nos testes
+vm.runInThisContext(fs.readFileSync(path.join(PUBLIC, 'chamados-cache.js'), 'utf8'), { filename: 'chamados-cache.js' });
 vm.runInThisContext(fs.readFileSync(path.join(PUBLIC, 'chamados.js'), 'utf8'), { filename: 'chamados.js' });
 const { nomeSistema, avisoSenha, bloqueioSenha } = window.ChamadosSenhas;
 
@@ -72,8 +74,8 @@ const OK_PROPRIA = { ok: true, regra: 'mesma_pessoa', motivo: 'Mesma pessoa' };
 const OK_GESTAO = { ok: true, regra: 'gestao', motivo: 'Gestor do departamento' };
 const NEGADO = { ok: false, regra: null, motivo: 'Solicitante não é a mesma pessoa nem gestor do departamento' };
 
-function tela(itens) {
-  estado.lista = { carregando: false, erro: null, itens, usuario: { nome: 'Fulano' }, outros: 0, totalAbertos: itens.length, perfis: [], em: null };
+function tela(itens, extra) {
+  estado.lista = { carregando: false, erro: null, itens, usuario: { nome: 'Fulano' }, outros: 0, totalAbertos: itens.length, perfis: [], entidades: [], tempos: null, guardado: false, em: null, ...extra };
   try { return html(React.createElement(window.ChamadosView, {})); } finally { estado.lista = null; }
 }
 
@@ -214,4 +216,73 @@ test('modo automático e lote: nenhum item somenteManual entra (lê o código)',
   assert.equal(usos.length, 2, 'automático e "Rodar todos os prontos"');
   assert.match(src, /rodar\(lote\)/);
   assert.match(src, /onClick: \(\) => rodar\(\[item\], \{ manual: true \}\)/);
+});
+
+// ---------- lista em cache: guardada, entidade e tempos ----------
+const livre = { ...SENHA_SISTEMAS, id: 301, entidade: 'Sistemas' };
+const outra = { ...SENHA_SISTEMAS, id: 302, entidade: 'Infraestrutura' };
+
+test('lista guardada: Rodar desabilitado com o texto de espera e aviso discreto Atualizando…', () => {
+  const h = tela([SENHA_SISTEMAS], { guardado: true, em: new Date(2026, 9, 14, 12, 0, 0) });
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+  assert.ok(h.includes('>Aguardando a atualização da lista<'));
+  assert.match(h, /<button[^>]*disabled="true"[^>]*>.*?Rodar<\/span>/);
+  assert.ok(h.includes('aria-live="polite"') && h.includes('Atualizando…'));
+  assert.ok(h.includes('guardada às'));
+  assert.ok(!h.includes('Rodar todos'));
+});
+
+test('lista fresca: sem aviso de espera, Rodar liberado e carimbo atualizado às', () => {
+  const h = tela([SENHA_SISTEMAS], { em: new Date(2026, 9, 14, 12, 0, 0) });
+  assert.ok(!h.includes('Aguardando a atualização') && !h.includes('Atualizando…'));
+  assert.ok(!h.includes('disabled="true"'));
+  assert.ok(h.includes('atualizado às'));
+  assert.ok(h.includes('aria-live="polite"'), 'região viva sempre presente');
+});
+
+test('guardada com erro de atualização: aviso e lista continua visível sem rodar', () => {
+  const h = tela([SENHA_SISTEMAS], { guardado: true, erro: 'HTTP 500', em: new Date(2026, 9, 14, 12, 0, 0) });
+  assert.ok(h.includes('Não foi possível atualizar a lista: HTTP 500'));
+  assert.ok(h.includes('Nada roda até a lista ser atualizada'));
+  assert.ok(h.includes('Aguardando a atualização da lista'));
+  assert.ok(!h.includes('Atualizando…'));
+});
+
+test('uma entidade ou servidor antigo: sem chip nem filtro', () => {
+  for (const [itens, ents] of [[[livre], ['Sistemas']], [[SENHA_SISTEMAS], []]]) {
+    const h = tela(itens, { entidades: ents });
+    assert.ok(!h.includes('Entidade no GLPI') && !h.includes('Filtrar por entidade'));
+    assert.ok(h.includes('na entidade ' + (ents[0] || 'Sistemas')));
+  }
+});
+
+test('mais de uma entidade: chip no cartão e filtro com Todas e cada entidade', () => {
+  const h = tela([livre, outra], { entidades: ['Sistemas', 'Infraestrutura'] });
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+  assert.ok(h.includes('aria-label="Filtrar por entidade"'));
+  assert.ok(h.includes('>Todas<') && h.includes('aria-pressed="true"'));
+  assert.equal((h.match(/title="Entidade no GLPI"/g) || []).length, 2);
+  assert.ok(h.includes('em 2 entidades'));
+  assert.ok(h.includes('#301') && h.includes('#302'), 'sem filtro mostra todos');
+});
+
+test('item sem entidade num servidor misto continua normal', () => {
+  const h = tela([livre, SENHA_SISTEMAS], { entidades: ['Sistemas', 'Infraestrutura'] });
+  assert.equal((h.match(/title="Entidade no GLPI"/g) || []).length, 1);
+});
+
+test('tempos: tooltip no carimbo só quando o servidor mede (e nunca na lista guardada)', () => {
+  const com = tela([SENHA_SISTEMAS], { em: new Date(2026, 9, 14, 12, 0, 0), tempos: { glpi: 1500 } });
+  assert.ok(com.includes('title="Leitura do GLPI: 1,5 s"'));
+  const sem = tela([SENHA_SISTEMAS], { em: new Date(2026, 9, 14, 12, 0, 0), tempos: null });
+  assert.ok(!sem.includes('Leitura do GLPI'));
+  const guardada = tela([SENHA_SISTEMAS], { guardado: true, em: new Date(2026, 9, 14, 12, 0, 0), tempos: { glpi: 1500 } });
+  assert.ok(!guardada.includes('Leitura do GLPI'));
+});
+
+test('proteção contra dado antigo: automático e rodar conferem lista.guardado (lê o código)', () => {
+  const src = fs.readFileSync(path.join(PUBLIC, 'chamados.js'), 'utf8');
+  assert.match(src, /if \(!auto\.ativo \|\| !pronto \|\| lista\.carregando \|\| lista\.guardado \|\| rodandoAlgo\) return;/);
+  assert.match(src, /if \(lista\.guardado\) return;/);
+  assert.match(src, /const prontosTodos = lista\.guardado \? \[\]/);
 });
