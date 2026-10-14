@@ -29,6 +29,7 @@
       tempos: s.tempos,
       em: s.em,
       guardado: !!d && !s.fresco,
+      aoVivo: !!s.aoVivo,
     };
   }
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
@@ -827,6 +828,8 @@
           e('span', { key: 'a' }, `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} ${mostrarEntidade ? 'em ' + plural(lista.entidades.length, 'entidade', 'entidades') : 'na entidade ' + (lista.entidades[0] || 'Sistemas')} · aprovação como ${lista.usuario.nome}`),
           // o tooltip do carimbo mostra quanto durou a leitura do GLPI (só quando o servidor mede)
           lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR')}`) : null,
+          // ponto discreto: o aviso do GLPI (webhook) está chegando, a lista atualiza sozinha
+          lista.aoVivo ? e('span', { key: 'ao-vivo', title: 'Atualização automática ligada', 'aria-label': 'Atualização automática ligada', role: 'img', style: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', marginLeft: 6, verticalAlign: 'middle' } }) : null,
           verificadoEm ? e('span', { key: 'v' }, ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR')) : null,
           // região viva sempre presente para o leitor de tela anunciar a troca
           e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8, color: 'var(--muted)' } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),

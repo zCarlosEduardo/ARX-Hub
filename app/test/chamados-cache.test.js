@@ -203,3 +203,258 @@ test('store: garantir só busca se não for fresca ou estiver velha', async () =
   await m.store.garantir(15000);
   assert.equal(m.pedidos.length, 2);
 });
+
+// ---- Canal de avisos (SSE do webhook) ----
+function relogioFalso() {
+  let t = 0;
+  let id = 0;
+  const fila = new Map();
+  return {
+    setTimer: (fn, ms) => { fila.set(++id, { fn, em: t + ms }); return id; },
+    clearTimer: (i) => { fila.delete(i); },
+    avancar(ms) {
+      const fim = t + ms;
+      for (;;) {
+        const prox = [...fila.entries()].filter(([, v]) => v.em <= fim).sort((a, b) => a[1].em - b[1].em)[0];
+        if (!prox) break;
+        fila.delete(prox[0]);
+        t = prox[1].em;
+        prox[1].fn();
+      }
+      t = fim;
+    },
+    pendentes: () => fila.size,
+  };
+}
+
+function fabricaFonte() {
+  const fontes = [];
+  const criarFonte = (url) => {
+    const f = { url, fechada: false, readyState: 0, close() { this.fechada = true; this.readyState = 2; } };
+    fontes.push(f);
+    return f;
+  };
+  return { fontes, criarFonte };
+}
+
+const msg = (f, obj) => f.onmessage({ data: typeof obj === 'string' ? obj : JSON.stringify(obj) });
+const mudou = { tipo: 'mudou', evento: 'new', itemtype: 'Ticket', itemId: 1, avisos: 1 };
+const umTick = () => new Promise((r) => setImmediate(r));
+
+test('canal: rajada de 5 avisos vira 1 busca depois de 600 ms', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  let buscas = 0;
+  const c = puro.criarCanal({ url: 'http://x/api/eventos', criarFonte, aoBuscar: () => { buscas++; }, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  assert.equal(fontes.length, 1);
+  assert.equal(fontes[0].url, 'http://x/api/eventos');
+  fontes[0].onopen();
+  for (let i = 0; i < 5; i++) { msg(fontes[0], mudou); r.avancar(100); }
+  assert.equal(buscas, 0, 'cada aviso reinicia a espera');
+  r.avancar(499);
+  assert.equal(buscas, 0);
+  r.avancar(1);
+  assert.equal(buscas, 1);
+  r.avancar(5000);
+  assert.equal(buscas, 1);
+});
+
+test('canal: mensagem inválida, de outro tipo ou ping não gera busca nem lança', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  let buscas = 0;
+  const c = puro.criarCanal({ url: 'u', criarFonte, aoBuscar: () => { buscas++; }, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  fontes[0].onopen();
+  for (const m of ['{lixo', '', 'null', '123', '"mudou"', { tipo: 'outro' }, { tipo: 'conectado' }, {}]) {
+    assert.doesNotThrow(() => msg(fontes[0], m));
+  }
+  assert.doesNotThrow(() => fontes[0].onmessage({}));
+  r.avancar(5000);
+  assert.equal(buscas, 0);
+});
+
+test('canal: queda e reconexão gera 1 busca; queda sozinha não', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  let buscas = 0;
+  const estados = [];
+  const c = puro.criarCanal({ url: 'u', criarFonte, aoBuscar: () => { buscas++; }, aoEstado: (v) => estados.push(v), setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  fontes[0].onopen();
+  assert.equal(buscas, 0, 'primeira conexão não busca (a pré-carga já fez)');
+  fontes[0].readyState = 0; // o navegador reconecta sozinho
+  fontes[0].onerror();
+  assert.equal(c.conectado(), false);
+  r.avancar(10000);
+  assert.equal(buscas, 0);
+  assert.equal(fontes.length, 1, 'não abre outra conexão: o EventSource reconecta sozinho');
+  fontes[0].onopen();
+  r.avancar(600);
+  assert.equal(buscas, 1);
+  assert.deepEqual(estados, [true, false, true]);
+});
+
+test('canal: servidor sem /api/eventos (404 fecha a fonte) reabre com espera crescente e teto', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  let buscas = 0;
+  const c = puro.criarCanal({ url: 'u', criarFonte, aoBuscar: () => { buscas++; }, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  const falhar = () => { const f = fontes[fontes.length - 1]; f.readyState = 2; f.onerror(); };
+  falhar();
+  r.avancar(4999);
+  assert.equal(fontes.length, 1);
+  r.avancar(1);
+  assert.equal(fontes.length, 2, '1a nova tentativa em 5 s');
+  falhar();
+  r.avancar(9999);
+  assert.equal(fontes.length, 2);
+  r.avancar(1);
+  assert.equal(fontes.length, 3, '2a em 10 s');
+  falhar();
+  r.avancar(20000);
+  assert.equal(fontes.length, 4, '3a em 20 s');
+  for (let i = 0; i < 10; i++) { falhar(); r.avancar(5 * 60 * 1000); }
+  const antes = fontes.length;
+  falhar();
+  r.avancar(4 * 60 * 1000);
+  assert.equal(fontes.length, antes, 'teto de 5 min entre tentativas');
+  r.avancar(60 * 1000);
+  assert.equal(fontes.length, antes + 1);
+  assert.equal(buscas, 0, 'falhar sem nunca ter conectado não busca');
+  c.fechar();
+  falhar();
+  r.avancar(10 * 60 * 1000);
+  assert.equal(fontes.length, antes + 1, 'fechado não reabre');
+});
+
+test('canal: espera volta ao início depois de conectar', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  const c = puro.criarCanal({ url: 'u', criarFonte, aoBuscar: () => {}, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  const falhar = () => { const f = fontes[fontes.length - 1]; f.readyState = 2; f.onerror(); };
+  falhar(); r.avancar(5000); falhar(); r.avancar(10000);
+  fontes[fontes.length - 1].onopen();
+  falhar();
+  const n = fontes.length;
+  r.avancar(5000);
+  assert.equal(fontes.length, n + 1);
+});
+
+test('canal: abrir duas vezes não duplica; fechar encerra a conexão e os timers', () => {
+  const r = relogioFalso();
+  const { fontes, criarFonte } = fabricaFonte();
+  let buscas = 0;
+  const c = puro.criarCanal({ url: 'u', criarFonte, aoBuscar: () => { buscas++; }, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  c.abrir();
+  c.abrir();
+  assert.equal(fontes.length, 1);
+  fontes[0].onopen();
+  msg(fontes[0], mudou);
+  c.fechar();
+  assert.equal(fontes[0].fechada, true);
+  assert.equal(r.pendentes(), 0);
+  r.avancar(5000);
+  assert.equal(buscas, 0);
+  assert.equal(c.conectado(), false);
+  assert.doesNotThrow(() => msg(fontes[0], mudou), 'mensagem atrasada da fonte velha é ignorada');
+  r.avancar(5000);
+  assert.equal(buscas, 0);
+});
+
+test('canal: sem suporte a EventSource ou erro na criação não quebra', () => {
+  const r = relogioFalso();
+  const a = puro.criarCanal({ url: 'u', criarFonte: null, aoBuscar: () => {}, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  assert.doesNotThrow(() => { a.abrir(); a.fechar(); });
+  assert.equal(a.conectado(), false);
+  const b = puro.criarCanal({ url: 'u', criarFonte: () => { throw new Error('bloqueado'); }, aoBuscar: () => {}, setTimer: r.setTimer, clearTimer: r.clearTimer });
+  assert.doesNotThrow(() => b.abrir());
+  assert.equal(r.pendentes(), 0, 'sem suporte real: só o polling, sem tentar de novo');
+});
+
+function montarComCanal(opcoes = {}) {
+  const r = relogioFalso();
+  const f = fabricaFonte();
+  const hub = { acessos: { userToken: opcoes.token === undefined ? 'tk1' : opcoes.token }, ouvintes: new Set(), ler() { return this.acessos; }, aoMudar(fn) { this.ouvintes.add(fn); return () => this.ouvintes.delete(fn); } };
+  const pedidos = [];
+  const respostas = [...(opcoes.respostas || [])];
+  const buscarApi = async (caminho, corpo) => {
+    pedidos.push({ caminho, corpo: JSON.parse(JSON.stringify(corpo)) });
+    const x = respostas.shift();
+    return typeof x === 'function' ? x() : x;
+  };
+  const store = criar({ hub, storage: storageFalso(), buscarApi, agora: () => T0, criarFonte: f.criarFonte, urlEventos: 'http://x/api/eventos', setTimer: r.setTimer, clearTimer: r.clearTimer });
+  return { store, hub, pedidos, r, f };
+}
+
+test('store: sem token não abre canal; com token abre um só, mesmo iniciando duas vezes', () => {
+  const a = montarComCanal({ token: '', respostas: [] });
+  a.store.iniciar();
+  assert.equal(a.f.fontes.length, 0);
+  const b = montarComCanal({ respostas: [lista()] });
+  b.store.iniciar();
+  b.store.iniciar();
+  assert.equal(b.f.fontes.length, 1);
+});
+
+test('store: troca de token fecha o canal antigo e abre outro; token removido fecha', () => {
+  const m = montarComCanal({ respostas: [lista(), lista()] });
+  m.store.iniciar();
+  m.hub.acessos = { userToken: 'tk2' };
+  m.hub.ouvintes.forEach((fn) => fn());
+  assert.equal(m.f.fontes.length, 2);
+  assert.equal(m.f.fontes[0].fechada, true);
+  assert.equal(m.f.fontes[1].fechada, false);
+  m.hub.acessos = { userToken: '' };
+  m.hub.ouvintes.forEach((fn) => fn());
+  assert.equal(m.f.fontes[1].fechada, true);
+  assert.equal(m.f.fontes.length, 2);
+});
+
+test('store: aviso busca com a assinatura, mantém a lista fresca e marca ao vivo', async () => {
+  const m = montarComCanal({ respostas: [lista(), { semMudanca: true, assinatura: 'a1' }] });
+  m.store.iniciar();
+  await umTick();
+  assert.equal(m.store.estado().fresco, true);
+  const fonte = m.f.fontes[0];
+  fonte.onopen();
+  assert.equal(m.store.estado().aoVivo, true);
+  for (let i = 0; i < 5; i++) msg(fonte, mudou);
+  m.r.avancar(600);
+  assert.equal(m.pedidos.length, 2, 'pré-carga + 1 busca do aviso');
+  assert.equal(m.pedidos[1].corpo.assinatura, 'a1');
+  assert.equal(m.store.estado().fresco, true, 'continua fresca: a tela não mostra Atualizando');
+  await umTick();
+  assert.equal(m.store.estado().dados.itens.length, 1);
+  fonte.readyState = 0;
+  fonte.onerror();
+  assert.equal(m.store.estado().aoVivo, false);
+});
+
+test('store: aviso durante busca em voo gera uma nova busca ao terminar', async () => {
+  let soltar;
+  const lenta = () => new Promise((res) => { soltar = () => res(lista()); });
+  const m = montarComCanal({ respostas: [lenta, lista({ itens: [{ id: 1 }, { id: 2 }], assinatura: 'a2' })] });
+  m.store.iniciar();
+  const fonte = m.f.fontes[0];
+  fonte.onopen();
+  msg(fonte, mudou);
+  m.r.avancar(600);
+  assert.equal(m.pedidos.length, 1, 'reaproveita a busca em voo');
+  soltar();
+  await umTick();
+  await umTick();
+  assert.equal(m.pedidos.length, 2, 'o aviso chegou durante a busca: busca de novo');
+  assert.equal(m.store.estado().dados.itens.length, 2);
+});
+
+test('store: sem criarFonte (navegador sem EventSource) segue só com a busca normal', async () => {
+  const m = montar({ respostas: [lista()] });
+  m.store.iniciar();
+  await m.store.buscar();
+  assert.equal(m.store.estado().aoVivo, false);
+  assert.equal(m.store.estado().dados.itens.length, 1);
+});
