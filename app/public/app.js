@@ -239,13 +239,13 @@
       return () => document.removeEventListener('mousedown', onDown);
     }, [tabsMenuOpen]);
 
+    // o token do GLPI fica no cofre dos acessos (cifrado); aqui só se lê e se atualiza quando o cofre destrava ou muda
     useEffect(() => {
-      try {
-        const saved = localStorage.getItem(GLPI_TOKEN_STORAGE_KEY);
-        if (saved) setGlpiToken(saved);
-      } catch (err) {
-        // localStorage indisponível (modo privado, etc.) — segue sem token salvo
-      }
+      const hub = window.ArxAcessosHub;
+      if (!hub) return undefined;
+      const token = (hub.ler() || {}).userToken;
+      if (token) setGlpiToken(token);
+      return hub.aoMudar((a) => setGlpiToken(a.userToken || null));
     }, []);
 
     useEffect(() => {
@@ -314,20 +314,14 @@
     function saveGlpiToken() {
       const value = glpiTokenDraft.trim();
       if (!value) return;
-      try {
-        localStorage.setItem(GLPI_TOKEN_STORAGE_KEY, value);
-      } catch (err) {
-        // segue mesmo se não conseguir persistir — vale só para esta sessão
-      }
+      if (window.ArxAcessosHub) window.ArxAcessosHub.definirToken(value); // vai para o cofre (cifrado)
       setGlpiToken(value);
       setGlpiTokenDraft('');
       loadGlpiLookup(value);
     }
 
     function forgetGlpiToken() {
-      try {
-        localStorage.removeItem(GLPI_TOKEN_STORAGE_KEY);
-      } catch (err) {}
+      if (window.ArxAcessosHub) window.ArxAcessosHub.definirToken('');
       setGlpiToken(null);
       setGlpiLookup(null);
       setGlpiLookupError(null);

@@ -27,5 +27,6 @@ cd app && npm test                     # node --test (validação, erros, config
 
 ## Contexto importante
 - **Sem autenticação de propósito**: o Hub vai virar iframe de outro projeto ARX, que cuidará do acesso. Por isso `/api/test-connection` só valida o formato da URL, não restringe hosts. Não adicionar auth aqui sem alinhar.
-- **Token GLPI do usuário** fica só no navegador (localStorage) e viaja no corpo da requisição; o servidor nunca grava nem loga (ver `glpi.sanitizar` e `http.erroFinal`). O App-Token fica só em env.
+- **Acessos no navegador (cofre):** logins do SGA e do PowerCRM, senha padrão e token do GLPI ficam CIFRADOS no navegador (`app/public/cofre.js`: AES-GCM 256, chave derivada da senha mestra por PBKDF2-SHA256 de 600 mil voltas; a senha mestra e a chave nunca são gravadas, a chave só existe na memória). Trava sozinho em 15 minutos parado. `acessos.js` guarda tudo via cofre (nunca texto puro); acessos antigos em texto puro são migrados quando a pessoa cria o cofre. O token do GLPI também vai pelo cofre (`ArxAcessosHub.definirToken`). Sem a senha mestra não há recuperação: "esqueci" apaga o cofre e a pessoa digita tudo de novo. Não é hash: as automações precisam da senha original.
+- **Token GLPI do usuário** vem do cofre e viaja no corpo da requisição; o servidor nunca grava nem loga (ver `glpi.sanitizar` e `http.erroFinal`). O App-Token fica só em env.
 - Varredura: `CHECK_INTERVAL_MS` (padrão 15000) e `CHECK_TIMEOUT_MS` (3000). Só grava no banco e faz broadcast quando o status muda; a lista é cacheada em memória.
