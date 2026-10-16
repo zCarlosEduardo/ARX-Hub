@@ -42,6 +42,30 @@ function validarVinculo(corpo) {
   return { ok: true, valor: { telefone, glpiId, nome } };
 }
 
+/** Chave de comparação de nomes: sem acento, caixa, espaço nem pontuação ("TechProtege" = "Tech Protege"). */
+const chaveNome = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Conversa privada: a categoria do GLPI vem de uma linha "Categoria Ancore" (ou "Categoria: Ancore") nas 3 primeiras
+ * linhas. Devolve o apelido e o texto sem essa linha; sem a linha, o texto volta intacto.
+ */
+function extrairCategoria(texto) {
+  const t = String(texto == null ? '' : texto);
+  const linhas = t.split(/\r?\n/);
+  for (let i = 0; i < Math.min(3, linhas.length); i++) {
+    const m = /^\s*categoria\s*[:\-]?\s*(\S.*?)\s*$/i.exec(linhas[i]);
+    if (m) return { apelido: m[1], texto: linhas.filter((_, j) => j !== i).join('\n').replace(/^\s*\n+/, '').trim() };
+  }
+  return { apelido: '', texto: t };
+}
+
+/** Categoria do GLPI cadastrada para o apelido que a pessoa escreveu (null = não existe). */
+function acharCategoria(categorias, apelido) {
+  const chave = chaveNome(apelido);
+  if (!chave) return null;
+  return (categorias || []).find((c) => chaveNome(c.apelido) === chave) || null;
+}
+
 function acharVinculo(vinculos, telefone) {
   return (vinculos || []).find((v) => mesmoTelefone(v.telefone, telefone)) || null;
 }
@@ -51,14 +75,15 @@ function montarChamado({ texto, vinculo, grupo, tipoNome }) {
   const t = String(texto || '').trim();
   const primeira = t.split(/\r?\n/).map((l) => l.trim()).find(Boolean) || '';
   const titulo = (primeira || tipoNome || 'Solicitação pelo WhatsApp').slice(0, 120);
-  const origem = `Aberto pelo ARX Hub a partir do WhatsApp (grupo ${(grupo && grupo.nome) || 'Não informado'}, solicitante ${(vinculo && vinculo.nome) || 'Não informado'}).`;
+  const onde = grupo && grupo.privado ? 'conversa privada' : `grupo ${(grupo && grupo.nome) || 'Não informado'}`;
+  const origem = `Aberto pelo ARX Hub a partir do WhatsApp (${onde}, solicitante ${(vinculo && vinculo.nome) || 'Não informado'}).`;
   return { titulo, descricao: t ? `${t}\n\n${origem}` : origem };
 }
 
 /** Situação do pedido -> reação na mensagem (null = não reage). */
 function reacaoDoStatus(status, reacoes) {
   const r = reacoes || {};
-  const mapa = { pendente: r.aFazer, aberto: r.andamento, concluido: r.sucesso, erro: r.erro, sem_vinculo: r.duvida, sem_tipo: r.duvida };
+  const mapa = { pendente: r.aFazer, aberto: r.andamento, concluido: r.sucesso, erro: r.erro, sem_vinculo: r.duvida, sem_tipo: r.duvida, sem_categoria: r.duvida };
   return mapa[status] || null;
 }
 
@@ -69,4 +94,4 @@ function textoResposta(modelo, { ticketId, solicitante, tipo }) {
     .replace(/\{tipo\}/g, tipo || '');
 }
 
-module.exports = { normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta };
+module.exports = { chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta };

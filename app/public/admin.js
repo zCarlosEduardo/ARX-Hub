@@ -312,6 +312,33 @@
           ]))),
         botao('+ Adicionar grupo', () => mudar((x) => (x.grupos.push({ id: proximoId('g', x.grupos), nome: '', jid: '', categoriaId: null, categoriaLabel: '', numeroId: x.numeros[0] ? x.numeros[0].id : '', tipos: [], ativo: true, responder: false, reagir: true }), x)), 'sec', { marginTop: 8, alignSelf: 'flex-start' }),
       ]),
+      e('div', { key: 'privado', className: 'wa-privado', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
+        rotulo('Conversa privada com o robô'),
+        dica('A pessoa manda o pedido direto para o número do chip. A primeira linha diz a categoria do GLPI, por exemplo "Categoria Ancore". Só atende quem tem vínculo (aba Vínculos do WhatsApp).'),
+        e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' } }, [
+          caixa(w.privado.ativo, (v) => mudar((x) => ((x.privado.ativo = v), x)), 'Atender no privado', { fontWeight: 600 }),
+          caixa(w.privado.responder, (v) => mudar((x) => ((x.privado.responder = v), x)), 'Responder na conversa'),
+          caixa(w.privado.reagir !== false, (v) => mudar((x) => ((x.privado.reagir = v), x)), 'Reagir às mensagens'),
+        ]),
+        e('div', { key: 'tipos' }, [
+          e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Tipos de solicitação atendidos no privado (nenhum marcado = todos):'),
+          e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, tipos.map((t) => {
+            const sel = w.privado.tipos.includes(t.chave);
+            return e('button', { key: t.chave, type: 'button', className: 'wa-tipo wa-tipo-privado', style: S().chip(sel), onClick: () => mudar((x) => ((x.privado.tipos = sel ? x.privado.tipos.filter((k) => k !== t.chave) : [...x.privado.tipos, t.chave]), x)) }, t.nome);
+          })),
+        ]),
+        e('div', { key: 'cats' }, [
+          e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Categorias que a pessoa pode escrever na mensagem (o nome pode vir sem espaço ou acento):'),
+          e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, w.privado.categorias.map((c, i) =>
+            e('div', { key: i, className: 'wa-categoria', style: { display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(180px, 1.6fr) auto', gap: 8, alignItems: 'center' } }, [
+              campoTexto(c.apelido, (v) => mudar((x) => ((x.privado.categorias[i].apelido = v), x)), 'Nome (ex.: Ancore)'),
+              selecao(c.categoriaId ? String(c.categoriaId) : '', (v) => mudar((x) => { const k = categorias.find((q) => String(q.id) === v); x.privado.categorias[i].categoriaId = v ? Number(v) : null; x.privado.categorias[i].categoriaLabel = k ? k.label : ''; return x; }),
+                [['', 'Escolha a categoria do GLPI'], ...(c.categoriaId && !categorias.some((q) => q.id === c.categoriaId) ? [[String(c.categoriaId), c.categoriaLabel || String(c.categoriaId)]] : []), ...categorias.map((q) => [String(q.id), q.label])]),
+              botao('Remover', () => mudar((x) => ((x.privado.categorias = x.privado.categorias.filter((_, j) => j !== i)), x)), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
+            ]))),
+          botao('+ Adicionar categoria', () => mudar((x) => (x.privado.categorias.push({ apelido: '', categoriaId: null, categoriaLabel: '' }), x)), 'sec', { marginTop: 6, alignSelf: 'flex-start' }),
+        ]),
+      ]),
       e('div', { key: 'rem' }, [
         rotulo('Quem pode pedir (telefones autorizados)'),
         e('textarea', { className: 'field-input wa-remetentes', value: w.remetentesTexto, onChange: (ev) => mudar((x) => ((x.remetentesTexto = ev.target.value), x)), rows: 3, placeholder: 'Um telefone por linha, com DDI e DDD. Vazio = qualquer pessoa dos grupos acima.', style: { ...S().input, resize: 'vertical' } }),
@@ -326,8 +353,8 @@
   }
 
   // ---------- abas: vínculos, conexão e pedidos do WhatsApp ----------
-  const NOMES_STATUS = { pendente: 'Na fila', abrindo: 'Abrindo o chamado', aberto: 'Chamado aberto', concluido: 'Concluído', erro: 'Erro', sem_vinculo: 'Sem vínculo', observado: 'Só observado' };
-  const COR_STATUS = { pendente: 'var(--warn)', abrindo: 'var(--accent)', aberto: 'var(--accent)', concluido: 'var(--success, #16a34a)', erro: 'var(--error)', sem_vinculo: 'var(--warn)', observado: 'var(--muted)' };
+  const NOMES_STATUS = { pendente: 'Na fila', abrindo: 'Abrindo o chamado', aberto: 'Chamado aberto', concluido: 'Concluído', erro: 'Erro', sem_vinculo: 'Sem vínculo', sem_categoria: 'Sem categoria', observado: 'Só observado' };
+  const COR_STATUS = { pendente: 'var(--warn)', abrindo: 'var(--accent)', aberto: 'var(--accent)', concluido: 'var(--success, #16a34a)', erro: 'var(--error)', sem_vinculo: 'var(--warn)', sem_categoria: 'var(--warn)', observado: 'var(--muted)' };
   const dataHora = (s) => (s ? new Date(s).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informado');
 
   /** Carrega o painel do WhatsApp (vínculos, pedidos recentes, estado do robô) e se atualiza sozinho de tempos em tempos. */
