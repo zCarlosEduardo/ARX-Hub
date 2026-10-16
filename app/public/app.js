@@ -639,6 +639,8 @@
           title: 'Resultados das automações', 'aria-label': 'Resultados',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('resultados') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('resultados') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('BarChart3', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Resultados')]),
+        // admin.js: aba "Administração", só aparece para quem é administrador (identificado pelo token do GLPI)
+        window.AdminAba ? e(window.AdminAba, { key: 'admin', ativa: abaFixaAtiva('admin'), aoAbrir: () => abrirAbaFixa('admin'), compacto: panelCompact }) : null,
         openTabItems.length ? e('span', { key: 'sep', className: 'tabs-sep' }) : null,
         navScroll,
       ]),
@@ -657,8 +659,6 @@
         // alertas.js (sino) e acessos.js (Meus acessos): componentes próprios
         window.AlertasSino ? e(window.AlertasSino, { key: 'alertas' }) : null,
         window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'acessos' }) : null,
-        // admin.js: botão "Administração", só aparece para quem é administrador (identificado pelo token do GLPI)
-        window.AdminBotao ? e(window.AdminBotao, { key: 'admin' }) : null,
         e('div', { key: 'health', style: sx('display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;flex-shrink:0') }, [
           e('span', { key: 'dot', className: 'pulse-dot', style: { position: 'relative', width: 7, height: 7, borderRadius: '50%', background: healthDotColor, color: healthDotColor } }),
           e('span', { key: 'label' }, online + '/' + total + ' online'),
@@ -1096,6 +1096,9 @@
         e('div', { key: 'panel', style: { display: abaFixaAtiva('painel') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
         abasMontadas.chamados && window.ChamadosView
           ? e('div', { key: 'chamados', style: { display: abaFixaAtiva('chamados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ChamadosView))
+          : null,
+        abasMontadas.admin && window.AdminView
+          ? e('div', { key: 'admin', style: { display: abaFixaAtiva('admin') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.AdminView))
           : null,
         abasMontadas.resultados && window.ResultadosView
           ? e('div', { key: 'resultados', style: { display: abaFixaAtiva('resultados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ResultadosView))
