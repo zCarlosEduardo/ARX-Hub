@@ -126,3 +126,11 @@ test('validarOrdem: lista de ids sem repetir', () => {
   assert.equal(validarOrdem({ ids: ['a'] }).ok, false);
   assert.equal(validarOrdem({}).ok, false);
 });
+
+test('usuarioDaSessao: GLPI com departamento entre parênteses no sobrenome ("(Sistemas)") ainda casa pelo nome completo', () => {
+  const real = { session: { glpiID: 7, glpiname: 'carlos.alonso', glpifirstname: 'Carlos Eduardo de Souza Alonso', glpirealname: '(Sistemas)', glpifriendlyname: '(Sistemas) Carlos Eduardo de Souza Alonso' } };
+  const u = usuarioDaSessao(real);
+  assert.equal(u.nome, 'Carlos Eduardo de Souza Alonso');
+  assert.ok(u.nomes.includes('CARLOS EDUARDO DE SOUZA ALONSO'));
+  assert.ok(adminCorrespondente(u, [{ id: 1, glpiId: null, login: '', nome: 'Carlos Eduardo de Souza Alonso' }]));
+});

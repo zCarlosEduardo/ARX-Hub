@@ -22,9 +22,11 @@ function usuarioDaSessao(resposta) {
   if (!s || typeof s !== 'object') return null;
   const id = Number(s.glpiID);
   const login = String(s.glpiname || '').trim();
-  const primeiro = String(s.glpifirstname || '').trim();
-  const ultimo = String(s.glpirealname || '').trim();
-  const amigavel = String(s.glpifriendlyname || '').trim();
+  // o GLPI da ARX põe o departamento entre parênteses no nome: "(Sistemas) Fulano"; fora isso não faz parte do nome
+  const semDepto = (t) => String(t || '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const primeiro = semDepto(s.glpifirstname);
+  const ultimo = semDepto(s.glpirealname);
+  const amigavel = semDepto(s.glpifriendlyname);
   const completo = [primeiro, ultimo].filter(Boolean).join(' ');
   const nome = completo || amigavel || login;
   if (!Number.isInteger(id) && !login && !nome) return null;
