@@ -222,6 +222,43 @@ test('modo automático e lote: nenhum item somenteManual entra (lê o código)',
   assert.match(src, /onClick: \(\) => rodar\(\[item\], \{ manual: true \}\)/);
 });
 
+// ---------- desbloqueio de usuário do SGA (mesmo card da troca de senha, outra ação) ----------
+const desbloquear = (identidade, extra) => ({ ...alterar(identidade, extra), tipo: 'desbloquear_usuario_sga', tipoNome: 'Desbloqueio de usuário do SGA', outrosSistemas: [], somenteManual: true, motivoConfianca: 'pedido reconhecido pela descrição (usuário do SGA bloqueado)' });
+
+test('desbloqueio: o card diz que só desbloqueia, mostra requerente e alvo e não fala em trocar a senha', () => {
+  const h = tela([desbloquear(OK_PROPRIA)]);
+  assert.match(h, /Desbloqueio de usuário do SGA/);
+  assert.match(h, /Desbloqueia o usuário alvo no SGA e soluciona o chamado\. A senha não é alterada/);
+  assert.match(h, /Requerente/);
+  assert.match(h, /Usuário alvo/);
+  assert.ok(!/Troca a senha do usuário alvo/.test(h));
+  assert.ok(!PROIBIDO.test(h), (h.match(PROIBIDO) || [])[0]);
+});
+
+test('desbloqueio: identidade não confirmada tem o mesmo aviso e o mesmo bloqueio da troca de senha', () => {
+  const tem = () => true;
+  const item = desbloquear(NEGADO);
+  assert.ok(avisoSenha(item));
+  assert.ok(bloqueioSenha(item, tem));
+  assert.equal(avisoSenha(desbloquear(OK_PROPRIA)), null);
+  assert.equal(bloqueioSenha(desbloquear(OK_PROPRIA), tem), null);
+  assert.match(bloqueioSenha(desbloquear(OK_PROPRIA), () => false), /Marque ARX em um login do SGA/);
+});
+
+test('desbloqueio: liberável no clique manual quando o alvo está identificado, e nunca entra no automático', () => {
+  const LIBERAVEL = { ok: false, regra: null, motivo: 'o solicitante não é da gestão', liberavelManual: true };
+  const item = desbloquear(LIBERAVEL);
+  assert.equal(avisoSenha(item).liberavel, true);
+  assert.equal(bloqueioSenha(item, () => true), null);
+  assert.equal(window.ChamadosSenhas.deveExcluirDoAutomatico(item), true);
+  assert.equal(window.ChamadosSenhas.montarPedidoItem(item, { manual: true }).confirmado, true);
+});
+
+test('o card da troca de senha não mudou (continua falando em trocar a senha)', () => {
+  const h = tela([alterar(OK_PROPRIA)]);
+  assert.match(h, /Troca a senha do usuário alvo no SGA e soluciona o chamado/);
+});
+
 // ---------- lista em cache: guardada, entidade e tempos ----------
 const livre = { ...SENHA_SISTEMAS, id: 301, entidade: 'Sistemas' };
 const outra = { ...SENHA_SISTEMAS, id: 302, entidade: 'Infraestrutura' };

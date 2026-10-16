@@ -64,7 +64,9 @@
   const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
-  // ---------- pedidos de senha (senha_sistemas e alterar_senha_sga) ----------
+  // ---------- pedidos de senha (senha_sistemas, alterar_senha_sga e desbloquear_usuario_sga) ----------
+  // trocar a senha e desbloquear o usuário do SGA usam o mesmo card (requerente, alvo, identidade); só a ação muda
+  const ehSenhaSga = (item) => !!item && (item.tipo === 'alterar_senha_sga' || item.tipo === 'desbloquear_usuario_sga');
   const NOMES_SISTEMA = { crm: 'CRM (PowerCRM)', ezchat: 'EzChat', wint: 'Wint', mundiale: 'Mundiale', chat: 'Chat', sga: 'SGA' };
   const nomeSistema = (chave) => NOMES_SISTEMA[chave] || String(chave);
   const SELOS_REGRA = { mesma_pessoa: 'Própria pessoa', gestao: 'Gestão do departamento' };
@@ -80,7 +82,7 @@
 
   /** Aviso do card "Alterar senha do SGA": só existe quando a identidade não foi confirmada. */
   function avisoSenha(item) {
-    if (!item || item.tipo !== 'alterar_senha_sga') return null;
+    if (!ehSenhaSga(item)) return null;
     const id = item.identidade;
     if (id && id.ok === true) return null;
     if (id && id.liberavelManual === true) return { motivo: textoOuNaoInformado(id.motivo), texto: 'Não roda no automático. Confira o chamado e rode manualmente se o pedido for legítimo', liberavel: true };
@@ -97,7 +99,7 @@
 
   /** Itens somenteManual nunca entram no modo automático nem em "Rodar todos os prontos". */
   function deveExcluirDoAutomatico(item) {
-    return !!item && (item.somenteManual === true || (item.tipo === 'alterar_senha_sga' && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
+    return !!item && (item.somenteManual === true || (ehSenhaSga(item) && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
   }
 
   /** Textos do aviso âmbar do card (null = sem aviso). */
@@ -116,7 +118,7 @@
 
   /** Motivo que impede de rodar um pedido de senha (null = liberado). `temLoginSga(chave)` diz se há login do SGA para a empresa. */
   function bloqueioSenha(item, temLoginSga) {
-    if (!item || item.tipo !== 'alterar_senha_sga') return null;
+    if (!ehSenhaSga(item)) return null;
     const aviso = avisoSenha(item);
     if (aviso && !aviso.liberavel) return 'Identidade não confirmada: este chamado não será executado';
     if (!item.empresaSga || !temLoginSga(item.empresaSga.chave)) return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
@@ -163,7 +165,7 @@
       listaSistemas,
       outros.length ? rotulo('ol', 'Recebem só a orientação "Esqueci minha senha"') : null,
       outros.length ? chips(outros, 'out') : null,
-      e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Troca a senha do usuário alvo no SGA e soluciona o chamado. A senha não passa pelo Hub.'),
+      e('div', { key: 'p', style: { color: 'var(--muted)' } }, item.tipo === 'desbloquear_usuario_sga' ? 'Desbloqueia o usuário alvo no SGA e soluciona o chamado. A senha não é alterada.' : 'Troca a senha do usuário alvo no SGA e soluciona o chamado. A senha não passa pelo Hub.'),
     ]);
   }
 
@@ -204,7 +206,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', ativacao_consultor: '#10B981', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', senha_sistemas: '#64748B', alterar_senha_sga: '#06B6D4', foto_perfil: '#D946EF', sincronizar_vistoria: '#F97316' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', ativacao_consultor: '#10B981', desbloquear_usuario_sga: '#0EA5E9', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', senha_sistemas: '#64748B', alterar_senha_sga: '#06B6D4', foto_perfil: '#D946EF', sincronizar_vistoria: '#F97316' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -442,7 +444,7 @@
 
     /** O que ainda falta escolher no card pra poder rodar. */
     function falta(item) {
-      if (item.tipo === 'alterar_senha_sga') return bloqueioSenha(item, (chave) => !!loginDaEmpresa(acessos.sgas, chave));
+      if (ehSenhaSga(item)) return bloqueioSenha(item, (chave) => !!loginDaEmpresa(acessos.sgas, chave));
       if (item.altStatus) {
         const precisaSga = item.altStatus.bases.some((b) => b.temSga);
         if (precisaSga && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
@@ -727,7 +729,7 @@
             f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
           ]) : null,
         ]);
-      } else if (item.tipo === 'senha_sistemas' || item.tipo === 'alterar_senha_sga') {
+      } else if (item.tipo === 'senha_sistemas' || ehSenhaSga(item)) {
         detalhes = detalhesSenha(item);
       } else if (item.tipo === 'senha_crm') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
