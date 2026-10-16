@@ -1,10 +1,14 @@
 // Cofre dos acessos: guarda logins, senhas e o token do GLPI CIFRADOS no navegador, nunca em texto puro.
 //
 // - A chave nasce da SENHA MESTRA (PBKDF2-SHA256, 600 mil voltas, sal aleatório) e a cifra é AES-GCM de 256 bits. A senha
-//   mestra e a chave NUNCA são gravadas: a chave fica só na memória (CryptoKey não extraível) e some ao travar.
+//   mestra e a chave NUNCA são gravadas: a chave fica só na memória e some ao travar.
 // - O que fica no localStorage é só o texto cifrado (`arxhub_cofre_v1`): sem a senha mestra não dá para ler.
 // - Trava sozinho depois de um tempo sem uso (padrão 15 minutos) e ao fechar a aba.
 // - Hash não serve aqui (é de mão única): as automações precisam da senha original, então é criptografia.
+// - Dois motores com o MESMO formato (um cofre abre nos dois): o WebCrypto do navegador e, quando ele não existe, o motor
+//   de reserva (vendor/arx-cripto.min.js, @noble/hashes e @noble/ciphers, MIT). O navegador só libera o WebCrypto em
+//   contexto seguro (HTTPS ou localhost); o Hub aberto por http://IP-da-rede cai no motor de reserva, mais lento (alguns
+//   segundos para destravar) e com a chave como bytes na memória em vez de CryptoKey não extraível.
 // Limite honesto: protege o que está gravado em disco (cópia do perfil do navegador, acesso ao computador, curiosos). Com o
 // cofre DESTRAVADO, um script malicioso rodando nesta página ou um programa espião no computador ainda conseguiria ler.
 (function (raiz) {
@@ -24,18 +28,21 @@
   const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
   /**
-   * @param {{storage: Storage, crypto?: Crypto, iteracoes?: number, ocioMs?: number, setTimer?: Function, clearTimer?: Function}} deps
-   *   `crypto`, `iteracoes` e os timers existem para os testes.
+   * @param {{storage: Storage, crypto?: Crypto|null, reserva?: object|null, iteracoes?: number, ocioMs?: number, setTimer?: Function, clearTimer?: Function}} deps
+   *   `crypto`, `reserva`, `iteracoes` e os timers existem para os testes.
    */
   function criarCofre(deps) {
     const storage = deps.storage;
-    const cr = deps.crypto || raiz.crypto;
+    const cr = deps.crypto === undefined ? raiz.crypto : deps.crypto;
+    const reserva = deps.reserva === undefined ? raiz.ArxCriptoJs : deps.reserva;
+    // motor: 'webcrypto' (contexto seguro), 'reserva' (HTTP fora de localhost) ou null (sem como cifrar)
+    const motor = cr && cr.subtle ? 'webcrypto' : reserva && cr && cr.getRandomValues ? 'reserva' : null;
     const iteracoes = deps.iteracoes || ITERACOES_PADRAO;
     const ocioMs = deps.ocioMs === undefined ? OCIO_PADRAO_MS : deps.ocioMs;
     const setTimer = deps.setTimer || ((fn, ms) => setTimeout(fn, ms));
     const clearTimer = deps.clearTimer || ((t) => clearTimeout(t));
 
-    let chave = null; // CryptoKey (só na memória)
+    let chave = null; // CryptoKey (webcrypto) ou bytes (reserva); só na memória
     let sal = null; // sal do cofre aberto (para saber se outra aba trocou a senha)
     let temporizador = null;
     const ouvintes = new Set();
@@ -48,6 +55,10 @@
       }
     });
 
+    function exigirMotor() {
+      if (!motor) throw new Error('Este navegador não permite criptografar nesta página. Abra o Hub por HTTPS ou por http://localhost.');
+    }
+
     function lerBlob() {
       try {
         const bruto = storage.getItem(CHAVE);
@@ -58,18 +69,23 @@
     }
 
     async function derivar(senha, salBytes, voltas) {
+      exigirMotor();
+      if (motor === 'reserva') return reserva.derivar(enc.encode(senha), salBytes, voltas);
       const base = await cr.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveKey']);
       return cr.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: salBytes, iterations: voltas }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     }
 
     async function cifrar(dados, k, salBytes, voltas) {
       const iv = cr.getRandomValues(new Uint8Array(12));
-      const ct = await cr.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify(dados)));
+      const claro = enc.encode(JSON.stringify(dados));
+      const ct = motor === 'reserva' ? reserva.cifrar(k, iv, claro) : new Uint8Array(await cr.subtle.encrypt({ name: 'AES-GCM', iv }, k, claro));
       return { v: 1, kdf: 'PBKDF2-SHA256', it: voltas, salt: paraB64(salBytes), iv: paraB64(iv), ct: paraB64(ct) };
     }
 
     async function decifrar(blob, k) {
-      const claro = await cr.subtle.decrypt({ name: 'AES-GCM', iv: deB64(blob.iv) }, k, deB64(blob.ct));
+      const iv = deB64(blob.iv);
+      const ct = deB64(blob.ct);
+      const claro = motor === 'reserva' ? reserva.decifrar(k, iv, ct) : new Uint8Array(await cr.subtle.decrypt({ name: 'AES-GCM', iv }, k, ct));
       return JSON.parse(dec.decode(claro));
     }
 
@@ -97,10 +113,15 @@
     return {
       CHAVE,
       MIN_SENHA,
+      /** 'webcrypto', 'reserva' ou null (sem como cifrar nesta página). */
+      motor,
+      /** Dá para criar e abrir o cofre nesta página? */
+      disponivel: () => !!motor,
       existe,
       aberto,
       /** Cria o cofre com a senha mestra e já deixa aberto. Recusa senha curta. Não sobrescreve cofre existente. */
       async criar(senhaMestra, dados) {
+        exigirMotor();
         if (existe()) throw new Error('Já existe um cofre neste navegador.');
         if (typeof senhaMestra !== 'string' || senhaMestra.length < MIN_SENHA) throw new Error(`A senha mestra precisa de ao menos ${MIN_SENHA} caracteres.`);
         const salBytes = cr.getRandomValues(new Uint8Array(16));
@@ -114,6 +135,7 @@
       },
       /** Destrava com a senha mestra e devolve os dados. Senha errada lança erro (o cofre continua travado). */
       async abrir(senhaMestra) {
+        exigirMotor();
         const blob = lerBlob();
         if (!blob) throw new Error('Não existe cofre neste navegador.');
         const k = await derivar(String(senhaMestra || ''), deB64(blob.salt), blob.it || ITERACOES_PADRAO);
