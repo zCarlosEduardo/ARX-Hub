@@ -229,7 +229,7 @@
     ativo: 'Ativo: o robô identifica quem pediu e o que pediu, abre o chamado no GLPI e reage na mensagem.',
   };
   const NOTAS_OPERACAO = {
-    fila_automatico: 'Pela fila do Chamados automático: o pedido espera na fila e o navegador de quem está com o Chamados automático ligado abre o chamado (com o token dessa pessoa) e o automático executa. Sem ninguém com o automático ligado, o pedido espera.',
+    fila_automatico: 'Pela fila do Chamados automático: o pedido espera na fila e o navegador de quem está com o Chamados automático ligado abre o chamado (com o token dessa pessoa) e o automático executa. Se ninguém pegar o pedido em 1 minuto e houver token de serviço no servidor, o servidor abre o chamado; sem token de serviço, o pedido espera um navegador.',
     so_abrir: 'Só abrir o chamado, 24 horas: o servidor abre o chamado com o token de um usuário de serviço do GLPI. A execução continua pelo Chamados (manual ou automático). Exige HUB_GLPI_TOKEN_SERVICO no servidor.',
   };
 

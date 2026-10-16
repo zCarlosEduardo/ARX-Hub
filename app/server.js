@@ -358,7 +358,11 @@ async function start() {
   await sweepAll().catch((err) => console.error('[varredura]', err.message));
   setInterval(() => sweepAll().catch((err) => console.error('[varredura]', err.message)), CHECK_INTERVAL_MS);
   // com o token de serviço, confere a cada minuto se os chamados que o robô abriu já foram solucionados
-  if (process.env.HUB_GLPI_TOKEN_SERVICO) setInterval(() => rotasWhatsapp.verificarAbertos().catch((err) => console.error('[whatsapp]', err.message)), 60000);
+  if (process.env.HUB_GLPI_TOKEN_SERVICO) {
+    setInterval(() => rotasWhatsapp.verificarAbertos().catch((err) => console.error('[whatsapp]', err.message)), 60000);
+    // pedido parado na fila por mais de 1 minuto (ninguém com o Chamados automático) é aberto pelo servidor
+    setInterval(() => rotasWhatsapp.abrirPendentesAtrasados().catch((err) => console.error('[whatsapp]', err.message)), 20000);
+  }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
 }
 
