@@ -364,7 +364,7 @@
     if (!admin) return null;
     return e('button', {
       type: 'button',
-      className: 'panel-tab admin-btn' + (compacto ? ' compact' : ''),
+      className: 'panel-tab admin-btn' + (ativa ? ' ativa' : '') + (compacto ? ' compact' : ''),
       onClick: aoAbrir,
       title: 'Administração do Hub',
       'aria-label': 'Administração',

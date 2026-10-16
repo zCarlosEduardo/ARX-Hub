@@ -625,17 +625,17 @@
     const header = e('div', { style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
       e('div', { key: 'left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
         e('button', {
-          key: 'panel', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
+          key: 'panel', className: 'panel-tab' + (abaFixaAtiva('painel') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
           title: 'Painel', 'aria-label': 'Painel',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('painel') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('painel') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('LayoutDashboard', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Painel')]),
         e('button', {
-          key: 'chamados', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirChamados,
+          key: 'chamados', className: 'panel-tab' + (abaFixaAtiva('chamados') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrirChamados,
           title: 'Chamados do GLPI', 'aria-label': 'Chamados',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('chamados') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('chamados') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('Headset', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Chamados')]),
         e('button', {
-          key: 'resultados', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: () => abrirAbaFixa('resultados'),
+          key: 'resultados', className: 'panel-tab' + (abaFixaAtiva('resultados') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: () => abrirAbaFixa('resultados'),
           title: 'Resultados das automações', 'aria-label': 'Resultados',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('resultados') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('resultados') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('BarChart3', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Resultados')]),
