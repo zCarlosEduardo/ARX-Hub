@@ -70,6 +70,9 @@
     if (cofre.existe()) return cofre.aberto() ? 'aberto' : 'travado';
     return temSegredo(normalizar(lerGuardado())) ? 'legado' : 'sem';
   }
+  // Política vinda do painel de administração (GET /api/config-publica). Padrão: cofre ativo e sessão do dia.
+  let politicaCofre = { modo: 'ativo', sessao: 'dia', horas: 8 };
+  const cofreLigado = () => politicaCofre.modo !== 'desativado';
   let estadoCofre = estadoInicial();
   // travado: nada de segredo na memória até a senha mestra; o texto puro antigo só é lido enquanto não há cofre
   let atual = normalizar(estadoCofre === 'travado' ? null : lerGuardado());
@@ -112,7 +115,17 @@
       }
       return;
     }
-    if ((estadoCofre === 'sem' || estadoCofre === 'legado') && temSegredo(atual)) abrirCofre('criar');
+    if ((estadoCofre === 'sem' || estadoCofre === 'legado') && temSegredo(atual)) {
+      if (cofreLigado()) abrirCofre('criar');
+      else {
+        // cofre desativado pelo administrador: guarda como nas versões antigas (texto puro). O painel avisa que é menos seguro.
+        try {
+          localStorage.setItem(KEY_ACESSOS, JSON.stringify(atual));
+        } catch {
+          // sem storage: vale só nesta sessão
+        }
+      }
+    }
   }
 
   function salvar(novo) {
@@ -152,6 +165,24 @@
         atual = normalizar(null);
         avisarCofre();
         avisar();
+      }
+      return;
+    }
+    if (cofre && ev.key === cofre.CHAVE_SESSAO) {
+      if (ev.newValue === null && estadoCofre === 'aberto' && ['dia', 'horas'].includes(cofre.politica().sessao)) {
+        // a sessão foi apagada em outra aba (Travar agora ou fim do prazo): confere depois de um instante, porque gravar uma
+        // sessão nova apaga a antiga antes de escrever
+        setTimeout(() => {
+          let ainda = null;
+          try {
+            ainda = localStorage.getItem(cofre.CHAVE_SESSAO);
+          } catch {
+            ainda = null;
+          }
+          if (!ainda && estadoCofre === 'aberto') cofre.travar('manual');
+        }, 300);
+      } else if (ev.newValue && estadoCofre === 'travado') {
+        restaurarSessao();
       }
       return;
     }
@@ -422,6 +453,47 @@
     );
   }
 
+  /** Frase para a pessoa saber por quanto tempo o cofre fica liberado depois de destravar (vem da política do painel). */
+  function descricaoSessao() {
+    const p = cofre ? cofre.politica() : politicaCofre;
+    if (p.sessao === 'dia') return 'Depois de destravar, fica liberado neste navegador até a meia-noite: o F5 não pede a senha de novo. "Travar agora" ou limpar os dados do navegador trava antes.';
+    if (p.sessao === 'horas') return `Depois de destravar, fica liberado por ${p.horas} ${p.horas === 1 ? 'hora' : 'horas'} (o F5 não pede a senha de novo). "Travar agora" ou limpar os dados do navegador trava antes.`;
+    if (p.sessao === 'aba') return 'Depois de destravar, fica liberado nesta aba (o F5 não pede a senha) e trava sozinho depois de 15 minutos parado ou ao fechar a aba.';
+    return 'A senha mestra é pedida a cada vez que o Hub é aberto.';
+  }
+
+  /** Destrava sem pedir a senha quando há uma sessão guardada que ainda vale (política dia, horas ou aba). */
+  async function restaurarSessao() {
+    if (!cofre || estadoCofre !== 'travado') return false;
+    let dados = null;
+    try {
+      dados = await cofre.restaurar();
+    } catch {
+      dados = null;
+    }
+    if (!dados) return false;
+    atual = normalizar(dados);
+    estadoCofre = 'aberto';
+    avisarCofre();
+    avisar();
+    if (modoCofre === 'destravar') fecharCofre();
+    return true;
+  }
+
+  /** Lê a política do painel (rápido, com prazo curto) e aplica ao cofre. Falha de rede usa o padrão. */
+  async function carregarPolitica() {
+    try {
+      const resp = await fetch('/api/config-publica', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+      if (resp.ok) {
+        const c = (await resp.json()).cofre;
+        if (c && typeof c === 'object') politicaCofre = { modo: c.modo === 'desativado' ? 'desativado' : 'ativo', sessao: c.sessao, horas: c.horas };
+      }
+    } catch {
+      // sem resposta do servidor: vale o padrão (cofre ativo, sessão do dia)
+    }
+    if (cofre) cofre.definirPolitica(politicaCofre);
+  }
+
   /** Cria o cofre com os acessos atuais e apaga o texto puro antigo. */
   async function criarCofre(senha) {
     await cofre.criar(senha, copia(atual));
@@ -495,8 +567,8 @@
 
     const titulos = { criar: 'Proteger meus acessos', destravar: 'Destravar meus acessos', trocar: 'Trocar a senha mestra' };
     const textos = {
-      criar: 'Crie uma senha mestra. Seus logins e o token ficam guardados neste navegador CIFRADOS com ela (nada em texto puro). Você digita a senha mestra uma vez por sessão e o cofre trava sozinho depois de 15 minutos parado. Anote a senha mestra: não há como recuperá-la.',
-      destravar: 'Digite a senha mestra para liberar os logins e o token. Eles ficam só na memória desta aba e somem ao travar.',
+      criar: 'Crie uma senha mestra. Seus logins e o token ficam guardados neste navegador CIFRADOS com ela (nada em texto puro). ' + descricaoSessao() + ' Anote a senha mestra: não há como recuperá-la.',
+      destravar: 'Digite a senha mestra para liberar os logins e o token. ' + descricaoSessao(),
       trocar: 'Informe a senha mestra atual e a nova.',
     };
     const campoSenha = (rotulo, valor, onChange, extra) =>
@@ -827,12 +899,17 @@
     aoMudarCofre,
     abrirCofre,
     travarCofre,
+    politicaCofre: () => ({ ...politicaCofre }),
+    recarregarPolitica: carregarPolitica,
   };
   window.MeusAcessosBotao = MeusAcessosBotao;
 
-  // ao abrir o Hub: cofre travado pede a senha mestra; acessos antigos em texto puro pedem para criar o cofre
-  setTimeout(() => {
+  // ao abrir o Hub: lê a política do painel, tenta a sessão guardada (sem pedir senha) e só então pergunta o que falta:
+  // cofre travado pede a senha mestra; acessos antigos em texto puro pedem para criar o cofre (se o cofre estiver ligado)
+  (async function iniciar() {
+    await carregarPolitica();
+    if (await restaurarSessao()) return;
     if (estadoCofre === 'travado') abrirCofre('destravar');
-    else if (estadoCofre === 'legado' && !adiouCriacao) abrirCofre('criar');
-  }, 400);
+    else if (estadoCofre === 'legado' && cofreLigado() && !adiouCriacao) abrirCofre('criar');
+  })();
 })();
