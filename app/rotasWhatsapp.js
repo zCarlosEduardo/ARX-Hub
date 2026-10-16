@@ -17,6 +17,8 @@ const { TIPOS_SOLICITACAO } = require('./admin');
 
 // tipos que não dependem de associação: no privado não precisam de "Categoria X" (quem diz a associação é a categoria do GLPI)
 const TIPOS_SEM_CATEGORIA = new Set(['foto_perfil', 'senha_sistemas']);
+// tipos com categoria fixa no GLPI, em grupo ou no privado (a foto de perfil sempre vai para "ARX - Demandas internas")
+const CATEGORIA_FIXA = { foto_perfil: 2 };
 const NOME_TIPO = new Map(TIPOS_SOLICITACAO.map((t) => [t.chave, t.nome]));
 const sem = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const mesmoHash = (a, b) => {
@@ -48,7 +50,7 @@ function criarRotasWhatsapp(deps) {
     const { titulo, descricao } = W.montarChamado({
       texto: pedido.texto, vinculo: { nome: pedido.solicitante }, grupo: { nome: pedido.grupoNome, privado: pedido.grupoId === 'privado' }, tipoNome: NOME_TIPO.get(pedido.tipo) || '',
     });
-    const id = await glpi.criarChamado(token, { titulo, descricao, categoriaId: pedido.categoriaId, requerenteId: pedido.glpiId });
+    const id = await glpi.criarChamado(token, { titulo, descricao, categoriaId: CATEGORIA_FIXA[pedido.tipo] || pedido.categoriaId, requerenteId: pedido.glpiId });
     if (deps.registrarHistorico) await deps.registrarHistorico({ id, titulo, descricao, pedido }).catch(() => {});
     return id;
   }
@@ -82,17 +84,18 @@ function criarRotasWhatsapp(deps) {
     const vinculo = W.acharVinculo(await repo.listarVinculos(), b.remetente);
     // no privado qualquer pessoa pode escrever para o chip: quem não tem vínculo é ignorado em silêncio (nos grupos continua a dúvida)
     if (ehPrivado && !vinculo) return { status: 'ignorado' };
-    const categoria = ehPrivado ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
+    const categoriaFixa = CATEGORIA_FIXA[tipo] || null;
+    const categoria = ehPrivado && !categoriaFixa ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
     const reagirLigado = ehPrivado ? cfg.privado.reagir : grupo.reagir;
     const base = {
       mensagemId, grupoId: ehPrivado ? 'privado' : grupo.id, grupoJid: String(b.grupoJid || ''), grupoNome: ehPrivado ? 'Conversa privada' : grupo.nome,
       telefone: W.normalizarTelefone(b.remetente), solicitante: vinculo ? vinculo.nome : '', glpiId: vinculo ? vinculo.glpiId : null,
-      categoriaId: ehPrivado ? (categoria ? categoria.categoriaId : null) : grupo.categoriaId, texto, tipo,
+      categoriaId: categoriaFixa || (ehPrivado ? (categoria ? categoria.categoriaId : null) : grupo.categoriaId), texto, tipo,
     };
     let status = 'pendente';
     let erro = '';
     if (!vinculo) status = 'sem_vinculo';
-    else if (ehPrivado && !categoria && (apelido || !TIPOS_SEM_CATEGORIA.has(tipo))) {
+    else if (ehPrivado && !categoriaFixa && !categoria && (apelido || !TIPOS_SEM_CATEGORIA.has(tipo))) {
       status = 'sem_categoria';
       erro = apelido ? `A categoria "${truncar(apelido, 60)}" não está cadastrada para a conversa privada.` : 'A mensagem não diz a categoria (primeira linha: Categoria Ancore).';
     } else if (cfg.modo === 'observacao') status = 'observado';
