@@ -3,7 +3,7 @@
 //
 // Abas: Cofre (ativar ou desativar a senha mestra e escolher quanto tempo fica liberada), Administradores (quem pode abrir
 // este painel), Automações (ordem em que aparecem) e WhatsApp (grupos, número que responde e tipos de solicitação).
-// Expõe window.AdminBotao (usado no cabeçalho do app.js).
+// Expõe window.AdminAba (aba do cabeçalho, só para administradores) e window.AdminView (a tela, como Chamados e Resultados).
 (function () {
   const e = React.createElement;
   const { useState, useEffect, useRef } = React;
@@ -305,20 +305,15 @@
     ]);
   }
 
-  // ---------- modal ----------
+  // ---------- tela ----------
   const ABAS = [['cofre', 'Cofre'], ['admins', 'Administradores'], ['automacoes', 'Automações'], ['whatsapp', 'WhatsApp']];
 
-  function ModalAdmin() {
+  function AdminView() {
     const [aba, setAba] = useState('cofre');
     const [dados, setDados] = useState(null); // { config, opcoes }
     const [erro, setErro] = useState(null);
     useEffect(() => {
       api('GET', '/api/admin/config').then(setDados).catch((err) => setErro(err.message));
-      const tecla = (ev) => {
-        if (ev.key === 'Escape') fecharAdmin();
-      };
-      document.addEventListener('keydown', tecla);
-      return () => document.removeEventListener('keydown', tecla);
     }, []);
     const atualizarConfig = (config) => setDados((d) => ({ ...d, config }));
 
@@ -330,41 +325,19 @@
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
 
-    return e('div', { className: 'admin-fundo', onMouseDown: (ev) => ev.target === ev.currentTarget && fecharAdmin(), style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 } },
-      e('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Administração', style: { width: '100%', maxWidth: 760, maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: '0 24px 60px -12px rgba(0,0,0,0.16)', color: 'var(--text)' } }, [
-        e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', borderBottom: '1px solid var(--border)' } }, [
-          e('span', { key: 'i', className: 'glpi-head-icon' }, ui().iconeChave(15)),
-          e('div', { key: 't', style: { fontWeight: 600, fontSize: 15.5, flex: 1 } }, 'Administração do Hub'),
-          e('button', { key: 'x', type: 'button', className: 'icon-btn', title: 'Fechar', onClick: fecharAdmin, style: { width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', borderRadius: 7 } }, Icon('X', 13)),
-        ]),
-        e('div', { key: 'abas', style: { display: 'flex', gap: 6, padding: '10px 20px 0', flexWrap: 'wrap' } }, ABAS.map(([k, t]) =>
-          e('button', { key: k, type: 'button', className: `admin-aba admin-aba-${k}`, style: S().chip(aba === k), onClick: () => setAba(k) }, t))),
-        e('div', { key: 'corpo', style: { padding: 20, overflowY: 'auto' } }, corpo),
-      ]));
+    return e('div', { className: 'admin-tela', style: { maxWidth: 860, margin: '0 auto', padding: '24px 20px 40px', color: 'var(--text)' } }, [
+      e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } }, [
+        e('span', { key: 'i', className: 'glpi-head-icon' }, Icon('Settings', 16)),
+        e('h1', { key: 't', style: { margin: 0, fontWeight: 600, fontSize: 18 } }, 'Administração do Hub'),
+      ]),
+      e('div', { key: 'abas', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 } }, ABAS.map(([k, t]) =>
+        e('button', { key: k, type: 'button', className: `admin-aba admin-aba-${k}`, style: S().chip(aba === k), onClick: () => setAba(k) }, t))),
+      e('div', { key: 'corpo', style: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 } }, corpo),
+    ]);
   }
 
-  let raiz = null;
-  let aberto = false;
-  function desenhar() {
-    if (!raiz) {
-      const div = document.createElement('div');
-      div.id = 'arx-admin-modal';
-      document.body.appendChild(div);
-      raiz = ReactDOM.createRoot(div);
-    }
-    raiz.render(aberto ? e(ModalAdmin) : null);
-  }
-  function abrirAdmin() {
-    aberto = true;
-    desenhar();
-  }
-  function fecharAdmin() {
-    aberto = false;
-    desenhar();
-  }
-
-  /** Botão do cabeçalho: só existe para administradores (o servidor confere o token do GLPI). */
-  function AdminBotao() {
+  /** Aba do cabeçalho: só existe para administradores (o servidor confere o token do GLPI). */
+  function AdminAba({ ativa, aoAbrir, compacto }) {
     const [admin, setAdmin] = useState(false);
     const ultimo = useRef(null);
     useEffect(() => {
@@ -378,7 +351,7 @@
           const d = await resp.json().catch(() => ({}));
           if (vivo) setAdmin(resp.ok && !!d.admin);
         } catch {
-          if (vivo) setAdmin(false); // sem resposta: o painel simplesmente não aparece
+          if (vivo) setAdmin(false); // sem resposta: a aba simplesmente não aparece
         }
       }
       checar(tokenAtual());
@@ -391,14 +364,14 @@
     if (!admin) return null;
     return e('button', {
       type: 'button',
-      className: 'btn-outline admin-btn',
-      onClick: abrirAdmin,
+      className: 'panel-tab admin-btn' + (compacto ? ' compact' : ''),
+      onClick: aoAbrir,
       title: 'Administração do Hub',
       'aria-label': 'Administração',
-      style: { display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', background: 'var(--secondary)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, fontWeight: 600, fontSize: 12.5, cursor: 'pointer', flexShrink: 0, fontFamily: 'inherit', whiteSpace: 'nowrap' },
-    }, [e('span', { key: 'i', style: { display: 'flex' } }, Icon('Settings', 15)), e('span', { key: 't', className: 'meus-acessos-label' }, 'Administração')]);
+      style: { display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', background: 'transparent', border: 'none', borderBottom: '2px solid ' + (ativa ? 'var(--accent)' : 'transparent'), color: ativa ? 'var(--text)' : 'var(--muted)', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' },
+    }, [Icon('Settings', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Administração')]);
   }
 
-  window.AdminBotao = AdminBotao;
-  window.ArxAdmin = { abrir: abrirAdmin, fechar: fecharAdmin };
+  window.AdminAba = AdminAba;
+  window.AdminView = AdminView;
 })();
