@@ -76,6 +76,7 @@ const TIPOS_SOLICITACAO = [
   { chave: 'cadastro_consultor', nome: 'Cadastro de consultor' },
   { chave: 'cadastro_usuario', nome: 'Cadastro de usuário' },
   { chave: 'inativacao_consultor', nome: 'Inativação de consultor' },
+  { chave: 'ativacao_consultor', nome: 'Ativação de consultor' },
   { chave: 'bloqueio_acesso', nome: 'Bloqueio de acesso' },
   { chave: 'senha_sistemas', nome: 'Senha de sistemas' },
   { chave: 'alterar_senha_sga', nome: 'Alterar senha do SGA' },
