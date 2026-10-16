@@ -80,6 +80,7 @@ const TIPOS_SOLICITACAO = [
   { chave: 'bloqueio_acesso', nome: 'Bloqueio de acesso' },
   { chave: 'senha_sistemas', nome: 'Senha de sistemas' },
   { chave: 'alterar_senha_sga', nome: 'Alterar senha do SGA' },
+  { chave: 'desbloquear_usuario_sga', nome: 'Desbloqueio de usuário do SGA' },
   { chave: 'foto_perfil', nome: 'Foto de perfil' },
   { chave: 'sincronizar_vistoria', nome: 'Sincronizar vistoria' },
   { chave: 'cadastro_modelo', nome: 'Cadastro de modelo' },
