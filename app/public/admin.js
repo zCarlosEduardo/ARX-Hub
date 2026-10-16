@@ -319,6 +319,7 @@
           caixa(w.privado.ativo, (v) => mudar((x) => ((x.privado.ativo = v), x)), 'Atender no privado', { fontWeight: 600 }),
           caixa(w.privado.responder, (v) => mudar((x) => ((x.privado.responder = v), x)), 'Responder na conversa'),
           caixa(w.privado.reagir !== false, (v) => mudar((x) => ((x.privado.reagir = v), x)), 'Reagir às mensagens'),
+          caixa(w.privado.explicarDuvida !== false, (v) => mudar((x) => ((x.privado.explicarDuvida = v), x)), 'Explicar na conversa quando faltar algo'),
         ]),
         e('div', { key: 'tipos' }, [
           e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Tipos de solicitação atendidos no privado (nenhum marcado = todos):'),
@@ -453,6 +454,28 @@
       ]),
       est.qr && !est.conectado && !semSinal ? e('img', { key: 'qr', className: 'wa-qr', src: est.qr, alt: 'QR code para conectar o WhatsApp', style: { width: 240, height: 240, background: '#fff', padding: 8, borderRadius: 10, border: '1px solid var(--border)', alignSelf: 'flex-start' } }) : null,
       painel.disponivel && painel.disponivel.so_abrir === false ? dica('O modo "só abrir o chamado" precisa do token de um usuário de serviço do GLPI no servidor (HUB_GLPI_TOKEN_SERVICO). Hoje não está configurado.') : null,
+      rotulo('O que cada reação significa'),
+      e('div', { key: 'legenda', className: 'wa-legenda', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 6, fontSize: 12.5 } }, [
+        ['aFazer', 'Na fila: espera alguém abrir o chamado.'],
+        ['andamento', 'Chamado aberto, em andamento.'],
+        ['sucesso', 'Chamado solucionado.'],
+        ['erro', 'Deu erro: o motivo aparece em Pedidos recentes.'],
+        ['duvida', 'Faltou algo: o vínculo do telefone (grupo) ou a categoria (privado). O motivo aparece em Mensagens recebidas.'],
+      ].map(([k, t]) => e('div', { key: k, style: { display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)' } }, [
+        e('span', { key: 'e', style: { fontSize: 16, lineHeight: 1.2 } }, (painel.reacoes && painel.reacoes[k]) || ''),
+        e('span', { key: 't', style: { color: 'var(--muted)' } }, t),
+      ]))),
+      rotulo('Mensagens recebidas (últimas 100, inclusive as ignoradas)'),
+      !painel.mensagens || painel.mensagens.length === 0 ? dica('Nenhuma mensagem chegou ao Hub desde a última vez que ele reiniciou.') : e('div', { key: 'msgs', className: 'wa-mensagens', style: { display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' } }, painel.mensagens.map((m, i) =>
+        e('div', { key: i, className: 'wa-mensagem', style: { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 3 } }, [
+          e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            e('span', { key: 's', style: { display: 'inline-flex', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, color: COR_STATUS[m.resultado] || 'var(--muted)', border: '1px solid currentColor' } }, m.resultado === 'ignorado' ? 'Ignorada' : (NOMES_STATUS[m.resultado] || m.resultado)),
+            e('span', { key: 'g', style: { fontWeight: 600 } }, m.onde),
+            e('span', { key: 'q', style: { color: 'var(--muted)' } }, `${m.remetente} · ${dataHora(m.quando)}`),
+          ]),
+          e('div', { key: 't', style: { color: 'var(--muted)' } }, m.trecho),
+          m.motivo ? e('div', { key: 'm' }, m.motivo) : null,
+        ]))),
       rotulo('Pedidos recentes'),
       painel.pedidos.length === 0 ? dica('Nenhum pedido ainda.') : e('div', { key: 'ped', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.pedidos.map((p) =>
         e('div', { key: p.id, className: 'wa-pedido', style: { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 3 } }, [

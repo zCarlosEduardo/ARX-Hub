@@ -33,7 +33,7 @@ test('reação de sem_categoria é a dúvida', () => {
 
 test('conversa privada: padrão desligado; validação de apelidos e tipos', () => {
   const p = configPadrao().whatsapp.privado;
-  assert.deepEqual(p, { ativo: false, tipos: [], responder: false, reagir: true, categorias: [] });
+  assert.deepEqual(p, { ativo: false, tipos: [], responder: false, reagir: true, explicarDuvida: true, categorias: [] });
   const base = configPadrao().whatsapp;
   const ok = validarSecao('whatsapp', { ...base, privado: { ativo: true, tipos: ['cadastro_consultor', 'cadastro_consultor'], responder: true, categorias: [{ apelido: ' Ancore ', categoriaId: '3', categoriaLabel: 'Ancore' }] } });
   assert.equal(ok.ok, true, ok.error);

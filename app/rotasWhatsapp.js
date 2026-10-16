@@ -55,35 +55,67 @@ function criarRotasWhatsapp(deps) {
     return id;
   }
 
+  // Registro das últimas mensagens que o robô entregou ao Hub e o que foi decidido de cada uma (inclusive as ignoradas, com o
+  // motivo), só em memória: é o que a tela "Conexão e pedidos" mostra para a pessoa entender uma reação ou um silêncio.
+  const decisoes = [];
+  const mascararTelefone = (t) => {
+    const d = W.normalizarTelefone(t);
+    return d ? `***${d.slice(-4)}` : 'Não informado';
+  };
+  const trecho = (t) => truncar(String(t || '').replace(/\s+/g, ' ').replace(/\d{6,}/g, '***').trim(), 70);
+  function registrarDecisao(b, r) {
+    decisoes.unshift({
+      quando: new Date().toISOString(),
+      onde: b.privado === true ? 'Conversa privada' : (b.grupoNome || 'Grupo'),
+      remetente: mascararTelefone(b.remetente),
+      trecho: trecho(b.texto),
+      resultado: r.status,
+      motivo: r.motivo || '',
+    });
+    if (decisoes.length > 100) decisoes.length = 100;
+  }
+
+  const ignorar = (motivo) => ({ status: 'ignorado', motivo });
+
+  /** O que o robô responde na conversa privada quando faltou a categoria (só se "explicar dúvida" estiver ligado). */
+  function explicacaoDaCategoria(cfg, apelido) {
+    const nomes = cfg.privado.categorias.map((c) => c.apelido);
+    if (!nomes.length) return 'Ainda não há categorias cadastradas para a conversa privada. Peça a um administrador para cadastrar na Administração do Hub.';
+    const lista = `Categorias disponíveis: ${nomes.join(', ')}.`;
+    if (apelido) return `Não encontrei a categoria "${truncar(apelido, 60)}". ${lista} Escreva na primeira linha, por exemplo: Categoria ${nomes[0]}.`;
+    return `Não consegui identificar a categoria. Escreva na primeira linha, por exemplo: Categoria ${nomes[0]}. ${lista}`;
+  }
+
   /**
-   * Decide o que fazer com uma mensagem (de grupo ou da conversa privada). Devolve { status, pedidoId?, ticketId?, reacao? }.
-   * Na conversa privada (b.privado) não há grupo: a categoria do GLPI vem da linha "Categoria X" da mensagem.
+   * Decide o que fazer com uma mensagem (de grupo ou da conversa privada). Devolve { status, motivo, pedidoId?, ticketId?,
+   * reacao?, resposta? }. Na conversa privada (b.privado) não há grupo: a categoria do GLPI vem da linha "Categoria X" da mensagem.
    */
-  async function processarMensagem(b) {
+  async function decidir(b) {
     const cfg = (await admin.configAtual()).whatsapp;
-    if (!cfg.ativo) return { status: 'ignorado' };
+    if (!cfg.ativo) return ignorar('Automação do WhatsApp desligada na Administração.');
     const bruto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 5000) : '';
     const mensagemId = typeof b.mensagemId === 'string' ? b.mensagemId.slice(0, 200) : '';
-    if (!bruto || !mensagemId) return { status: 'ignorado' };
+    if (!bruto || !mensagemId) return ignorar('Mensagem sem texto.');
     const ehPrivado = b.privado === true;
     let grupo = null;
     if (ehPrivado) {
-      if (!cfg.privado.ativo) return { status: 'ignorado' };
+      if (!cfg.privado.ativo) return ignorar('Atender no privado está desligado.');
     } else {
       grupo = cfg.grupos.find((g) => g.ativo && ((g.jid && g.jid === b.grupoJid) || (!g.jid && sem(g.nome) === sem(b.grupoNome))));
-      if (!grupo) return { status: 'ignorado' };
+      if (!grupo) return ignorar('Grupo não configurado ou desligado.');
     }
-    if (cfg.remetentesAutorizados.length && !cfg.remetentesAutorizados.some((t) => W.mesmoTelefone(t, b.remetente))) return { status: 'ignorado' };
+    if (cfg.remetentesAutorizados.length && !cfg.remetentesAutorizados.some((t) => W.mesmoTelefone(t, b.remetente))) return ignorar('Telefone fora da lista de autorizados.');
 
     const { apelido, texto } = ehPrivado ? W.extrairCategoria(bruto) : { apelido: '', texto: bruto };
     const { tipo } = await classificar(texto);
     const tiposLiberados = ehPrivado ? cfg.privado.tipos : grupo.tipos;
     // conversa solta ou pedido que não é deste grupo: o robô fica quieto
-    if (!tipo || (tiposLiberados.length && !tiposLiberados.includes(tipo))) return { status: 'ignorado' };
+    if (!tipo) return ignorar('Não parece um pedido de nenhum tipo atendido.');
+    if (tiposLiberados.length && !tiposLiberados.includes(tipo)) return ignorar(`O tipo "${NOME_TIPO.get(tipo) || tipo}" não está liberado ${ehPrivado ? 'na conversa privada' : 'neste grupo'}.`);
 
     const vinculo = W.acharVinculo(await repo.listarVinculos(), b.remetente);
     // no privado qualquer pessoa pode escrever para o chip: quem não tem vínculo é ignorado em silêncio (nos grupos continua a dúvida)
-    if (ehPrivado && !vinculo) return { status: 'ignorado' };
+    if (ehPrivado && !vinculo) return ignorar('Telefone sem vínculo com usuário do GLPI (ignorado no privado).');
     const categoriaFixa = CATEGORIA_FIXA[tipo] || null;
     const categoria = ehPrivado && !categoriaFixa ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
     const reagirLigado = ehPrivado ? cfg.privado.reagir : grupo.reagir;
@@ -94,31 +126,45 @@ function criarRotasWhatsapp(deps) {
     };
     let status = 'pendente';
     let erro = '';
-    if (!vinculo) status = 'sem_vinculo';
-    else if (ehPrivado && !categoriaFixa && !categoria && (apelido || !TIPOS_SEM_CATEGORIA.has(tipo))) {
+    let resposta;
+    if (!vinculo) {
+      status = 'sem_vinculo';
+      erro = 'Telefone sem vínculo com usuário do GLPI (aba Vínculos do WhatsApp).';
+    } else if (ehPrivado && !categoriaFixa && !categoria && (apelido || !TIPOS_SEM_CATEGORIA.has(tipo))) {
       status = 'sem_categoria';
       erro = apelido ? `A categoria "${truncar(apelido, 60)}" não está cadastrada para a conversa privada.` : 'A mensagem não diz a categoria (primeira linha: Categoria Ancore).';
-    } else if (cfg.modo === 'observacao') status = 'observado';
-    else if (cfg.operacao === 'so_abrir') {
+      if (cfg.privado.explicarDuvida !== false) resposta = explicacaoDaCategoria(cfg, apelido);
+    } else if (cfg.modo === 'observacao') {
+      status = 'observado';
+      erro = 'Modo Observação: o pedido foi entendido, mas nada foi aberto.';
+    } else if (cfg.operacao === 'so_abrir') {
       if (tokenServico) status = 'abrindo'; // o pedido nasce reservado: mensagem repetida não abre o chamado duas vezes
       else {
         status = 'erro';
         erro = 'O token de serviço do GLPI não está configurado neste Hub (HUB_GLPI_TOKEN_SERVICO).';
       }
+    } else {
+      erro = 'Na fila: espera o Chamados automático de alguém (ou o token de serviço) abrir o chamado.';
     }
-    const { pedido, novo } = await repo.criarPedido({ ...base, status, ticketId: null, erro });
+    const { pedido, novo } = await repo.criarPedido({ ...base, status, ticketId: null, erro: status === 'pendente' || status === 'observado' ? '' : erro });
     const reagir = (st) => (reagirLigado ? W.reacaoDoStatus(st, cfg.reacoes) : null);
-    if (!novo) return { status: pedido.status, pedidoId: pedido.id, ticketId: pedido.ticketId, repetida: true, reacao: reagir(pedido.status) };
-    if (status !== 'abrindo') return { status, pedidoId: pedido.id, ticketId: null, reacao: reagir(status) };
+    if (!novo) return { status: pedido.status, motivo: 'Mensagem repetida: o robô já tinha tratado.', pedidoId: pedido.id, ticketId: pedido.ticketId, repetida: true, reacao: reagir(pedido.status) };
+    if (status !== 'abrindo') return { status, motivo: erro, pedidoId: pedido.id, ticketId: null, reacao: reagir(status), ...(resposta ? { resposta } : {}) };
     try {
       const ticketId = await abrirNoGlpi(pedido, tokenServico);
       await repo.mudarStatus(pedido.id, 'aberto', { ticketId });
-      return { status: 'aberto', pedidoId: pedido.id, ticketId, reacao: reagir('aberto') };
+      return { status: 'aberto', motivo: `Chamado ${ticketId} aberto.`, pedidoId: pedido.id, ticketId, reacao: reagir('aberto') };
     } catch (err) {
       const msg = truncar(limpar(err.message, tokenServico), 300);
       await repo.mudarStatus(pedido.id, 'erro', { erro: msg });
-      return { status: 'erro', pedidoId: pedido.id, ticketId: null, reacao: reagir('erro') };
+      return { status: 'erro', motivo: msg, pedidoId: pedido.id, ticketId: null, reacao: reagir('erro') };
     }
+  }
+
+  async function processarMensagem(b) {
+    const r = await decidir(b);
+    registrarDecisao(b, r);
+    return r;
   }
 
   /**
@@ -244,6 +290,8 @@ function criarRotasWhatsapp(deps) {
       res.json({
         vinculos: await repo.listarVinculos(),
         pedidos,
+        mensagens: decisoes,
+        reacoes: (await admin.configAtual()).whatsapp.reacoes,
         estado: { ...estadoBot, botConfigurado: !!tokenBot },
         disponivel: { so_abrir: !!tokenServico },
       });

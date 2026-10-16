@@ -100,7 +100,7 @@ function configPadrao() {
       numeros: [],
       grupos: [],
       remetentesAutorizados: [],
-      privado: { ativo: false, tipos: [], responder: false, reagir: true, categorias: [] },
+      privado: { ativo: false, tipos: [], responder: false, reagir: true, explicarDuvida: true, categorias: [] },
       reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
     },
   };
@@ -209,7 +209,8 @@ function validarWhatsapp(b) {
     if (!Number.isInteger(categoriaId) || categoriaId < 1) return { erro: `escolha a categoria do GLPI de "${apelido}"` };
     pvCategorias.push({ apelido, categoriaId, categoriaLabel: texto(c.categoriaLabel, 300).slice(0, 300) });
   }
-  const privado = { ativo: pvAtivo, tipos: pvTipos, responder: pv.responder === true, reagir: pv.reagir !== false, categorias: pvCategorias };
+  if (pv.explicarDuvida !== undefined && typeof pv.explicarDuvida !== 'boolean') return { erro: 'whatsapp.privado.explicarDuvida deve ser verdadeiro ou falso' };
+  const privado = { ativo: pvAtivo, tipos: pvTipos, responder: pv.responder === true, reagir: pv.reagir !== false, explicarDuvida: pv.explicarDuvida !== false, categorias: pvCategorias };
 
   const r = w.reacoes && typeof w.reacoes === 'object' ? w.reacoes : {};
   const reacoes = {};
