@@ -80,6 +80,8 @@ function criarRotasWhatsapp(deps) {
     if (!tipo || (tiposLiberados.length && !tiposLiberados.includes(tipo))) return { status: 'ignorado' };
 
     const vinculo = W.acharVinculo(await repo.listarVinculos(), b.remetente);
+    // no privado qualquer pessoa pode escrever para o chip: quem não tem vínculo é ignorado em silêncio (nos grupos continua a dúvida)
+    if (ehPrivado && !vinculo) return { status: 'ignorado' };
     const categoria = ehPrivado ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
     const reagirLigado = ehPrivado ? cfg.privado.reagir : grupo.reagir;
     const base = {
