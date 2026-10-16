@@ -613,24 +613,32 @@
       }
     }, [resultados, acessos.userToken]); // eslint-disable-line
 
-    // Automático: a cada atualização da lista (e quando uma execução termina), pega até
+    // Automático: a cada atualização da lista (e quando uma execução termina), pega a sua parte, até
     // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
     // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam
     // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
+    // Com vários computadores no automático, cada um pega a SUA parte (a divisão dos prontos pelos computadores ligados, até o
+    // limite) e o que ficou com outro computador é tentado de novo de 15 em 15 s, sem depender de a lista mudar.
+    const [tentativaAuto, setTentativaAuto] = useState(0);
+    const novaTentativaRef = useRef(null);
+    useEffect(() => () => clearTimeout(novaTentativaRef.current), []);
     useEffect(() => {
       if (!auto.ativo || !pronto || lista.carregando || lista.guardado || rodandoAlgo) return;
+      // `lote` = TODOS os prontos, na ordem da lista; a parte deste computador é decidida na reserva (max)
       const lote = lista.itens
         .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
-          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
-        .slice(0, auto.limite);
+          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)));
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
       // Vários computadores podem estar no automático: antes de rodar, RESERVA no servidor (atômico) os chamados deste lote.
       // O que outro computador já pegou é descartado aqui. Se o controle (Redis) estiver fora do ar, o automático para.
       (async () => {
         const nome = lista.usuario && lista.usuario.nome;
-        const reservar = () => api('/api/auto/reservar', { clienteId: CLIENTE_ID, ids: lote.map((i) => i.id) });
         try {
+          // quantos computadores estão no automático: cada um pega a sua parte (com 1 computador, pega até o limite como sempre)
+          const quantos = await api('/api/auto').then((x) => Math.max(1, Number(x.quantos) || 1)).catch(() => 1);
+          const quero = Math.min(auto.limite, Math.ceil(lote.length / quantos));
+          const reservar = () => api('/api/auto/reservar', { clienteId: CLIENTE_ID, ids: lote.map((i) => i.id), max: quero });
           let r;
           try {
             r = await reservar();
@@ -640,14 +648,18 @@
             r = await reservar();
           }
           const meus = lote.filter((i) => r.reservados.includes(i.id));
-          lote.filter((i) => !r.reservados.includes(i.id)).forEach((i) => autoRef.current.delete(i.id)); // com outro computador: reavalia depois
+          lote.filter((i) => !r.reservados.includes(i.id)).forEach((i) => autoRef.current.delete(i.id)); // com outro computador (ou fora da minha parte): reavalia depois
+          if (lote.length > meus.length) {
+            clearTimeout(novaTentativaRef.current);
+            novaTentativaRef.current = setTimeout(() => setTentativaAuto((x) => x + 1), 15000);
+          }
           if (meus.length) rodar(meus);
         } catch (err) {
           lote.forEach((i) => autoRef.current.delete(i.id));
           setErroAuto(err.message);
         }
       })();
-    }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
+    }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados, tentativaAuto]); // eslint-disable-line
 
     if (!pronto) {
       return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
