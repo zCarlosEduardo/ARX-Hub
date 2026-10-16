@@ -61,11 +61,11 @@ test('cofre: valores válidos passam; modo, sessão e horas inválidos são recu
 
 const WHATS = {
   ativo: true,
-  modo: 'aprovacao',
+  modo: 'ativo',
   numeros: [{ id: 'principal', rotulo: 'Chip dedicado', telefone: '+55 (31) 99999-1234', ativo: true }],
   grupos: [{ id: 'cadastros', nome: 'Cadastro de consultores', jid: '120363000000000000@g.us', numeroId: 'principal', tipos: ['cadastro_consultor', 'bloqueio_acesso'], ativo: true, responder: true, reagir: true }],
   remetentesAutorizados: ['(31) 98888-7777', '5531988887777'],
-  reacoes: { aFazer: '⏳', andamento: '⚙️', sucesso: '✅', erro: '⚠️', duvida: '❓' },
+  reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
 };
 
 test('whatsapp: configuração completa é normalizada (telefones só com dígitos, sem repetir)', () => {
@@ -101,7 +101,7 @@ test('whatsapp: recusa modo, telefone, ids repetidos, número inexistente e tipo
 test('whatsapp: grupo sem número definido é aceito; tipos viram lista sem repetir; padrões de responder e reagir', () => {
   const r = validarSecao('whatsapp', { ativo: false, numeros: [], grupos: [{ id: 'g1', nome: 'Grupo', tipos: ['foto_perfil', 'foto_perfil'] }] });
   assert.equal(r.ok, true, r.error);
-  assert.deepEqual(r.valor.grupos[0], { id: 'g1', nome: 'Grupo', jid: '', numeroId: '', tipos: ['foto_perfil'], ativo: true, responder: false, reagir: true });
+  assert.deepEqual(r.valor.grupos[0], { id: 'g1', nome: 'Grupo', jid: '', numeroId: '', categoriaId: null, categoriaLabel: '', tipos: ['foto_perfil'], ativo: true, responder: false, reagir: true });
 });
 
 test('os tipos oferecidos existem e a seção desconhecida é recusada', () => {
@@ -138,10 +138,10 @@ test('usuarioDaSessao: GLPI com departamento entre parênteses no sobrenome ("(S
 test('whatsapp: reações de "a fazer" e "em andamento" existem no padrão e podem ser trocadas; configuração antiga sem elas continua válida', () => {
   const padrao = configPadrao().whatsapp.reacoes;
   assert.equal(padrao.aFazer, '⏳');
-  assert.equal(padrao.andamento, '⚙️');
+  assert.equal(padrao.andamento, '🔍');
   const antigo = validarSecao('whatsapp', { ...WHATS, reacoes: { sucesso: '✅', erro: '⚠️', duvida: '❓' } });
   assert.equal(antigo.ok, true, antigo.error);
-  assert.equal(antigo.valor.reacoes.andamento, '⚙️', 'o que faltava usa o padrão');
+  assert.equal(antigo.valor.reacoes.andamento, '🔍', 'o que faltava usa o padrão');
   const novo = validarSecao('whatsapp', { ...WHATS, reacoes: { ...WHATS.reacoes, andamento: '🔧' } });
   assert.equal(novo.valor.reacoes.andamento, '🔧');
   assert.match(validarSecao('whatsapp', { ...WHATS, reacoes: { andamento: 'ok ok ok ok ok' } }).error, /emoji/);
