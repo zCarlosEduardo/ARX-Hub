@@ -356,9 +356,13 @@
     const [logsAbertos, setLogsAbertos] = useState({});
     const [confirmandoTodos, setConfirmandoTodos] = useState(false);
     // Modo automático: com a chave ligada, roda sozinho os chamados prontos, até "limite" por vez
-    const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
+    // (a escolha de "tipos que rodam sozinhos" foi retirada: o que estiver guardada dela é ignorado)
+    const [auto, setAuto] = useState(() => { const guardado = { ...ler(KEY_AUTO, {}) }; delete guardado.fora; return { limite: 5, ...guardado, ativo: false }; });
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
     const [erroAuto, setErroAuto] = useState('');
+    const [computadoresAuto, setComputadoresAuto] = useState([]); // nomes de quem está com o automático ligado (todos os computadores)
+    const [ultimoAuto, setUltimoAuto] = useState(null); // última rodada deste computador: { hora, quantos }
+    const [filaWhatsapp, setFilaWhatsapp] = useState(0); // pedidos do WhatsApp esperando alguém abrir o chamado
     const [verChamado, setVerChamado] = useState(null); // chamado aberto no painel "Ver chamado"
     const [linkCopiado, setLinkCopiado] = useState(null); // id do chamado cujo link acabou de ser copiado
     const copiarLink = async (item) => {
@@ -371,7 +375,7 @@
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
       const n = { ...a, ...campos };
-      gravar(KEY_AUTO, { limite: n.limite, fora: n.fora });
+      gravar(KEY_AUTO, { limite: n.limite });
       return n;
     });
     const fontesRef = useRef(new Map());
@@ -558,15 +562,17 @@
     // com o automático ligado: renova a presença a cada 30 s (se o servidor recusar, desliga); ao desligar/fechar, solta e libera as reservas
     useEffect(() => {
       if (!auto.ativo) return undefined;
-      const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).catch((err) => {
+      const atualizarComputadores = () => api('/api/auto').then((x) => setComputadoresAuto((x.computadores || []).map((c) => c.por))).catch(() => {});
+      const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).then(atualizarComputadores).catch((err) => {
         if (/^HTTP|Failed|NetworkError/.test(err.message)) return; // servidor fora um instante: tenta de novo
         setErroAuto(err.message);
         mudarAuto({ ativo: false });
       });
+      atualizarComputadores();
       const t = setInterval(renovar, 30000);
       const soltar = () => { try { fetch(SERVICO + '/api/auto/soltar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteId: CLIENTE_ID }) }); } catch { /* sem rede */ } };
       window.addEventListener('beforeunload', soltar);
-      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); };
+      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); setComputadoresAuto([]); };
     }, [auto.ativo]); // eslint-disable-line
 
     // Robô do WhatsApp: com o automático ligado, este navegador também abre os chamados que chegaram pelos grupos
@@ -583,10 +589,15 @@
         try {
           const r = await fetch('/api/whatsapp/fila', { headers: cabecalho, cache: 'no-store' });
           if (!r.ok) return;
-          for (const p of await r.json()) {
+          const fila = await r.json();
+          if (vivo) setFilaWhatsapp(fila.length);
+          let abertos = 0;
+          for (const p of fila) {
             if (!vivo) break;
-            await fetch(`/api/whatsapp/fila/${p.id}/abrir`, { method: 'POST', headers: cabecalho }).catch(() => {}); // 409 = outro computador pegou
+            const ab = await fetch(`/api/whatsapp/fila/${p.id}/abrir`, { method: 'POST', headers: cabecalho }).catch(() => null); // 409 = outro computador pegou
+            if (ab && ab.ok) abertos += 1;
           }
+          if (vivo) setFilaWhatsapp(Math.max(0, fila.length - abertos));
         } catch {
           // Hub fora do ar um instante: tenta na próxima volta
         } finally {
@@ -595,7 +606,7 @@
       };
       puxar();
       const t = setInterval(puxar, 10000);
-      return () => { vivo = false; clearInterval(t); };
+      return () => { vivo = false; clearInterval(t); setFilaWhatsapp(0); };
     }, [auto.ativo, pronto, acessos.userToken]); // eslint-disable-line
 
     // Avisa o Hub quando uma automação termina um chamado (o robô do WhatsApp reage ou responde no grupo). Só vale para
@@ -614,8 +625,8 @@
     }, [resultados, acessos.userToken]); // eslint-disable-line
 
     // Automático: a cada atualização da lista (e quando uma execução termina), pega a sua parte, até
-    // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
-    // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam
+    // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados,
+    // já tentados aqui e os que deram erro na última execução (esses voltam
     // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
     // Com vários computadores no automático, cada um pega a SUA parte (a divisão dos prontos pelos computadores ligados, até o
     // limite) e o que ficou com outro computador é tentado de novo de 15 em 15 s, sem depender de a lista mudar.
@@ -626,7 +637,7 @@
       if (!auto.ativo || !pronto || lista.carregando || lista.guardado || rodandoAlgo) return;
       // `lote` = TODOS os prontos, na ordem da lista; a parte deste computador é decidida na reserva (max)
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
           && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)));
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
@@ -653,7 +664,10 @@
             clearTimeout(novaTentativaRef.current);
             novaTentativaRef.current = setTimeout(() => setTentativaAuto((x) => x + 1), 15000);
           }
-          if (meus.length) rodar(meus);
+          if (meus.length) {
+            setUltimoAuto({ hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), quantos: meus.length });
+            rodar(meus);
+          }
         } catch (err) {
           lote.forEach((i) => autoRef.current.delete(i.id));
           setErroAuto(err.message);
@@ -892,23 +906,29 @@
 
     // cartões da barra do topo: mesma altura e mesmo desenho
     const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
-    const tiposAuto = [...new Map(lista.itens.filter((i) => i.tipo).map((i) => [i.tipo, i.tipoNome])).entries()];
-    // faixa abaixo da barra: confirmação, tipos que rodam sozinhos, erro e estado do automático
+    const descreverAuto = (window.ChamadosAuto && window.ChamadosAuto.descreverAuto) || (() => ({}));
+    const estadoAuto = descreverAuto({
+      computadores: computadoresAuto, rodando: Object.values(execucoes).filter((x) => !x.fim).reduce((n, x) => n + x.ids.length, 0),
+      ultima: ultimoAuto, filaWhatsapp, modoTeste, limite: auto.limite,
+    });
+    // faixa abaixo da barra: confirmação, erro e estado do automático
     const faixaAuto = (confirmandoAuto || auto.ativo || erroAuto) ? e('div', { key: 'faixa', style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', marginBottom: 16, borderRadius: 10, border: '1px solid ' + (confirmandoAuto ? 'var(--warn)' : 'var(--border)'), background: confirmandoAuto ? 'var(--warn-tint)' : 'transparent', fontSize: 12.5 } }, [
       confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
         e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Os chamados serão processados em modo real, até ${auto.limite} por vez, sem confirmação individual.`),
         e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
         e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
       ]) : null,
-      tiposAuto.length ? e('div', { key: 'tp', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' } }, [
-        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Rodam sozinhos:'),
-        ...tiposAuto.map(([tipo, nome]) => {
-          const marcado = !auto.fora.includes(tipo);
-          return e('button', { key: tipo, style: S.chip(marcado), onClick: () => mudarAuto({ fora: marcado ? [...auto.fora, tipo] : auto.fora.filter((x) => x !== tipo) }) }, nome);
-        }),
-      ]) : null,
       erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-      auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ativo: processa os chamados prontos assim que aparecem (verificação no GLPI a cada 30 s), até ${auto.limite} por vez. Mantenha esta aba aberta.`) : null,
+      auto.ativo ? e('div', { key: 'st', className: 'auto-estado', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, [
+        e('div', { key: 'tt', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--text)' } }, [
+          e('span', { key: 'p', 'aria-hidden': 'true', style: { width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 } }),
+          e('span', { key: 't' }, 'Modo automático ligado'),
+        ]),
+        estadoAuto.computadores ? e('div', { key: 'c', style: { color: 'var(--muted)', fontSize: 12 } }, estadoAuto.computadores) : null,
+        e('div', { key: 'ag', style: { color: 'var(--muted)', fontSize: 12 } }, [estadoAuto.agora, estadoAuto.ultima, estadoAuto.whatsapp].filter(Boolean).join(' ')),
+        estadoAuto.aviso ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12, fontWeight: 600 } }, estadoAuto.aviso) : null,
+        e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, 'Mantenha esta aba aberta: é este navegador que roda os chamados.'),
+      ]) : null,
     ]) : null;
 
     const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
@@ -934,7 +954,7 @@
           e('span', { key: 't', style: { fontWeight: 600, color: modoTeste ? 'var(--warn)' : 'var(--text)' } }, 'Modo teste'),
           e('span', { key: 's', style: { fontSize: 11.5, color: modoTeste ? 'var(--warn)' : 'var(--muted-soft)' } }, modoTeste ? 'não escreve no GLPI' : 'gravando no GLPI'),
         ]),
-        e('div', { key: 'auto', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
+        e('div', { key: 'auto', title: 'Quantos chamados este computador pega de cada vez. Com mais computadores ligados, cada um pega a sua parte.', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
           e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--text)' } }, [
             e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
               if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
