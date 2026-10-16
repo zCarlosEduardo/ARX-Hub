@@ -70,6 +70,39 @@ async function init() {
     );
   `);
   await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS ordem INTEGER;');
+  // robô do WhatsApp: quem é quem (telefone -> usuário do GLPI) e os pedidos que chegam pelos grupos
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_vinculos (
+      telefone TEXT PRIMARY KEY,
+      glpi_id BIGINT NOT NULL,
+      nome TEXT NOT NULL DEFAULT '',
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query('CREATE SEQUENCE IF NOT EXISTS whatsapp_eventos_seq;');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_pedidos (
+      id BIGSERIAL PRIMARY KEY,
+      mensagem_id TEXT NOT NULL UNIQUE,
+      grupo_id TEXT NOT NULL DEFAULT '',
+      grupo_jid TEXT NOT NULL DEFAULT '',
+      grupo_nome TEXT NOT NULL DEFAULT '',
+      telefone TEXT NOT NULL DEFAULT '',
+      solicitante TEXT NOT NULL DEFAULT '',
+      glpi_id BIGINT,
+      categoria_id BIGINT,
+      texto TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      ticket_id BIGINT,
+      erro TEXT NOT NULL DEFAULT '',
+      evento BIGINT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS whatsapp_pedidos_status_idx ON whatsapp_pedidos (status);');
+  await pool.query('CREATE INDEX IF NOT EXISTS whatsapp_pedidos_evento_idx ON whatsapp_pedidos (evento);');
   // primeiro admin: nomes (ou logins) da variável HUB_ADMINS_INICIAIS, só quando a lista ainda está vazia
   const { adminsIniciais } = require('./admin');
   const { rows: adm } = await pool.query('SELECT COUNT(*)::int AS count FROM hub_admins');

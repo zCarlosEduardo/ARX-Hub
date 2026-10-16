@@ -569,6 +569,50 @@
       return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); };
     }, [auto.ativo]); // eslint-disable-line
 
+    // Robô do WhatsApp: com o automático ligado, este navegador também abre os chamados que chegaram pelos grupos
+    // (fila no Hub). O chamado é aberto com o token de quem está com o automático e o requerente do pedido; depois o
+    // próprio automático o executa como qualquer outro. Falha de rede aqui não atrapalha o resto da tela.
+    useEffect(() => {
+      if (!auto.ativo || !pronto || !acessos.userToken) return undefined;
+      let vivo = true;
+      let ocupado = false;
+      const cabecalho = { 'Content-Type': 'application/json', 'X-Glpi-Token': acessos.userToken };
+      const puxar = async () => {
+        if (ocupado || document.hidden) return;
+        ocupado = true;
+        try {
+          const r = await fetch('/api/whatsapp/fila', { headers: cabecalho, cache: 'no-store' });
+          if (!r.ok) return;
+          for (const p of await r.json()) {
+            if (!vivo) break;
+            await fetch(`/api/whatsapp/fila/${p.id}/abrir`, { method: 'POST', headers: cabecalho }).catch(() => {}); // 409 = outro computador pegou
+          }
+        } catch {
+          // Hub fora do ar um instante: tenta na próxima volta
+        } finally {
+          ocupado = false;
+        }
+      };
+      puxar();
+      const t = setInterval(puxar, 10000);
+      return () => { vivo = false; clearInterval(t); };
+    }, [auto.ativo, pronto, acessos.userToken]); // eslint-disable-line
+
+    // Avisa o Hub quando uma automação termina um chamado (o robô do WhatsApp reage ou responde no grupo). Só vale para
+    // chamados abertos pelo robô; para os outros o Hub responde que não há pedido e nada acontece. Resultado de teste não conta.
+    const avisadosRef = useRef(new Set());
+    useEffect(() => {
+      if (!acessos.userToken) return;
+      for (const [id, r] of Object.entries(resultados)) {
+        if (!r || avisadosRef.current.has(id) || !['concluido', 'erro', 'nao_rodou'].includes(r.status)) continue;
+        avisadosRef.current.add(id);
+        fetch('/api/whatsapp/resultado', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': acessos.userToken },
+          body: JSON.stringify({ ticketId: Number(id), ok: r.status === 'concluido' && r.ok !== false, texto: String(r.texto || '').slice(0, 300) }),
+        }).catch(() => {});
+      }
+    }, [resultados, acessos.userToken]); // eslint-disable-line
+
     // Automático: a cada atualização da lista (e quando uma execução termina), pega até
     // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
     // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam

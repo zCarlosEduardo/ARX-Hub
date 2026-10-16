@@ -69,7 +69,8 @@ function adminsIniciais(texto) {
 
 // ---------- configurações ----------
 const SESSOES_COFRE = ['dia', 'horas', 'aba', 'pedir'];
-const MODOS_WHATSAPP = ['observacao', 'aprovacao', 'automatico'];
+const MODOS_WHATSAPP = ['observacao', 'ativo'];
+const OPERACOES_WHATSAPP = ['fila_automatico', 'so_abrir'];
 /** Tipos de solicitação que o robô do WhatsApp pode tratar (mesmas chaves do chamados-glpi). */
 const TIPOS_SOLICITACAO = [
   { chave: 'cadastro_consultor', nome: 'Cadastro de consultor' },
@@ -93,10 +94,12 @@ function configPadrao() {
     whatsapp: {
       ativo: false,
       modo: 'observacao',
+      operacao: 'fila_automatico',
+      respostaModelo: 'Chamado {chamado} concluído.',
       numeros: [],
       grupos: [],
       remetentesAutorizados: [],
-      reacoes: { aFazer: '⏳', andamento: '⚙️', sucesso: '✅', erro: '⚠️', duvida: '❓' },
+      reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
     },
   };
 }
@@ -123,6 +126,12 @@ function validarWhatsapp(b) {
   if (typeof ativo !== 'boolean') return { erro: 'whatsapp.ativo deve ser verdadeiro ou falso' };
   const modo = w.modo === undefined ? padrao.modo : w.modo;
   if (!MODOS_WHATSAPP.includes(modo)) return { erro: `whatsapp.modo deve ser um de: ${MODOS_WHATSAPP.join(', ')}` };
+
+  const operacao = w.operacao === undefined ? padrao.operacao : w.operacao;
+  if (operacao === 'totalmente') return { erro: 'o modo totalmente automático exige logins do SGA e do PowerCRM guardados no servidor e ainda não está disponível' };
+  if (!OPERACOES_WHATSAPP.includes(operacao)) return { erro: `whatsapp.operacao deve ser uma de: ${OPERACOES_WHATSAPP.join(', ')}` };
+  const respostaModelo = w.respostaModelo === undefined ? padrao.respostaModelo : texto(w.respostaModelo, 300);
+  if (!respostaModelo || respostaModelo.length > 300) return { erro: 'o texto da resposta no grupo precisa ter de 1 a 300 caracteres' };
 
   const numerosBrutos = w.numeros === undefined ? [] : w.numeros;
   if (!Array.isArray(numerosBrutos) || numerosBrutos.length > 10) return { erro: 'whatsapp.numeros deve ser uma lista de até 10 números' };
@@ -160,7 +169,10 @@ function validarWhatsapp(b) {
     const tipos = [...new Set(tiposBrutos.map(String))];
     const invalido = tipos.find((t) => !CHAVES_TIPOS.has(t));
     if (invalido) return { erro: `o tipo "${invalido}" do grupo "${nome}" não existe` };
-    grupos.push({ id: g.id, nome, jid, numeroId, tipos, ativo: g.ativo !== false, responder: g.responder === true, reagir: g.reagir !== false });
+    const categoriaId = g.categoriaId === undefined || g.categoriaId === null || g.categoriaId === '' ? null : Number(g.categoriaId);
+    if (categoriaId !== null && (!Number.isInteger(categoriaId) || categoriaId < 1)) return { erro: `a categoria do GLPI do grupo "${nome}" é inválida` };
+    const categoriaLabel = texto(g.categoriaLabel, 300).slice(0, 300);
+    grupos.push({ id: g.id, nome, jid, numeroId, categoriaId, categoriaLabel, tipos, ativo: g.ativo !== false, responder: g.responder === true, reagir: g.reagir !== false });
   }
 
   const autorizadosBrutos = w.remetentesAutorizados === undefined ? [] : w.remetentesAutorizados;
@@ -179,7 +191,7 @@ function validarWhatsapp(b) {
     if (typeof v !== 'string' || !v.trim() || [...v.trim()].length > 4) return { erro: `a reação "${chave}" deve ser um emoji` };
     reacoes[chave] = v.trim();
   }
-  return { valor: { ativo, modo, numeros, grupos, remetentesAutorizados, reacoes } };
+  return { valor: { ativo, modo, operacao, respostaModelo, numeros, grupos, remetentesAutorizados, reacoes } };
 }
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
@@ -227,4 +239,5 @@ module.exports = {
   TIPOS_SOLICITACAO,
   SESSOES_COFRE,
   MODOS_WHATSAPP,
+  OPERACOES_WHATSAPP,
 };

@@ -225,9 +225,12 @@
 
   // ---------- aba: WhatsApp ----------
   const NOTAS_MODO = {
-    observacao: 'Observação (recomendado no início): só lê e registra o que faria. Não abre chamado, não executa e não reage.',
-    aprovacao: 'Aprovação: os pedidos entendidos aparecem para você aprovar com um clique antes de executar.',
-    automatico: 'Automático: executa sozinho. Use só depois de conferir que a leitura acerta.',
+    observacao: 'Observação (recomendado no início): o robô só lê e registra o que faria. Não abre chamado e não reage.',
+    ativo: 'Ativo: o robô identifica quem pediu e o que pediu, abre o chamado no GLPI e reage na mensagem.',
+  };
+  const NOTAS_OPERACAO = {
+    fila_automatico: 'Pela fila do Chamados automático: o pedido espera na fila e o navegador de quem está com o Chamados automático ligado abre o chamado (com o token dessa pessoa) e o automático executa. Sem ninguém com o automático ligado, o pedido espera.',
+    so_abrir: 'Só abrir o chamado, 24 horas: o servidor abre o chamado com o token de um usuário de serviço do GLPI. A execução continua pelo Chamados (manual ou automático). Exige HUB_GLPI_TOKEN_SERVICO no servidor.',
   };
 
   function AbaWhatsapp({ config, opcoes, aoSalvar }) {
@@ -245,14 +248,25 @@
     });
     const mudar = (fn) => setW((x) => fn(copia(x)));
     const tipos = (opcoes && opcoes.tipos) || [];
+    const [categorias, setCategorias] = useState([]);
+    const { painel } = usePainelWhatsapp(0);
+    const gruposVisiveis = (painel && painel.estado && painel.estado.grupos) || [];
+    useEffect(() => {
+      fetch('/api/glpi/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userToken: tokenAtual() }) })
+        .then((r) => r.json()).then((d) => setCategorias(Array.isArray(d.categories) ? d.categories : [])).catch(() => setCategorias([]));
+    }, []);
     const campoTexto = (valor, onChange, placeholder, extra = {}) => e('input', { className: 'field-input', value: valor || '', onChange: (ev) => onChange(ev.target.value), placeholder, style: { ...S().input, ...extra } });
 
     return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
       e('div', { key: 'aviso', style: { background: 'var(--accent-soft, rgba(22,163,74,0.08))', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' } },
-        'A conexão com o WhatsApp (leitura do QR code com o chip dedicado) ainda não foi instalada. Estas configurações já ficam salvas e serão usadas quando o número estiver disponível.'),
+        'Fluxo: o robô lê a mensagem no grupo, identifica quem pediu (pelo telefone vinculado a um usuário do GLPI) e o tipo de solicitação, abre o chamado e reage na mensagem: a fazer, em andamento, concluído ou erro. A conexão do chip é feita na aba "Conexão e pedidos".'),
       e('div', { key: 'geral' }, [
         caixa(w.ativo, (v) => mudar((x) => ((x.ativo = v), x)), 'Automação do WhatsApp ligada', { fontWeight: 600 }),
-        e('div', { style: { marginTop: 8 } }, [rotulo('Modo de funcionamento'), selecao(w.modo, (v) => mudar((x) => ((x.modo = v), x)), (opcoes.modosWhatsapp || ['observacao', 'aprovacao', 'automatico']).map((m) => [m, { observacao: 'Observação', aprovacao: 'Aprovação no Hub', automatico: 'Automático' }[m] || m]), { marginTop: 4 }), dica(NOTAS_MODO[w.modo])]),
+        e('div', { style: { marginTop: 8 } }, [rotulo('Modo de funcionamento'), selecao(w.modo, (v) => mudar((x) => ((x.modo = v), x)), (opcoes.modosWhatsapp || ['observacao', 'ativo']).map((m) => [m, { observacao: 'Observação', ativo: 'Ativo' }[m] || m]), { marginTop: 4 }), dica(NOTAS_MODO[w.modo] || '')]),
+        e('div', { style: { marginTop: 8 } }, [rotulo('Como o chamado é aberto'), selecao(w.operacao, (v) => mudar((x) => ((x.operacao = v), x)), [['fila_automatico', 'Pela fila do Chamados automático'], ['so_abrir', 'Só abrir o chamado, 24 horas (token de serviço)']], { marginTop: 4 }), dica(NOTAS_OPERACAO[w.operacao] || ''),
+          dica('Totalmente automático no servidor (abrir e executar sem ninguém com o navegador aberto) ainda não está disponível: exigiria guardar logins do SGA e do PowerCRM no servidor.'),
+          w.operacao === 'so_abrir' && painel && painel.disponivel && painel.disponivel.so_abrir === false ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12.5, marginTop: 4 } }, 'O token de serviço do GLPI não está configurado no servidor: os pedidos vão dar erro até configurar.') : null]),
+        e('div', { style: { marginTop: 8 } }, [rotulo('Texto da resposta no grupo quando o chamado for solucionado'), campoTexto(w.respostaModelo, (v) => mudar((x) => ((x.respostaModelo = v), x)), 'Chamado {chamado} concluído.'), dica('Use {chamado}, {solicitante} e {tipo}. Só responde nos grupos com "Responder no grupo" marcado.')]),
       ]),
       e('div', { key: 'numeros' }, [
         rotulo('Números (chips) do WhatsApp'),
@@ -265,13 +279,14 @@
           ]))),
         botao('+ Adicionar número', () => mudar((x) => (x.numeros.push({ id: proximoId('n', x.numeros), rotulo: '', telefone: '', ativo: true }), x)), 'sec', { marginTop: 6, alignSelf: 'flex-start' }),
       ]),
+      e('datalist', { key: 'dl', id: 'wa-grupos-visiveis' }, gruposVisiveis.map((gv) => e('option', { key: gv.jid, value: gv.nome }))),
       e('div', { key: 'grupos' }, [
         rotulo('Grupos atendidos'),
         dica('Para cada grupo: qual número responde nele e quais tipos de solicitação o robô pode tratar.'),
         e('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 } }, w.grupos.map((g, i) =>
           e('div', { key: g.id, className: 'wa-grupo', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
             e('div', { key: 'a', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } }, [
-              campoTexto(g.nome, (v) => mudar((x) => ((x.grupos[i].nome = v), x)), 'Nome do grupo (como aparece no WhatsApp)'),
+              e('input', { className: 'field-input', list: 'wa-grupos-visiveis', value: g.nome || '', placeholder: 'Nome do grupo (como aparece no WhatsApp)', style: S().input, onChange: (ev) => { const v = ev.target.value; mudar((x) => { x.grupos[i].nome = v; const achado = gruposVisiveis.find((gv) => gv.nome === v); if (achado) x.grupos[i].jid = achado.jid; return x; }); } }),
               campoTexto(g.jid, (v) => mudar((x) => ((x.grupos[i].jid = v), x)), 'Identificador do grupo (opcional, ...@g.us)'),
             ]),
             e('div', { key: 'b', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
@@ -280,6 +295,11 @@
               caixa(g.ativo !== false, (v) => mudar((x) => ((x.grupos[i].ativo = v), x)), 'Grupo ativo'),
               caixa(g.responder, (v) => mudar((x) => ((x.grupos[i].responder = v), x)), 'Responder no grupo'),
               caixa(g.reagir !== false, (v) => mudar((x) => ((x.grupos[i].reagir = v), x)), 'Reagir às mensagens'),
+            ]),
+            e('div', { key: 'cat', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+              e('span', { key: 'l', style: { fontSize: 12.5, color: 'var(--muted)' } }, 'Categoria do chamado no GLPI:'),
+              selecao(g.categoriaId ? String(g.categoriaId) : '', (v) => mudar((x) => { const c = categorias.find((k) => String(k.id) === v); x.grupos[i].categoriaId = v ? Number(v) : null; x.grupos[i].categoriaLabel = c ? c.label : ''; return x; }),
+                [['', 'Nenhuma (o chamado abre sem categoria)'], ...(g.categoriaId && !categorias.some((k) => k.id === g.categoriaId) ? [[String(g.categoriaId), g.categoriaLabel || String(g.categoriaId)]] : []), ...categorias.map((k) => [String(k.id), k.label])], { width: 'auto', minWidth: 260, maxWidth: '100%' }),
             ]),
             e('div', { key: 'c' }, [
               e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Tipos de solicitação deste grupo:'),
@@ -290,7 +310,7 @@
             ]),
             botao('Remover grupo', () => mudar((x) => ((x.grupos = x.grupos.filter((_, j) => j !== i)), x)), 'sec', { color: 'var(--error)', alignSelf: 'flex-start', padding: '5px 10px' }),
           ]))),
-        botao('+ Adicionar grupo', () => mudar((x) => (x.grupos.push({ id: proximoId('g', x.grupos), nome: '', jid: '', numeroId: x.numeros[0] ? x.numeros[0].id : '', tipos: [], ativo: true, responder: false, reagir: true }), x)), 'sec', { marginTop: 8, alignSelf: 'flex-start' }),
+        botao('+ Adicionar grupo', () => mudar((x) => (x.grupos.push({ id: proximoId('g', x.grupos), nome: '', jid: '', categoriaId: null, categoriaLabel: '', numeroId: x.numeros[0] ? x.numeros[0].id : '', tipos: [], ativo: true, responder: false, reagir: true }), x)), 'sec', { marginTop: 8, alignSelf: 'flex-start' }),
       ]),
       e('div', { key: 'rem' }, [
         rotulo('Quem pode pedir (telefones autorizados)'),
@@ -305,8 +325,124 @@
     ]);
   }
 
+  // ---------- abas: vínculos, conexão e pedidos do WhatsApp ----------
+  const NOMES_STATUS = { pendente: 'Na fila', abrindo: 'Abrindo o chamado', aberto: 'Chamado aberto', concluido: 'Concluído', erro: 'Erro', sem_vinculo: 'Sem vínculo', observado: 'Só observado' };
+  const COR_STATUS = { pendente: 'var(--warn)', abrindo: 'var(--accent)', aberto: 'var(--accent)', concluido: 'var(--success, #16a34a)', erro: 'var(--error)', sem_vinculo: 'var(--warn)', observado: 'var(--muted)' };
+  const dataHora = (s) => (s ? new Date(s).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informado');
+
+  /** Carrega o painel do WhatsApp (vínculos, pedidos recentes, estado do robô) e se atualiza sozinho de tempos em tempos. */
+  function usePainelWhatsapp(intervaloMs) {
+    const [painel, setPainel] = useState(null);
+    const [erro, setErro] = useState(null);
+    const carregar = async () => {
+      try {
+        setPainel(await api('GET', '/api/admin/whatsapp/painel'));
+        setErro(null);
+      } catch (err) {
+        setErro(err.message);
+      }
+    };
+    useEffect(() => {
+      carregar();
+      if (!intervaloMs) return undefined;
+      const t = setInterval(carregar, intervaloMs);
+      return () => clearInterval(t);
+    }, []);
+    return { painel, erro, recarregar: carregar };
+  }
+
+  function AbaVinculos() {
+    const { painel, erro: erroPainel, recarregar } = usePainelWhatsapp(0);
+    const [usuarios, setUsuarios] = useState([]);
+    const [telefone, setTelefone] = useState('');
+    const [escolhido, setEscolhido] = useState('');
+    const [erro, setErro] = useState(null);
+    const [info, setInfo] = useState(null);
+    useEffect(() => {
+      fetch('/api/glpi/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userToken: tokenAtual() }) })
+        .then((r) => r.json()).then((d) => setUsuarios(Array.isArray(d.users) ? d.users : [])).catch(() => setUsuarios([]));
+    }, []);
+    async function adicionar() {
+      setErro(null);
+      setInfo(null);
+      const u = usuarios.find((x) => String(x.id) === escolhido);
+      try {
+        await api('POST', '/api/admin/whatsapp/vinculos', { telefone, glpiId: escolhido, nome: u ? u.label : '' });
+        setTelefone('');
+        setEscolhido('');
+        setInfo('Vínculo salvo.');
+        await recarregar();
+      } catch (err) {
+        setErro(err.message);
+      }
+    }
+    async function remover(v) {
+      setErro(null);
+      setInfo(null);
+      try {
+        await api('DELETE', `/api/admin/whatsapp/vinculos/${v.telefone}`);
+        setInfo('Vínculo removido.');
+        await recarregar();
+      } catch (err) {
+        setErro(err.message);
+      }
+    }
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+      dica('Cada telefone que pede no grupo precisa estar ligado a um usuário do GLPI: é ele que vai como requerente do chamado aberto pelo robô. Telefone sem vínculo recebe só a reação de dúvida.'),
+      e('div', { key: 'novo', style: { display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(180px, 1.4fr) auto', gap: 8, alignItems: 'center' } }, [
+        e('input', { key: 't', className: 'field-input wa-vinculo-telefone', value: telefone, onChange: (ev) => setTelefone(ev.target.value), placeholder: 'Telefone com DDD', style: S().input }),
+        selecao(escolhido, setEscolhido, [['', 'Escolha o usuário do GLPI'], ...usuarios.map((u) => [String(u.id), u.label])]),
+        botao('Salvar vínculo', adicionar, 'prim', { padding: '8px 14px' }),
+      ]),
+      erro || erroPainel ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro || erroPainel) : null,
+      info ? e('div', { key: 'i', className: 'admin-ok', style: { color: 'var(--success, #16a34a)', fontSize: 12.5 } }, info) : null,
+      !painel ? dica('Carregando…') : painel.vinculos.length === 0 ? dica('Nenhum vínculo ainda.') : e('div', { key: 'lista', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.vinculos.map((v) =>
+        e('div', { key: v.telefone, className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 13 } }, [
+          e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
+            e('div', { key: 'a', style: { fontWeight: 600 } }, v.nome || 'Não informado'),
+            e('div', { key: 'b', style: { color: 'var(--muted)', fontSize: 12 } }, `${v.telefone} · usuário ${v.glpiId} no GLPI`),
+          ]),
+          botao('Remover', () => remover(v), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
+        ]))),
+    ]);
+  }
+
+  function AbaConexao() {
+    const { painel, erro, recarregar } = usePainelWhatsapp(8000);
+    if (erro && !painel) return e('div', { style: { color: 'var(--error)', fontSize: 13 } }, erro);
+    if (!painel) return dica('Carregando…');
+    const est = painel.estado;
+    const semSinal = !est.atualizadoEm || Date.now() - new Date(est.atualizadoEm).getTime() > 120000;
+    const situacao = !est.botConfigurado ? 'O robô ainda não está configurado neste Hub (falta o segredo WHATSAPP_BOT_TOKEN).'
+      : semSinal ? 'O robô do WhatsApp não está enviando sinal.'
+        : est.conectado ? `Conectado${est.numero ? ` ao número ${est.numero}` : ''}.`
+          : 'Desconectado: leia o QR code abaixo com o WhatsApp do chip dedicado (Aparelhos conectados).';
+    const cor = est.botConfigurado && !semSinal && est.conectado ? 'var(--success, #16a34a)' : 'var(--warn)';
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+      e('div', { key: 'sit', className: 'wa-situacao', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 13 } }, [
+        e('span', { key: 'p', style: { width: 9, height: 9, borderRadius: '50%', background: cor, flexShrink: 0 } }),
+        e('span', { key: 't', style: { flex: 1 } }, situacao),
+        botao('Atualizar', recarregar, 'sec', { padding: '5px 10px' }),
+      ]),
+      est.qr && !est.conectado && !semSinal ? e('img', { key: 'qr', className: 'wa-qr', src: est.qr, alt: 'QR code para conectar o WhatsApp', style: { width: 240, height: 240, background: '#fff', padding: 8, borderRadius: 10, border: '1px solid var(--border)', alignSelf: 'flex-start' } }) : null,
+      painel.disponivel && painel.disponivel.so_abrir === false ? dica('O modo "só abrir o chamado" precisa do token de um usuário de serviço do GLPI no servidor (HUB_GLPI_TOKEN_SERVICO). Hoje não está configurado.') : null,
+      rotulo('Pedidos recentes'),
+      painel.pedidos.length === 0 ? dica('Nenhum pedido ainda.') : e('div', { key: 'ped', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.pedidos.map((p) =>
+        e('div', { key: p.id, className: 'wa-pedido', style: { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 3 } }, [
+          e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            e('span', { key: 's', style: { display: 'inline-flex', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, color: COR_STATUS[p.status] || 'var(--muted)', border: '1px solid currentColor' } }, NOMES_STATUS[p.status] || p.status),
+            e('span', { key: 'g', style: { fontWeight: 600 } }, p.grupo || 'Não informado'),
+            e('span', { key: 'q', style: { color: 'var(--muted)' } }, `${p.solicitante || 'Sem vínculo'} · ${dataHora(p.criadoEm)}`),
+            p.ticketId ? e('span', { key: 't', style: { color: 'var(--muted)' } }, `Chamado ${p.ticketId}`) : null,
+          ]),
+          e('div', { key: 'x', style: { color: 'var(--muted)' } }, p.texto),
+          p.erro ? e('div', { key: 'r', style: { color: 'var(--error)' } }, p.erro) : null,
+        ]))),
+    ]);
+  }
+
   // ---------- tela ----------
-  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['whatsapp', 'WhatsApp', 'MessageCircle']];
+  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
 
   function AdminView() {
     const [aba, setAba] = useState('cofre');
@@ -323,6 +459,8 @@
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes' });
+    else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
+    else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
 
     return e('div', { className: 'admin-tela', style: { maxWidth: 1040, margin: '0 auto', padding: '24px 20px 40px', color: 'var(--text)' } }, [

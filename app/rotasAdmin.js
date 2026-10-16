@@ -134,7 +134,7 @@ function criarRotasAdmin(deps) {
     }));
   }
 
-  return { registrar, configAtual, quemE };
+  return { registrar, configAtual, quemE, identificar, exigirAdmin };
 }
 
 module.exports = { criarRotasAdmin };
