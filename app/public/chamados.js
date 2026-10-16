@@ -70,11 +70,20 @@
   const SELOS_REGRA = { mesma_pessoa: 'Própria pessoa', gestao: 'Gestão do departamento' };
   const textoOuNaoInformado = (v) => (v === null || v === undefined || String(v).trim() === '' ? 'Não informado' : String(v));
 
+  const ESTADOS_PLANILHA = { unica: 'achado', ambigua: 'mais de uma pessoa com esse nome', inativa: 'consta como inativo', nenhuma: 'não encontrado', planilha_indisponivel: 'planilha indisponível' };
+  const descreverPessoa = (p) => (!p ? 'Não informado' : p.estado === 'unica' ? `${textoOuNaoInformado(p.nome)} (função ${textoOuNaoInformado(p.funcao)}, departamento ${textoOuNaoInformado(p.departamento)})` : ESTADOS_PLANILHA[p.estado] || 'Não informado');
+  /** O que a planilha de funcionários achou do solicitante e do alvo (null = servidor antigo, sem o campo). */
+  function textoDiagnosticoPlanilha(d) {
+    if (!d) return null;
+    return `Planilha de funcionários: solicitante ${descreverPessoa(d.solicitante)}; alvo ${descreverPessoa(d.alvo)}.`;
+  }
+
   /** Aviso do card "Alterar senha do SGA": só existe quando a identidade não foi confirmada. */
   function avisoSenha(item) {
     if (!item || item.tipo !== 'alterar_senha_sga') return null;
     const id = item.identidade;
     if (id && id.ok === true) return null;
+    if (id && id.liberavelManual === true) return { motivo: textoOuNaoInformado(id.motivo), texto: 'Não roda no automático. Confira o chamado e rode manualmente se o pedido for legítimo', liberavel: true };
     return { motivo: textoOuNaoInformado(id && id.motivo), texto: 'Este chamado não será executado' };
   }
 
@@ -88,7 +97,7 @@
 
   /** Itens somenteManual nunca entram no modo automático nem em "Rodar todos os prontos". */
   function deveExcluirDoAutomatico(item) {
-    return !!item && item.somenteManual === true;
+    return !!item && (item.somenteManual === true || (item.tipo === 'alterar_senha_sga' && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
   }
 
   /** Textos do aviso âmbar do card (null = sem aviso). */
@@ -108,7 +117,8 @@
   /** Motivo que impede de rodar um pedido de senha (null = liberado). `temLoginSga(chave)` diz se há login do SGA para a empresa. */
   function bloqueioSenha(item, temLoginSga) {
     if (!item || item.tipo !== 'alterar_senha_sga') return null;
-    if (avisoSenha(item)) return 'Identidade não confirmada: este chamado não será executado';
+    const aviso = avisoSenha(item);
+    if (aviso && !aviso.liberavel) return 'Identidade não confirmada: este chamado não será executado';
     if (!item.empresaSga || !temLoginSga(item.empresaSga.chave)) return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
     return null;
   }
@@ -131,6 +141,7 @@
     const alvo = item.senhaAlvo || {};
     const outros = Array.isArray(item.outrosSistemas) ? item.outrosSistemas : [];
     const aviso = avisoSenha(item);
+    const diagnostico = textoDiagnosticoPlanilha(item.diagnosticoPlanilha);
     const regra = item.identidade && item.identidade.ok === true ? SELOS_REGRA[item.identidade.regra] : null;
     const bloco = (chave, titulo, linhas) => e('div', { key: chave, style: { minWidth: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 2, overflowWrap: 'anywhere' } }, [
       e('div', { key: 'l', style: { ...S.label, marginBottom: 2 } }, titulo),
@@ -142,6 +153,7 @@
         bloco('alvo', 'Usuário alvo', [textoOuNaoInformado(alvo.nome), `Usuário ${textoOuNaoInformado(alvo.usuario)}`, `CPF ${textoOuNaoInformado(alvo.cpfMascarado)}`]),
       ]),
       regra ? e('div', { key: 'selo', style: { display: 'flex' } }, e('span', { style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--accent-soft)', color: 'var(--accent-fg)' } }, regra)) : null,
+      diagnostico ? e('div', { key: 'diag', style: { color: 'var(--muted)', fontSize: 12 } }, diagnostico) : null,
       aviso ? e('div', { key: 'aviso', role: 'alert', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 2 } }, [
         e('div', { key: 'm' }, aviso.motivo),
         e('strong', { key: 't' }, aviso.texto),
