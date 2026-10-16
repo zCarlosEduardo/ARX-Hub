@@ -15,6 +15,8 @@ const crypto = require('crypto');
 const W = require('./whatsapp');
 const { TIPOS_SOLICITACAO } = require('./admin');
 
+// tipos que não dependem de associação: no privado não precisam de "Categoria X" (quem diz a associação é a categoria do GLPI)
+const TIPOS_SEM_CATEGORIA = new Set(['foto_perfil', 'senha_sistemas']);
 const NOME_TIPO = new Map(TIPOS_SOLICITACAO.map((t) => [t.chave, t.nome]));
 const sem = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const mesmoHash = (a, b) => {
@@ -88,7 +90,7 @@ function criarRotasWhatsapp(deps) {
     let status = 'pendente';
     let erro = '';
     if (!vinculo) status = 'sem_vinculo';
-    else if (ehPrivado && !categoria) {
+    else if (ehPrivado && !categoria && (apelido || !TIPOS_SEM_CATEGORIA.has(tipo))) {
       status = 'sem_categoria';
       erro = apelido ? `A categoria "${truncar(apelido, 60)}" não está cadastrada para a conversa privada.` : 'A mensagem não diz a categoria (primeira linha: Categoria Ancore).';
     } else if (cfg.modo === 'observacao') status = 'observado';
