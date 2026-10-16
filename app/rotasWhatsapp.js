@@ -118,6 +118,29 @@ function criarRotasWhatsapp(deps) {
     }
   }
 
+  /**
+   * Pedido parado na fila (ninguém estava com o Chamados automático): com o token de serviço o servidor abre o chamado
+   * depois de `esperaMs`, para o pedido não depender de um navegador aberto. Um navegador que pega o pedido antes vence
+   * (reivindicar é atômico). Devolve quantos chamados abriu.
+   */
+  async function abrirPendentesAtrasados({ esperaMs = 60000, agora = Date.now() } = {}) {
+    if (!tokenServico) return 0;
+    let abertos = 0;
+    for (const p of await repo.listarPendentes()) {
+      if (agora - new Date(p.criadoEm).getTime() < esperaMs) continue;
+      const pedido = await repo.reivindicar(p.id);
+      if (!pedido) continue;
+      try {
+        const ticketId = await abrirNoGlpi(pedido, tokenServico);
+        await repo.mudarStatus(pedido.id, 'aberto', { ticketId });
+        abertos += 1;
+      } catch (err) {
+        await repo.mudarStatus(pedido.id, 'erro', { erro: truncar(limpar(err.message, tokenServico), 300) });
+      }
+    }
+    return abertos;
+  }
+
   /** Com o token de serviço, confere no GLPI se os chamados abertos pelo robô já foram solucionados. */
   async function verificarAbertos() {
     if (!tokenServico) return 0;
@@ -239,7 +262,7 @@ function criarRotasWhatsapp(deps) {
     }));
   }
 
-  return { registrar, processarMensagem, verificarAbertos };
+  return { registrar, processarMensagem, verificarAbertos, abrirPendentesAtrasados };
 }
 
 module.exports = { criarRotasWhatsapp };

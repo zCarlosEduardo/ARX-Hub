@@ -38,7 +38,7 @@ function repoWhatsMemoria() {
     async criarPedido(p) {
       const ja = e.pedidos.find((x) => x.mensagemId === p.mensagemId);
       if (ja) return { pedido: copia(ja), novo: false };
-      const novo = { ...p, id: e.proximo++, ticketId: p.ticketId || null, erro: p.erro || '', evento: ++e.seq, criadoEm: 'x' };
+      const novo = { ...p, id: e.proximo++, ticketId: p.ticketId || null, erro: p.erro || '', evento: ++e.seq, criadoEm: Date.now() };
       e.pedidos.push(novo);
       return { pedido: copia(novo), novo: true };
     },
