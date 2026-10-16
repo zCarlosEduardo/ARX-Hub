@@ -285,10 +285,13 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* "Painel" fixo no início da faixa: compacto (só ícone) quando as abas não cabem */
-.panel-tab-label { display: inline-block; max-width: 64px; overflow: hidden; transition: max-width 0.25s var(--ease), opacity 0.2s ease; }
-.panel-tab.compact { gap: 0 !important; padding: 8px 10px !important; }
-.panel-tab.compact .panel-tab-label { max-width: 0; opacity: 0; }
-.panel-tab { transition: color 0.15s, border-color 0.2s, background 0.15s, padding 0.25s var(--ease); border-radius: 8px 8px 0 0; }
+/* abas fixas do cabeçalho: só o ícone; o nome aparece ao passar o mouse, ao focar com o teclado ou na aba aberta */
+.panel-tab-label { display: inline-block; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; transition: max-width 0.28s var(--ease), opacity 0.2s ease 0.04s; }
+.panel-tab { gap: 0 !important; padding: 8px 10px !important; transition: color 0.15s, border-color 0.2s, background 0.15s, padding 0.28s var(--ease), gap 0.28s var(--ease); }
+.panel-tab:hover, .panel-tab:focus-visible, .panel-tab.ativa { gap: 7px !important; padding: 8px 12px !important; }
+.panel-tab:hover .panel-tab-label, .panel-tab:focus-visible .panel-tab-label, .panel-tab.ativa .panel-tab-label { max-width: 140px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .panel-tab, .panel-tab-label { transition: none; } }
+.panel-tab { border-radius: 8px 8px 0 0; }
 .panel-tab:hover { background: var(--hover-bg-soft); }
 .tabs-sep { width: 1px; height: 20px; align-self: center; margin: 0 6px; background: var(--border); flex-shrink: 0; animation: fadeIn 0.2s ease both; }
 
