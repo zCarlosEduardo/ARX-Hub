@@ -31,6 +31,9 @@ services:
       GLPI_BASE_URL: ${GLPI_BASE_URL:-}
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
       GLPI_ENTITY_ID: ${GLPI_ENTITY_ID:-}
+      # Quem é administrador do Hub na primeira subida (nome completo ou login do GLPI, separados por ;). Depois a lista
+      # é gerida no painel de administração.
+      HUB_ADMINS_INICIAIS: ${HUB_ADMINS_INICIAIS:-Carlos Eduardo de Souza Alonso}
     depends_on:
       db:
         condition: service_healthy

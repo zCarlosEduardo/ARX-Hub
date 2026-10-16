@@ -49,6 +49,37 @@ async function init() {
     );
   `);
 
+  // ---------- administração do Hub ----------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hub_admins (
+      id BIGSERIAL PRIMARY KEY,
+      glpi_id INTEGER,
+      login TEXT NOT NULL DEFAULT '',
+      nome TEXT NOT NULL DEFAULT '',
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      criado_por TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS hub_admins_glpi_id_uq ON hub_admins (glpi_id) WHERE glpi_id IS NOT NULL;');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hub_config (
+      chave TEXT PRIMARY KEY,
+      valor JSONB NOT NULL,
+      atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      atualizado_por TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS ordem INTEGER;');
+  // primeiro admin: nomes (ou logins) da variável HUB_ADMINS_INICIAIS, só quando a lista ainda está vazia
+  const { adminsIniciais } = require('./admin');
+  const { rows: adm } = await pool.query('SELECT COUNT(*)::int AS count FROM hub_admins');
+  if (adm[0].count === 0) {
+    for (const nome of adminsIniciais(process.env.HUB_ADMINS_INICIAIS)) {
+      const ehLogin = !/\s/.test(nome);
+      await pool.query('INSERT INTO hub_admins (login, nome, criado_por) VALUES ($1, $2, $3)', [ehLogin ? nome : '', ehLogin ? '' : nome, 'instalação']);
+    }
+  }
+
   const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM automations');
   if (rows[0].count === 0) {
     for (const a of SEED_AUTOMATIONS) {
@@ -83,6 +114,7 @@ function rowToAutomation(row) {
     icon: row.icon,
     color: row.color,
     categories: row.categories || [],
+    ordem: row.ordem == null ? null : row.ordem,
     status: row.status,
     lastCheckedAt: row.last_checked_at,
     createdAt: row.created_at,
