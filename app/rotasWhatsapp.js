@@ -44,37 +44,54 @@ function criarRotasWhatsapp(deps) {
 
   async function abrirNoGlpi(pedido, token) {
     const { titulo, descricao } = W.montarChamado({
-      texto: pedido.texto, vinculo: { nome: pedido.solicitante }, grupo: { nome: pedido.grupoNome }, tipoNome: NOME_TIPO.get(pedido.tipo) || '',
+      texto: pedido.texto, vinculo: { nome: pedido.solicitante }, grupo: { nome: pedido.grupoNome, privado: pedido.grupoId === 'privado' }, tipoNome: NOME_TIPO.get(pedido.tipo) || '',
     });
     const id = await glpi.criarChamado(token, { titulo, descricao, categoriaId: pedido.categoriaId, requerenteId: pedido.glpiId });
     if (deps.registrarHistorico) await deps.registrarHistorico({ id, titulo, descricao, pedido }).catch(() => {});
     return id;
   }
 
-  /** Decide o que fazer com uma mensagem de grupo. Devolve { status, pedidoId?, ticketId?, reacao? }. */
+  /**
+   * Decide o que fazer com uma mensagem (de grupo ou da conversa privada). Devolve { status, pedidoId?, ticketId?, reacao? }.
+   * Na conversa privada (b.privado) não há grupo: a categoria do GLPI vem da linha "Categoria X" da mensagem.
+   */
   async function processarMensagem(b) {
     const cfg = (await admin.configAtual()).whatsapp;
     if (!cfg.ativo) return { status: 'ignorado' };
-    const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 5000) : '';
+    const bruto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 5000) : '';
     const mensagemId = typeof b.mensagemId === 'string' ? b.mensagemId.slice(0, 200) : '';
-    if (!texto || !mensagemId) return { status: 'ignorado' };
-    const grupo = cfg.grupos.find((g) => g.ativo && ((g.jid && g.jid === b.grupoJid) || (!g.jid && sem(g.nome) === sem(b.grupoNome))));
-    if (!grupo) return { status: 'ignorado' };
+    if (!bruto || !mensagemId) return { status: 'ignorado' };
+    const ehPrivado = b.privado === true;
+    let grupo = null;
+    if (ehPrivado) {
+      if (!cfg.privado.ativo) return { status: 'ignorado' };
+    } else {
+      grupo = cfg.grupos.find((g) => g.ativo && ((g.jid && g.jid === b.grupoJid) || (!g.jid && sem(g.nome) === sem(b.grupoNome))));
+      if (!grupo) return { status: 'ignorado' };
+    }
     if (cfg.remetentesAutorizados.length && !cfg.remetentesAutorizados.some((t) => W.mesmoTelefone(t, b.remetente))) return { status: 'ignorado' };
 
+    const { apelido, texto } = ehPrivado ? W.extrairCategoria(bruto) : { apelido: '', texto: bruto };
     const { tipo } = await classificar(texto);
+    const tiposLiberados = ehPrivado ? cfg.privado.tipos : grupo.tipos;
     // conversa solta ou pedido que não é deste grupo: o robô fica quieto
-    if (!tipo || (grupo.tipos.length && !grupo.tipos.includes(tipo))) return { status: 'ignorado' };
+    if (!tipo || (tiposLiberados.length && !tiposLiberados.includes(tipo))) return { status: 'ignorado' };
 
     const vinculo = W.acharVinculo(await repo.listarVinculos(), b.remetente);
+    const categoria = ehPrivado ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
+    const reagirLigado = ehPrivado ? cfg.privado.reagir : grupo.reagir;
     const base = {
-      mensagemId, grupoId: grupo.id, grupoJid: String(b.grupoJid || ''), grupoNome: grupo.nome, telefone: W.normalizarTelefone(b.remetente),
-      solicitante: vinculo ? vinculo.nome : '', glpiId: vinculo ? vinculo.glpiId : null, categoriaId: grupo.categoriaId, texto, tipo,
+      mensagemId, grupoId: ehPrivado ? 'privado' : grupo.id, grupoJid: String(b.grupoJid || ''), grupoNome: ehPrivado ? 'Conversa privada' : grupo.nome,
+      telefone: W.normalizarTelefone(b.remetente), solicitante: vinculo ? vinculo.nome : '', glpiId: vinculo ? vinculo.glpiId : null,
+      categoriaId: ehPrivado ? (categoria ? categoria.categoriaId : null) : grupo.categoriaId, texto, tipo,
     };
     let status = 'pendente';
     let erro = '';
     if (!vinculo) status = 'sem_vinculo';
-    else if (cfg.modo === 'observacao') status = 'observado';
+    else if (ehPrivado && !categoria) {
+      status = 'sem_categoria';
+      erro = apelido ? `A categoria "${truncar(apelido, 60)}" não está cadastrada para a conversa privada.` : 'A mensagem não diz a categoria (primeira linha: Categoria Ancore).';
+    } else if (cfg.modo === 'observacao') status = 'observado';
     else if (cfg.operacao === 'so_abrir') {
       if (tokenServico) status = 'abrindo'; // o pedido nasce reservado: mensagem repetida não abre o chamado duas vezes
       else {
@@ -83,7 +100,7 @@ function criarRotasWhatsapp(deps) {
       }
     }
     const { pedido, novo } = await repo.criarPedido({ ...base, status, ticketId: null, erro });
-    const reagir = (st) => (grupo.reagir ? W.reacaoDoStatus(st, cfg.reacoes) : null);
+    const reagir = (st) => (reagirLigado ? W.reacaoDoStatus(st, cfg.reacoes) : null);
     if (!novo) return { status: pedido.status, pedidoId: pedido.id, ticketId: pedido.ticketId, repetida: true, reacao: reagir(pedido.status) };
     if (status !== 'abrindo') return { status, pedidoId: pedido.id, ticketId: null, reacao: reagir(status) };
     try {
@@ -118,7 +135,7 @@ function criarRotasWhatsapp(deps) {
       exigirBot(req);
       const c = (await admin.configAtual()).whatsapp;
       res.set('Cache-Control', 'no-store');
-      res.json({ ativo: c.ativo, modo: c.modo, numeros: c.numeros, reacoes: c.reacoes, grupos: c.grupos.filter((g) => g.ativo).map((g) => ({ id: g.id, nome: g.nome, jid: g.jid, numeroId: g.numeroId, responder: g.responder, reagir: g.reagir })) });
+      res.json({ ativo: c.ativo, modo: c.modo, numeros: c.numeros, reacoes: c.reacoes, privado: { ativo: c.privado.ativo, responder: c.privado.responder, reagir: c.privado.reagir }, grupos: c.grupos.filter((g) => g.ativo).map((g) => ({ id: g.id, nome: g.nome, jid: g.jid, numeroId: g.numeroId, responder: g.responder, reagir: g.reagir })) });
     }));
 
     app.post('/api/whatsapp/bot/mensagem', asyncHandler(async (req, res) => {
@@ -135,7 +152,7 @@ function criarRotasWhatsapp(deps) {
       const cfg = (await admin.configAtual()).whatsapp;
       const pedidos = await repo.eventosDesde(desde);
       const eventos = pedidos.map((p) => {
-        const grupo = cfg.grupos.find((g) => g.id === p.grupoId);
+        const grupo = p.grupoId === 'privado' ? cfg.privado : cfg.grupos.find((g) => g.id === p.grupoId);
         return {
           evento: p.evento, pedidoId: p.id, mensagemId: p.mensagemId, grupoJid: p.grupoJid, grupoNome: p.grupoNome, status: p.status, ticketId: p.ticketId,
           reacao: grupo && !grupo.reagir ? null : W.reacaoDoStatus(p.status, cfg.reacoes),

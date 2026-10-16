@@ -100,11 +100,13 @@ function configPadrao() {
       numeros: [],
       grupos: [],
       remetentesAutorizados: [],
+      privado: { ativo: false, tipos: [], responder: false, reagir: true, categorias: [] },
       reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
     },
   };
 }
 
+const { chaveNome } = require('./whatsapp');
 const texto = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max + 1) : '');
 const soDigitos = (v) => String(v == null ? '' : v).replace(/\D/g, '');
 
@@ -185,6 +187,30 @@ function validarWhatsapp(b) {
     if (!remetentesAutorizados.includes(d)) remetentesAutorizados.push(d);
   }
 
+  // conversa privada: o robô atende pedidos mandados direto para o chip; a categoria do GLPI vem da mensagem ("Categoria Ancore")
+  const pv = w.privado && typeof w.privado === 'object' ? w.privado : {};
+  const pvAtivo = pv.ativo === undefined ? false : pv.ativo;
+  if (typeof pvAtivo !== 'boolean') return { erro: 'whatsapp.privado.ativo deve ser verdadeiro ou falso' };
+  if (pv.tipos !== undefined && !Array.isArray(pv.tipos)) return { erro: 'os tipos da conversa privada devem ser uma lista' };
+  const pvTipos = [...new Set((pv.tipos || []).map(String))];
+  const pvTipoInvalido = pvTipos.find((t) => !CHAVES_TIPOS.has(t));
+  if (pvTipoInvalido) return { erro: `o tipo "${pvTipoInvalido}" da conversa privada não existe` };
+  const pvCatsBrutas = pv.categorias === undefined ? [] : pv.categorias;
+  if (!Array.isArray(pvCatsBrutas) || pvCatsBrutas.length > 100) return { erro: 'whatsapp.privado.categorias deve ser uma lista de até 100 categorias' };
+  const pvCategorias = [];
+  const chavesApelidos = new Set();
+  for (const c of pvCatsBrutas) {
+    if (!c || typeof c !== 'object') return { erro: 'cada categoria da conversa privada deve ser um objeto' };
+    const apelido = texto(c.apelido, 60);
+    if (!apelido || apelido.length > 60 || !chaveNome(apelido)) return { erro: 'cada categoria da conversa privada precisa de um nome de até 60 caracteres' };
+    if (chavesApelidos.has(chaveNome(apelido))) return { erro: `o nome de categoria "${apelido}" está repetido` };
+    chavesApelidos.add(chaveNome(apelido));
+    const categoriaId = Number(c.categoriaId);
+    if (!Number.isInteger(categoriaId) || categoriaId < 1) return { erro: `escolha a categoria do GLPI de "${apelido}"` };
+    pvCategorias.push({ apelido, categoriaId, categoriaLabel: texto(c.categoriaLabel, 300).slice(0, 300) });
+  }
+  const privado = { ativo: pvAtivo, tipos: pvTipos, responder: pv.responder === true, reagir: pv.reagir !== false, categorias: pvCategorias };
+
   const r = w.reacoes && typeof w.reacoes === 'object' ? w.reacoes : {};
   const reacoes = {};
   for (const chave of ['aFazer', 'andamento', 'sucesso', 'erro', 'duvida']) {
@@ -192,7 +218,7 @@ function validarWhatsapp(b) {
     if (typeof v !== 'string' || !v.trim() || [...v.trim()].length > 4) return { erro: `a reação "${chave}" deve ser um emoji` };
     reacoes[chave] = v.trim();
   }
-  return { valor: { ativo, modo, operacao, respostaModelo, numeros, grupos, remetentesAutorizados, reacoes } };
+  return { valor: { ativo, modo, operacao, respostaModelo, numeros, grupos, remetentesAutorizados, privado, reacoes } };
 }
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
