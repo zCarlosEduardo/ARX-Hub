@@ -4,6 +4,8 @@ const { pool, init, waitForDb, rowToAutomation } = require('./db');
 const glpi = require('./glpi');
 const { validarId, validarAutomacao, validarUrlTeste } = require('./validacao');
 const { asyncHandler, ErroHttp, erroFinal } = require('./http');
+const { criarRotasAdmin } = require('./rotasAdmin');
+const { repoPg } = require('./repoAdmin');
 
 const { lerConfig, verificarSenhaProducao } = require('./config');
 const { calcularMudancas } = require('./varredura');
@@ -59,7 +61,8 @@ function invalidarCache() { cacheLista = null; }
 
 async function listarAutomacoes() {
   if (!cacheLista) {
-    const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
+    // ordem escolhida no painel de administração; as que ainda não têm ordem ficam no fim, pelo id
+    const { rows } = await pool.query('SELECT * FROM automations ORDER BY ordem NULLS LAST, id');
     const lista = rows.map(rowToAutomation);
     cacheLista = { lista, json: JSON.stringify(lista) };
   }
@@ -302,6 +305,18 @@ app.get('/api/glpi/history', asyncHandler(async (req, res) => {
     url: glpi.ticketUrl(r.ticket_id),
   })));
 }));
+
+// Administração (painel de configuração): só admins do GLPI. Veja rotasAdmin.js.
+criarRotasAdmin({
+  repo: repoPg(pool),
+  glpi,
+  asyncHandler,
+  ErroHttp,
+  aoMudarOrdem: async () => {
+    invalidarCache();
+    await broadcastAutomations();
+  },
+}).registrar(app);
 
 // Sempre por último: converte qualquer erro das rotas em JSON {error}.
 app.use(erroFinal());
