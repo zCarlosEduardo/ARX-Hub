@@ -65,7 +65,7 @@ const WHATS = {
   numeros: [{ id: 'principal', rotulo: 'Chip dedicado', telefone: '+55 (31) 99999-1234', ativo: true }],
   grupos: [{ id: 'cadastros', nome: 'Cadastro de consultores', jid: '120363000000000000@g.us', numeroId: 'principal', tipos: ['cadastro_consultor', 'bloqueio_acesso'], ativo: true, responder: true, reagir: true }],
   remetentesAutorizados: ['(31) 98888-7777', '5531988887777'],
-  reacoes: { sucesso: '✅', erro: '⚠️', duvida: '❓' },
+  reacoes: { aFazer: '⏳', andamento: '⚙️', sucesso: '✅', erro: '⚠️', duvida: '❓' },
 };
 
 test('whatsapp: configuração completa é normalizada (telefones só com dígitos, sem repetir)', () => {
@@ -133,4 +133,16 @@ test('usuarioDaSessao: GLPI com departamento entre parênteses no sobrenome ("(S
   assert.equal(u.nome, 'Carlos Eduardo de Souza Alonso');
   assert.ok(u.nomes.includes('CARLOS EDUARDO DE SOUZA ALONSO'));
   assert.ok(adminCorrespondente(u, [{ id: 1, glpiId: null, login: '', nome: 'Carlos Eduardo de Souza Alonso' }]));
+});
+
+test('whatsapp: reações de "a fazer" e "em andamento" existem no padrão e podem ser trocadas; configuração antiga sem elas continua válida', () => {
+  const padrao = configPadrao().whatsapp.reacoes;
+  assert.equal(padrao.aFazer, '⏳');
+  assert.equal(padrao.andamento, '⚙️');
+  const antigo = validarSecao('whatsapp', { ...WHATS, reacoes: { sucesso: '✅', erro: '⚠️', duvida: '❓' } });
+  assert.equal(antigo.ok, true, antigo.error);
+  assert.equal(antigo.valor.reacoes.andamento, '⚙️', 'o que faltava usa o padrão');
+  const novo = validarSecao('whatsapp', { ...WHATS, reacoes: { ...WHATS.reacoes, andamento: '🔧' } });
+  assert.equal(novo.valor.reacoes.andamento, '🔧');
+  assert.match(validarSecao('whatsapp', { ...WHATS, reacoes: { andamento: 'ok ok ok ok ok' } }).error, /emoji/);
 });
