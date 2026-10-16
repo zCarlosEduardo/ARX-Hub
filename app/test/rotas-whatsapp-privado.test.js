@@ -62,10 +62,13 @@ test('privado: tipo que não está liberado na conversa privada é ignorado; con
   s.fechar();
 });
 
-test('privado: remetente sem vínculo recebe a dúvida; não autorizado é ignorado', async () => {
+test('privado: remetente sem vínculo é ignorado em silêncio (sem reação e sem registro); não autorizado também', async () => {
   const s = await subir();
   await s.configurar({ operacao: 'so_abrir', privado: privado() });
-  assert.equal((await mensagemPv(s)).json.status, 'sem_vinculo');
+  const r = (await mensagemPv(s)).json;
+  assert.equal(r.status, 'ignorado');
+  assert.equal(r.reacao, undefined);
+  assert.equal(s.repo.e.pedidos.length, 0);
   await s.configurar({ operacao: 'so_abrir', remetentesAutorizados: ['11977776666'], privado: privado() });
   assert.equal((await mensagemPv(s, { mensagemId: 'd' })).json.status, 'ignorado');
   s.fechar();
