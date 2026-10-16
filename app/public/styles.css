@@ -551,3 +551,17 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
   .admin-nav-item { flex-shrink: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .admin-corpo { animation: none; } .admin-nav-item { transition: none; } }
+
+/* cartões do Painel: o botão Abrir fica sempre na base, então as linhas de cartões alinham mesmo com descrições de tamanhos diferentes */
+.card-open-btn { margin-top: auto !important; }
+
+/* cabeçalho no celular: as abas (Painel, Chamados, Resultados, Administração) têm a primeira linha só para elas e a busca
+   e os botões descem para a segunda; antes a coluna da direita ocupava tudo e as abas sumiam */
+@media (max-width: 760px) {
+  .hub-header { flex-wrap: wrap !important; height: auto !important; padding: 8px 12px !important; gap: 6px 8px !important; }
+  .hub-header-left { order: 0; flex: 1 1 100% !important; overflow-x: auto !important; scrollbar-width: none; }
+  .hub-header-left::-webkit-scrollbar { display: none; }
+  .hub-header-spacer { display: none !important; }
+  .hub-header-right { order: 1; flex: 1 1 100% !important; flex-wrap: wrap; gap: 8px !important; }
+  .hub-search { flex: 1 1 150px; width: auto !important; min-width: 0; }
+}

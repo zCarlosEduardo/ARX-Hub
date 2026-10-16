@@ -622,8 +622,8 @@
       ]) : null,
     ]) : null;
 
-    const header = e('div', { style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
-      e('div', { key: 'left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
+    const header = e('div', { className: 'hub-header', style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
+      e('div', { key: 'left', className: 'hub-header-left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
         e('button', {
           key: 'panel', className: 'panel-tab' + (abaFixaAtiva('painel') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
           title: 'Painel', 'aria-label': 'Painel',
@@ -645,9 +645,9 @@
         navScroll,
       ]),
       tabsMenu,
-      e('div', { key: 'spacer', style: { flex: 1, minWidth: 20 } }),
-      e('div', { key: 'right', style: sx('display:flex;align-items:center;gap:16px;flex-shrink:0') }, [
-        e('div', { key: 'search', className: 'search-box', style: sx('display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;flex-shrink:0;width:220px') }, [
+      e('div', { key: 'spacer', className: 'hub-header-spacer', style: { flex: 1, minWidth: 20 } }),
+      e('div', { key: 'right', className: 'hub-header-right', style: sx('display:flex;align-items:center;gap:16px;flex-shrink:0') }, [
+        e('div', { key: 'search', className: 'search-box hub-search', style: sx('display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;flex-shrink:0;width:220px') }, [
           Icon('Search', 15, 'var(--muted-soft)'),
           e('input', {
             key: 'input', ref: searchRef, value: search, onChange: (ev) => setSearch(ev.target.value),
