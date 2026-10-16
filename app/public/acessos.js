@@ -65,7 +65,8 @@
   // Estado do cofre: 'indisponivel' (sem storage), 'sem' (nada guardado), 'legado' (acessos antigos em texto puro, ainda sem
   // cofre), 'travado' (cofre existe, falta a senha mestra) ou 'aberto'.
   function estadoInicial() {
-    if (!cofre) return 'indisponivel';
+    // sem storage, ou sem como cifrar nesta página (nem WebCrypto nem o motor de reserva): os acessos valem só nesta sessão
+    if (!cofre || !cofre.disponivel()) return 'indisponivel';
     if (cofre.existe()) return cofre.aberto() ? 'aberto' : 'travado';
     return temSegredo(normalizar(lerGuardado())) ? 'legado' : 'sem';
   }
@@ -517,6 +518,7 @@
           modo === 'trocar' ? campoSenha('Senha mestra atual', senha, setSenha, { autoFocus: true }) : null,
           modo === 'trocar' ? campoSenha('Nova senha mestra', nova, setNova) : null,
           modo === 'trocar' ? campoSenha('Repita a nova senha mestra', confirmar, setConfirmar) : null,
+          ocupado && cofre.motor === 'reserva' ? e('div', { key: 'lento', className: 'cofre-lento', style: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 } }, 'Calculando a chave de segurança. Neste endereço (sem HTTPS) isso leva alguns segundos.') : null,
           erro ? e('div', { key: 'err', className: 'cofre-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
           e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
             e('button', { key: 'ok', type: 'button', className: 'cofre-ok', disabled: ocupado, style: { ...S.btnPrim, flex: 1, opacity: ocupado ? 0.7 : 1 }, onClick: enviar },
