@@ -286,3 +286,26 @@ test('proteção contra dado antigo: automático e rodar conferem lista.guardado
   assert.match(src, /if \(lista\.guardado\) return;/);
   assert.match(src, /const prontosTodos = lista\.guardado \? \[\]/);
 });
+
+test('identidade liberável no manual: aviso com orientação, sem bloquear o clique, e fora do automático', () => {
+  const tem = () => true;
+  const LIBERAVEL = { ok: false, regra: null, motivo: 'o solicitante não é da gestão de nenhum departamento (função: Analista)', liberavelManual: true };
+  const item = alterar(LIBERAVEL);
+  const a = avisoSenha(item);
+  assert.equal(a.liberavel, true);
+  assert.match(a.texto, /rode manualmente/);
+  assert.equal(bloqueioSenha(item, tem), null, 'o clique manual fica liberado');
+  assert.match(bloqueioSenha(item, () => false), /Marque/, 'o login do SGA continua exigido');
+  assert.equal(window.ChamadosSenhas.deveExcluirDoAutomatico(item), true);
+  assert.equal(window.ChamadosSenhas.montarPedidoItem(item, { manual: true }).confirmado, true);
+  assert.equal(window.ChamadosSenhas.montarPedidoItem(item, { manual: false }).confirmado, undefined);
+  assert.equal(window.ChamadosSenhas.deveExcluirDoAutomatico(alterar(OK_PROPRIA)), false);
+  assert.ok(bloqueioSenha(alterar({ ...LIBERAVEL, liberavelManual: false }), tem), 'quando cita outra pessoa não identificada continua bloqueado');
+});
+
+test('diagnóstico da planilha aparece no card sem CPF', () => {
+  const item = alterar({ ok: false, regra: null, motivo: 'x', liberavelManual: true });
+  item.diagnosticoPlanilha = { solicitante: { estado: 'unica', nome: 'JOANA SANTOS', funcao: 'ANALISTA', departamento: 'CADASTRO' }, alvo: { estado: 'nenhuma' } };
+  const txt = JSON.stringify(window.ChamadosSenhas.detalhesSenha(item), (k, v) => (typeof v === 'function' ? undefined : v));
+  assert.match(txt, /Planilha de funcionários: solicitante JOANA SANTOS \(função ANALISTA, departamento CADASTRO\); alvo não encontrado/);
+});
