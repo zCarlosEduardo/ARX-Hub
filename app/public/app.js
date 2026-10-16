@@ -657,6 +657,8 @@
         // alertas.js (sino) e acessos.js (Meus acessos): componentes próprios
         window.AlertasSino ? e(window.AlertasSino, { key: 'alertas' }) : null,
         window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'acessos' }) : null,
+        // admin.js: botão "Administração", só aparece para quem é administrador (identificado pelo token do GLPI)
+        window.AdminBotao ? e(window.AdminBotao, { key: 'admin' }) : null,
         e('div', { key: 'health', style: sx('display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;flex-shrink:0') }, [
           e('span', { key: 'dot', className: 'pulse-dot', style: { position: 'relative', width: 7, height: 7, borderRadius: '50%', background: healthDotColor, color: healthDotColor } }),
           e('span', { key: 'label' }, online + '/' + total + ' online'),

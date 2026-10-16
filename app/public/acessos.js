@@ -894,6 +894,8 @@
     empresas: listaEmpresas,
     dadosParaAutomacoes,
     EditorAcessos,
+    // estilo e campos compartilhados com o painel de administração (admin.js)
+    ui: { S, campo, inp, iconeChave },
     definirToken,
     estadoCofre: () => estadoCofre,
     aoMudarCofre,
