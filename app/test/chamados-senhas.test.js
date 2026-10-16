@@ -214,7 +214,11 @@ test('modo automático e lote: nenhum item somenteManual entra (lê o código)',
   const src = fs.readFileSync(path.join(PUBLIC, 'chamados.js'), 'utf8');
   const usos = src.match(/deveExcluirDoAutomatico\(i\)/g) || [];
   assert.equal(usos.length, 2, 'automático e "Rodar todos os prontos"');
-  assert.match(src, /rodar\(lote\)/);
+  // o lote do automático só roda depois de reservado no servidor (vários computadores sem duplicar): roda só o que foi reservado
+  assert.match(src, /\/api\/auto\/reservar/);
+  assert.match(src, /const meus = lote\.filter\(\(i\) => r\.reservados\.includes\(i\.id\)\)/);
+  assert.match(src, /rodar\(meus\)/);
+  assert.ok(!/rodar\(lote\)/.test(src), 'nunca roda o lote inteiro sem reservar');
   assert.match(src, /onClick: \(\) => rodar\(\[item\], \{ manual: true \}\)/);
 });
 

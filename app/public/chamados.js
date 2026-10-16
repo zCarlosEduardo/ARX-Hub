@@ -34,7 +34,7 @@
   }
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
-  // identifica esta aba pro servidor (a "vaga" do modo automático é de um computador de cada vez)
+  // identifica esta aba pro servidor (cada computador no modo automático reserva os chamados que vai pegar)
   const CLIENTE_ID = (() => {
     const novo = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
     try {
@@ -544,7 +544,7 @@
       gravar(KEY_DISPENSADOS, novo);
     }
 
-    /** Pega a vaga do automático no servidor (só um computador de cada vez) e liga. */
+    /** Registra este computador no automático (vários podem estar ligados; o servidor limita e reserva chamado a chamado) e liga. */
     async function ligarAuto() {
       try {
         await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome });
@@ -555,7 +555,7 @@
         mudarAuto({ ativo: false });
       }
     }
-    // com o automático ligado: renova a vaga a cada 30 s (se perder, desliga); ao desligar/fechar, solta
+    // com o automático ligado: renova a presença a cada 30 s (se o servidor recusar, desliga); ao desligar/fechar, solta e libera as reservas
     useEffect(() => {
       if (!auto.ativo) return undefined;
       const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).catch((err) => {
@@ -625,7 +625,28 @@
         .slice(0, auto.limite);
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
-      rodar(lote);
+      // Vários computadores podem estar no automático: antes de rodar, RESERVA no servidor (atômico) os chamados deste lote.
+      // O que outro computador já pegou é descartado aqui. Se o controle (Redis) estiver fora do ar, o automático para.
+      (async () => {
+        const nome = lista.usuario && lista.usuario.nome;
+        const reservar = () => api('/api/auto/reservar', { clienteId: CLIENTE_ID, ids: lote.map((i) => i.id) });
+        try {
+          let r;
+          try {
+            r = await reservar();
+          } catch (err) {
+            if (!/^Assuma/.test(err.message)) throw err;
+            await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: nome }); // o servidor reiniciou e esqueceu este computador
+            r = await reservar();
+          }
+          const meus = lote.filter((i) => r.reservados.includes(i.id));
+          lote.filter((i) => !r.reservados.includes(i.id)).forEach((i) => autoRef.current.delete(i.id)); // com outro computador: reavalia depois
+          if (meus.length) rodar(meus);
+        } catch (err) {
+          lote.forEach((i) => autoRef.current.delete(i.id));
+          setErroAuto(err.message);
+        }
+      })();
     }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
 
     if (!pronto) {
