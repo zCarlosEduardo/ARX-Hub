@@ -298,7 +298,7 @@
       ]),
       e('div', { key: 'reacoes' }, [
         rotulo('Reações usadas nas mensagens'),
-        e('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 4 } }, [['sucesso', 'Deu certo'], ['erro', 'Deu erro'], ['duvida', 'Faltou dado']].map(([k, t]) =>
+        e('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginTop: 4 } }, [['aFazer', 'A fazer (pedido recebido)'], ['andamento', 'Em andamento'], ['sucesso', 'Deu certo'], ['erro', 'Deu erro'], ['duvida', 'Faltou dado']].map(([k, t]) =>
           e('div', { key: k }, [e('div', { style: { fontSize: 11.5, color: 'var(--muted)', marginBottom: 3 } }, t), campoTexto(w.reacoes[k], (v) => mudar((x) => ((x.reacoes[k] = v), x)), '', { textAlign: 'center' })]))),
       ]),
       rodape(salvar, salvando, erro, ok),
@@ -306,7 +306,7 @@
   }
 
   // ---------- tela ----------
-  const ABAS = [['cofre', 'Cofre'], ['admins', 'Administradores'], ['automacoes', 'Automações'], ['whatsapp', 'WhatsApp']];
+  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['whatsapp', 'WhatsApp', 'MessageCircle']];
 
   function AdminView() {
     const [aba, setAba] = useState('cofre');
@@ -325,14 +325,16 @@
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
 
-    return e('div', { className: 'admin-tela', style: { maxWidth: 860, margin: '0 auto', padding: '24px 20px 40px', color: 'var(--text)' } }, [
+    return e('div', { className: 'admin-tela', style: { maxWidth: 1040, margin: '0 auto', padding: '24px 20px 40px', color: 'var(--text)' } }, [
       e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } }, [
         e('span', { key: 'i', className: 'glpi-head-icon' }, Icon('Settings', 16)),
         e('h1', { key: 't', style: { margin: 0, fontWeight: 600, fontSize: 18 } }, 'Administração do Hub'),
       ]),
-      e('div', { key: 'abas', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 } }, ABAS.map(([k, t]) =>
-        e('button', { key: k, type: 'button', className: `admin-aba admin-aba-${k}`, style: S().chip(aba === k), onClick: () => setAba(k) }, t))),
-      e('div', { key: 'corpo', style: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 } }, corpo),
+      e('div', { key: 'grade', className: 'admin-grid' }, [
+        e('nav', { key: 'nav', className: 'admin-nav', 'aria-label': 'Seções da administração' }, ABAS.map(([k, t, ic]) =>
+          e('button', { key: k, type: 'button', className: `admin-nav-item admin-aba admin-aba-${k}` + (aba === k ? ' ativo' : ''), 'aria-current': aba === k ? 'page' : undefined, onClick: () => setAba(k) }, [Icon(ic, 16), e('span', { key: 't' }, t)]))),
+        e('div', { key: 'corpo', className: 'admin-corpo' }, corpo),
+      ]),
     ]);
   }
 

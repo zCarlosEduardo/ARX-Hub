@@ -96,7 +96,7 @@ function configPadrao() {
       numeros: [],
       grupos: [],
       remetentesAutorizados: [],
-      reacoes: { sucesso: '✅', erro: '⚠️', duvida: '❓' },
+      reacoes: { aFazer: '⏳', andamento: '⚙️', sucesso: '✅', erro: '⚠️', duvida: '❓' },
     },
   };
 }
@@ -174,7 +174,7 @@ function validarWhatsapp(b) {
 
   const r = w.reacoes && typeof w.reacoes === 'object' ? w.reacoes : {};
   const reacoes = {};
-  for (const chave of ['sucesso', 'erro', 'duvida']) {
+  for (const chave of ['aFazer', 'andamento', 'sucesso', 'erro', 'duvida']) {
     const v = r[chave] === undefined ? padrao.reacoes[chave] : r[chave];
     if (typeof v !== 'string' || !v.trim() || [...v.trim()].length > 4) return { erro: `a reação "${chave}" deve ser um emoji` };
     reacoes[chave] = v.trim();
