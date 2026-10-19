@@ -42,7 +42,7 @@ services:
     # Tutoriais em vídeo do botão "?" (pasta fora do Git): TUTORIAIS_DIR no .env aponta para a pasta videos gerada
     # em Documentacao-Automacoes; sem ela, o Hub sobe igual e o botão não aparece.
     volumes:
-      - ${TUTORIAIS_DIR:-./tutoriais}:/usr/src/app/tutoriais:ro
+      - ${TUTORIAIS_DIR:-./tutoriais-videos}:/usr/src/app/tutoriais:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
