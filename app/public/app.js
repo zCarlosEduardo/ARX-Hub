@@ -656,7 +656,8 @@
           }),
           e('span', { key: 'kbd', style: sx("font-family:'JetBrains Mono',monospace;font-size:10.5px;background:var(--secondary);border:1px solid var(--border);border-radius:5px;padding:2px 5px;color:var(--muted-soft);flex-shrink:0") }, 'Ctrl K'),
         ]),
-        // alertas.js (sino) e acessos.js (Meus acessos): componentes próprios
+        // ajuda.js (?), alertas.js (sino) e acessos.js (Meus acessos): componentes próprios
+        window.AjudaBotao ? e(window.AjudaBotao, { key: 'ajuda', aba: activeTabId === null ? abaFixa : null }) : null,
         window.AlertasSino ? e(window.AlertasSino, { key: 'alertas' }) : null,
         window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'acessos' }) : null,
         e('div', { key: 'health', style: sx('display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;flex-shrink:0') }, [
