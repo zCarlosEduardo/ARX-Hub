@@ -40,6 +40,13 @@ app.get(['/', '/index.html'], (req, res, next) => {
   res.send(indexComVersao);
 });
 
+// Tutoriais em vídeo do botão "?" (Hub e automações): pasta montada no container, fora do Git (mídia pesada).
+// CORS aberto porque as automações, em outras portas, leem o índice tutoriais.json daqui.
+app.use('/tutoriais', (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(process.env.TUTORIAIS_DIR || path.join(__dirname, 'tutoriais'), { maxAge: '1h', fallthrough: false }));
+
 // /vendor e /assets têm nome sem hash: cache de 1 dia. O resto (js/css/html do
 // app) revalida por ETag a cada carga, para uma nova versão chegar sem limpar cache.
 app.use(express.static(path.join(__dirname, 'public'), {

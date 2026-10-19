@@ -39,6 +39,10 @@ services:
       WHATSAPP_BOT_TOKEN: ${WHATSAPP_BOT_TOKEN:-}
       HUB_GLPI_TOKEN_SERVICO: ${HUB_GLPI_TOKEN_SERVICO:-}
       CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://host.docker.internal:4013}
+    # Tutoriais em vídeo do botão "?" (pasta fora do Git): TUTORIAIS_DIR no .env aponta para a pasta videos gerada
+    # em Documentacao-Automacoes; sem ela, o Hub sobe igual e o botão não aparece.
+    volumes:
+      - ${TUTORIAIS_DIR:-./tutoriais}:/usr/src/app/tutoriais:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
