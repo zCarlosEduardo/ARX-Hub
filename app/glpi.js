@@ -122,4 +122,26 @@ async function createTicket(userToken, { titulo, descricao, categoriaId, requere
   });
 }
 
-module.exports = { fetchLookup, createTicket, ticketUrl, sanitizar };
+/** Situação do chamado no GLPI (1 novo ... 5 solucionado, 6 fechado), lida com o token informado. */
+async function statusChamado(userToken, ticketId) {
+  return withSession(userToken, async (sessionToken) => {
+    const t = await glpiFetch(`/Ticket/${Number(ticketId)}`, { headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken } });
+    return Number(t && t.status);
+  });
+}
+
+/**
+ * Quem é a pessoa dona do token (GET /getFullSession): { id, login, nome, nomes } ou erro. Serve para o painel de
+ * administração saber se ela está na lista de admins. O token não é guardado nem logado.
+ */
+async function identificarUsuario(userToken) {
+  const { usuarioDaSessao } = require('./admin');
+  return withSession(userToken, async (sessionToken) => {
+    const sessao = await glpiFetch('/getFullSession', { method: 'GET', headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken } });
+    const usuario = usuarioDaSessao(sessao);
+    if (!usuario) throw new Error('O GLPI não informou quem é o dono do token.');
+    return usuario;
+  });
+}
+
+module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, ticketUrl, sanitizar, identificarUsuario };

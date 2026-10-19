@@ -11,9 +11,30 @@
   const { Icon } = window.Icons;
 
   const Hub = window.ArxAcessosHub; // acessos.js: dono dos acessos do Hub
+  const Cache = window.ChamadosCache; // chamados-cache.js: pré-carga e lista em memória/localStorage
+  const TEXTO_AGUARDANDO = 'Aguardando a atualização da lista';
+
+  /** Forma de `lista` usada pela tela, a partir do estado do cache. `guardado`: lista antiga, ainda não confirmada. */
+  function listaDoCache(s) {
+    const d = s.dados;
+    return {
+      carregando: s.carregando,
+      erro: s.erro,
+      itens: d ? d.itens : [],
+      usuario: d ? d.usuario : null,
+      outros: d ? d.outros : 0,
+      totalAbertos: d ? d.totalAbertos : 0,
+      perfis: d ? d.perfis || [] : [],
+      entidades: d ? Cache.puro.entidadesDaLista(d) : [],
+      tempos: s.tempos,
+      em: s.em,
+      guardado: !!d && !s.fresco,
+      aoVivo: !!s.aoVivo,
+    };
+  }
   const KEY_DISPENSADOS = 'arxhub_chamados_dispensados';
   const KEY_MODO_TESTE = 'arxhub_chamados_modo_teste';
-  // identifica esta aba pro servidor (a "vaga" do modo automático é de um computador de cada vez)
+  // identifica esta aba pro servidor (cada computador no modo automático reserva os chamados que vai pegar)
   const CLIENTE_ID = (() => {
     const novo = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
     try {
@@ -42,6 +63,111 @@
   };
   const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const dataBr = (s) => (s ? new Date(String(s).replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+
+  // ---------- pedidos de senha (senha_sistemas, alterar_senha_sga e desbloquear_usuario_sga) ----------
+  // trocar a senha e desbloquear o usuário do SGA usam o mesmo card (requerente, alvo, identidade); só a ação muda
+  const ehSenhaSga = (item) => !!item && (item.tipo === 'alterar_senha_sga' || item.tipo === 'desbloquear_usuario_sga');
+  const NOMES_SISTEMA = { crm: 'CRM (PowerCRM)', ezchat: 'EzChat', wint: 'Wint', mundiale: 'Mundiale', chat: 'Chat', sga: 'SGA' };
+  const nomeSistema = (chave) => NOMES_SISTEMA[chave] || String(chave);
+  const SELOS_REGRA = { mesma_pessoa: 'Própria pessoa', gestao: 'Gestão do departamento' };
+  const textoOuNaoInformado = (v) => (v === null || v === undefined || String(v).trim() === '' ? 'Não informado' : String(v));
+
+  const ESTADOS_PLANILHA = { unica: 'achado', ambigua: 'mais de uma pessoa com esse nome', inativa: 'consta como inativo', nenhuma: 'não encontrado', planilha_indisponivel: 'planilha indisponível' };
+  const descreverPessoa = (p) => (!p ? 'Não informado' : p.estado === 'unica' ? `${textoOuNaoInformado(p.nome)} (função ${textoOuNaoInformado(p.funcao)}, departamento ${textoOuNaoInformado(p.departamento)})` : ESTADOS_PLANILHA[p.estado] || 'Não informado');
+  /** O que a planilha de funcionários achou do solicitante e do alvo (null = servidor antigo, sem o campo). */
+  function textoDiagnosticoPlanilha(d) {
+    if (!d) return null;
+    return `Planilha de funcionários: solicitante ${descreverPessoa(d.solicitante)}; alvo ${descreverPessoa(d.alvo)}.`;
+  }
+
+  /** Aviso do card "Alterar senha do SGA": só existe quando a identidade não foi confirmada. */
+  function avisoSenha(item) {
+    if (!ehSenhaSga(item)) return null;
+    const id = item.identidade;
+    if (id && id.ok === true) return null;
+    if (id && id.liberavelManual === true) return { motivo: textoOuNaoInformado(id.motivo), texto: 'Não roda no automático. Confira o chamado e rode manualmente se o pedido for legítimo', liberavel: true };
+    return { motivo: textoOuNaoInformado(id && id.motivo), texto: 'Este chamado não será executado' };
+  }
+
+  // ---------- confirmação manual (chamado identificado só pela descrição) ----------
+  const MOTIVO_PADRAO_CONFIANCA = 'pedido identificado pela descrição';
+
+  /** Rótulo do chip do card (null = confiança alta ou serviço sem o campo). */
+  function rotuloConfianca(item) {
+    return item && item.somenteManual === true ? 'Confirmação manual' : null;
+  }
+
+  /** Itens somenteManual nunca entram no modo automático nem em "Rodar todos os prontos". */
+  function deveExcluirDoAutomatico(item) {
+    return !!item && (item.somenteManual === true || (ehSenhaSga(item) && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
+  }
+
+  /** Textos do aviso âmbar do card (null = sem aviso). */
+  function avisoConfianca(item) {
+    if (!rotuloConfianca(item)) return null;
+    const motivo = String(item.motivoConfianca || '').trim() || MOTIVO_PADRAO_CONFIANCA;
+    return { titulo: `Confirmação manual: ${motivo}`, orientacao: 'Revise o chamado antes de rodar. Este item não entra no modo automático.' };
+  }
+
+  /** Objeto do item enviado ao serviço. `confirmado: true` só no clique manual de um item somenteManual. */
+  function montarPedidoItem(item, { manual = false, campos = {} } = {}) {
+    const pedido = { id: item.id, ...campos };
+    if (manual === true && deveExcluirDoAutomatico(item)) pedido.confirmado = true;
+    return pedido;
+  }
+
+  /** Motivo que impede de rodar um pedido de senha (null = liberado). `temLoginSga(chave)` diz se há login do SGA para a empresa. */
+  function bloqueioSenha(item, temLoginSga) {
+    if (!ehSenhaSga(item)) return null;
+    const aviso = avisoSenha(item);
+    if (aviso && !aviso.liberavel) return 'Identidade não confirmada: este chamado não será executado';
+    if (!item.empresaSga || !temLoginSga(item.empresaSga.chave)) return `Marque ${item.empresaSga ? item.empresaSga.nome : item.categoria} em um login do SGA (Acessos)`;
+    return null;
+  }
+
+  /** Bloco de detalhes do card dos dois tipos de senha. */
+  function detalhesSenha(item) {
+    const caixa = { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 };
+    const rotulo = (chave, t) => e('div', { key: chave, style: { ...S.label, marginBottom: 0 } }, t);
+    const chips = (lista, chave) => e('div', { key: chave, role: 'list', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+      lista.map((s) => e('span', { key: s, role: 'listitem', style: { ...S.chip(false), cursor: 'default' } }, nomeSistema(s))));
+    const sistemas = Array.isArray(item.sistemas) ? item.sistemas : [];
+    const listaSistemas = sistemas.length ? chips(sistemas, 'sis') : e('div', { key: 'sis', style: { color: 'var(--muted)' } }, 'Não informado');
+    if (item.tipo === 'senha_sistemas') {
+      return e('div', { key: 'det', style: caixa }, [
+        rotulo('l', 'Sistemas citados'),
+        listaSistemas,
+        e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Responde com o texto "Esqueci minha senha" e soluciona o chamado. Nenhuma senha é alterada.'),
+      ]);
+    }
+    const alvo = item.senhaAlvo || {};
+    const outros = Array.isArray(item.outrosSistemas) ? item.outrosSistemas : [];
+    const aviso = avisoSenha(item);
+    const diagnostico = textoDiagnosticoPlanilha(item.diagnosticoPlanilha);
+    const regra = item.identidade && item.identidade.ok === true ? SELOS_REGRA[item.identidade.regra] : null;
+    const bloco = (chave, titulo, linhas) => e('div', { key: chave, style: { minWidth: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 2, overflowWrap: 'anywhere' } }, [
+      e('div', { key: 'l', style: { ...S.label, marginBottom: 2 } }, titulo),
+      ...linhas.map((x, i) => e('div', { key: i, style: i === 0 ? { fontWeight: 600 } : { color: 'var(--muted)', fontSize: 12 } }, x)),
+    ]);
+    return e('div', { key: 'det', style: caixa }, [
+      e('div', { key: 'par', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } }, [
+        bloco('req', 'Requerente', [textoOuNaoInformado(item.requerente)]),
+        bloco('alvo', 'Usuário alvo', [textoOuNaoInformado(alvo.nome), `Usuário ${textoOuNaoInformado(alvo.usuario)}`, `CPF ${textoOuNaoInformado(alvo.cpfMascarado)}`]),
+      ]),
+      regra ? e('div', { key: 'selo', style: { display: 'flex' } }, e('span', { style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--accent-soft)', color: 'var(--accent-fg)' } }, regra)) : null,
+      diagnostico ? e('div', { key: 'diag', style: { color: 'var(--muted)', fontSize: 12 } }, diagnostico) : null,
+      aviso ? e('div', { key: 'aviso', role: 'alert', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 2 } }, [
+        e('div', { key: 'm' }, aviso.motivo),
+        e('strong', { key: 't' }, aviso.texto),
+      ]) : null,
+      e('div', { key: 'emp' }, [e('span', { key: 'l', style: { color: 'var(--muted)' } }, 'Empresa no SGA: '), e('strong', { key: 'n' }, textoOuNaoInformado(item.empresaSga && item.empresaSga.nome))]),
+      rotulo('sl', 'Sistemas citados'),
+      listaSistemas,
+      outros.length ? rotulo('ol', 'Recebem só a orientação "Esqueci minha senha"') : null,
+      outros.length ? chips(outros, 'out') : null,
+      e('div', { key: 'p', style: { color: 'var(--muted)' } }, item.tipo === 'desbloquear_usuario_sga' ? 'Desbloqueia o usuário alvo no SGA e soluciona o chamado. A senha não é alterada.' : 'Troca a senha do usuário alvo no SGA e soluciona o chamado. A senha não passa pelo Hub.'),
+    ]);
+  }
 
   /** Copia texto pra área de transferência (o Hub abre em http: sem navigator.clipboard, então cai no execCommand). */
   async function copiarTexto(texto) {
@@ -80,7 +206,7 @@
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor }),
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };
-  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', foto_perfil: '#D946EF' };
+  const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', ativacao_consultor: '#10B981', desbloquear_usuario_sga: '#0EA5E9', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#14B8A6', erro_exportar_modelo: '#0EA5E9', senha_crm: '#64748B', senha_sistemas: '#64748B', alterar_senha_sga: '#06B6D4', foto_perfil: '#D946EF', sincronizar_vistoria: '#F97316' };
 
   /** Login do SGA que cobre a empresa (o primeiro que a tiver marcada). */
   const loginDaEmpresa = (sgas, chave) => Hub.loginDaEmpresa(sgas, chave);
@@ -217,7 +343,9 @@
   // ---------- Aba ----------
   function ChamadosView() {
     const [acessos, setAcessos] = useState(Hub.ler);
-    const [lista, setLista] = useState({ carregando: false, erro: null, itens: [], usuario: null, outros: 0, totalAbertos: 0, perfis: [], em: null });
+    // a lista vem do cache (pré-carga): ao montar já mostra o que existir; `setLista` só acompanha o cache
+    const [lista, setLista] = useState(listaDoCache(Cache.store.estado()));
+    const [filtroEntidade, setFiltroEntidade] = useState(''); // '' = todas
     const [dispensados, setDispensados] = useState(() => ler(KEY_DISPENSADOS, []));
     const [verOutros, setVerOutros] = useState(false);
     const [modoTeste, setModoTeste] = useState(() => ler(KEY_MODO_TESTE, true));
@@ -230,9 +358,13 @@
     const [logsAbertos, setLogsAbertos] = useState({});
     const [confirmandoTodos, setConfirmandoTodos] = useState(false);
     // Modo automático: com a chave ligada, roda sozinho os chamados prontos, até "limite" por vez
-    const [auto, setAuto] = useState(() => ({ limite: 5, fora: [], ...ler(KEY_AUTO, {}), ativo: false }));
+    // (a escolha de "tipos que rodam sozinhos" foi retirada: o que estiver guardada dela é ignorado)
+    const [auto, setAuto] = useState(() => { const guardado = { ...ler(KEY_AUTO, {}) }; delete guardado.fora; return { limite: 5, ...guardado, ativo: false }; });
     const [confirmandoAuto, setConfirmandoAuto] = useState(false);
     const [erroAuto, setErroAuto] = useState('');
+    const [computadoresAuto, setComputadoresAuto] = useState([]); // nomes de quem está com o automático ligado (todos os computadores)
+    const [ultimoAuto, setUltimoAuto] = useState(null); // última rodada deste computador: { hora, quantos }
+    const [filaWhatsapp, setFilaWhatsapp] = useState(0); // pedidos do WhatsApp esperando alguém abrir o chamado
     const [verChamado, setVerChamado] = useState(null); // chamado aberto no painel "Ver chamado"
     const [linkCopiado, setLinkCopiado] = useState(null); // id do chamado cujo link acabou de ser copiado
     const copiarLink = async (item) => {
@@ -241,11 +373,11 @@
         setTimeout(() => setLinkCopiado((x) => (x === item.id ? null : x)), 2500);
       }
     };
-    const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 30 s)
+    const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 8 s)
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
       const n = { ...a, ...campos };
-      gravar(KEY_AUTO, { limite: n.limite, fora: n.fora });
+      gravar(KEY_AUTO, { limite: n.limite });
       return n;
     });
     const fontesRef = useRef(new Map());
@@ -253,42 +385,43 @@
     const rodandoAlgo = Object.values(execucoes).some((x) => !x.fim);
     const execDoChamado = (id) => Object.values(execucoes).find((x) => !x.fim && x.ids.includes(id)) || null;
     const pronto = !!acessos.pronto;
+    const mostrarEntidade = lista.entidades.length > 1; // com uma entidade só nada novo aparece
+    const entidadeAtiva = mostrarEntidade && lista.entidades.includes(filtroEntidade) ? filtroEntidade : '';
 
     // salvo em "Meus acessos" (cabeçalho), no botão "Acessos" daqui ou em outra aba
     useEffect(() => Hub.aoMudar(setAcessos), []);
 
-    const buscar = useCallback(async () => {
-      if (!acessos.userToken) return;
-      setLista((l) => ({ ...l, carregando: true, erro: null }));
-      try {
-        const d = await api('/api/chamados', { glpi: { userToken: acessos.userToken } });
-        assinaturaRef.current = d.assinatura || '';
-        setLista({ carregando: false, erro: null, itens: d.itens, usuario: d.usuario, outros: d.outros, totalAbertos: d.totalAbertos, perfis: d.perfis || [], em: new Date() });
-      } catch (err) {
-        setLista((l) => ({ ...l, carregando: false, erro: err.message }));
-      }
-    }, [acessos.userToken]);
+    // acompanha o cache: pré-carga, lista guardada, lista nova e erro chegam por aqui
+    useEffect(() => {
+      const aplicar = (s) => { assinaturaRef.current = s.assinatura || ''; setLista(listaDoCache(s)); };
+      aplicar(Cache.store.estado());
+      return Cache.store.assinar(aplicar);
+    }, []);
 
-    // puxa ao entrar e de 2 em 2 minutos (menos durante uma execução)
+    // uma busca por vez, no cache (a mesma da pré-carga); a assinatura conhecida vai junto
+    const buscar = useCallback(() => Cache.store.buscar(), []);
+
+    // ao entrar só busca se a lista não for fresca (a pré-carga já costuma ter trazido); depois, polling leve
     useEffect(() => {
       if (!pronto) return undefined;
-      buscar();
-      // a cada 30 s só pergunta ao servidor se algo mudou no GLPI (1 busca leve) e recarrega a lista
-      // inteira só se mudou; por segurança recarrega tudo a cada 5 min mesmo sem mudança
+      Cache.store.garantir();
+      // a cada 8 s (reserva do webhook, que o GLPI só entrega a cada ~1 min) só pergunta ao servidor se algo mudou no
+      // GLPI (1 busca leve) e recarrega a lista inteira só se mudou; com a aba escondida não pergunta; por segurança
+      // recarrega tudo a cada ~5 min mesmo sem mudança
       let volta = 0;
       const t = setInterval(async () => {
-        if (fontesRef.current.size) return;
+        if (fontesRef.current.size || document.hidden) return;
         volta++;
         try {
           const m = await api('/api/mudou', { glpi: { userToken: acessos.userToken } });
           setVerificadoEm(new Date());
-          if (volta % 10 === 0 || m.assinatura !== assinaturaRef.current) buscar();
+          if (volta % 38 === 0 || m.assinatura !== assinaturaRef.current) buscar();
         } catch {
           // servidor fora por um instante: tenta de novo no próximo ciclo
         }
-      }, 30000);
+      }, 8000);
       return () => clearInterval(t);
-    }, [pronto, buscar]);
+    }, [pronto, buscar, acessos.userToken]);
     useEffect(() => () => fontesRef.current.forEach((f) => f.close()), []);
 
     const escolha = (item) => {
@@ -311,6 +444,7 @@
 
     /** O que ainda falta escolher no card pra poder rodar. */
     function falta(item) {
+      if (ehSenhaSga(item)) return bloqueioSenha(item, (chave) => !!loginDaEmpresa(acessos.sgas, chave));
       if (item.altStatus) {
         const precisaSga = item.altStatus.bases.some((b) => b.temSga);
         if (precisaSga && (!item.empresaSga || !loginDaEmpresa(acessos.sgas, item.empresaSga.chave))) {
@@ -356,9 +490,11 @@
       return null;
     }
 
-    async function rodar(itensParaRodar) {
+    // `manual`: execução pedida por clique em UM chamado (único caso que envia `confirmado`)
+    async function rodar(itensParaRodar, { manual = false } = {}) {
       setConfirmando(null);
       setConfirmandoTodos(false);
+      if (lista.guardado) return; // nunca roda em cima da lista guardada (pode estar desatualizada)
       const ids = itensParaRodar.map((x) => x.id);
       try {
         const d = await api('/api/executar', {
@@ -370,7 +506,7 @@
           modoTeste,
           itens: itensParaRodar.map((item) => {
             const c = escolha(item);
-            return { id: item.id, dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoLista: item.foto && item.foto.multi ? c.fotoLista : undefined, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined };
+            return montarPedidoItem(item, { manual, campos: { dataInicial: c.dataInicial, dataFinal: c.dataFinal, roleId: c.roleId ? Number(c.roleId) : undefined, loginSga: c.loginSga, empresasCrm: c.empresasCrm, fotoLista: item.foto && item.foto.multi ? c.fotoLista : undefined, fotoNome: item.foto && item.foto.duvidaNome ? c.fotoNome : undefined, fotoDepartamento: item.foto && item.foto.duvidaDepto ? c.fotoDepartamento : undefined, cooperativa: c.cooperativa || undefined, baseCrm: c.baseCrm || undefined, extrasAlt: item.altStatus && item.altStatus.secundarias.length ? c.extrasAlt : undefined } });
           }),
         });
         const jobId = d.jobId;
@@ -414,7 +550,7 @@
       gravar(KEY_DISPENSADOS, novo);
     }
 
-    /** Pega a vaga do automático no servidor (só um computador de cada vez) e liga. */
+    /** Registra este computador no automático (vários podem estar ligados; o servidor limita e reserva chamado a chamado) e liga. */
     async function ligarAuto() {
       try {
         await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome });
@@ -425,34 +561,121 @@
         mudarAuto({ ativo: false });
       }
     }
-    // com o automático ligado: renova a vaga a cada 30 s (se perder, desliga); ao desligar/fechar, solta
+    // com o automático ligado: renova a presença a cada 30 s (se o servidor recusar, desliga); ao desligar/fechar, solta e libera as reservas
     useEffect(() => {
       if (!auto.ativo) return undefined;
-      const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).catch((err) => {
+      const atualizarComputadores = () => api('/api/auto').then((x) => setComputadoresAuto((x.computadores || []).map((c) => c.por))).catch(() => {});
+      const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).then(atualizarComputadores).catch((err) => {
         if (/^HTTP|Failed|NetworkError/.test(err.message)) return; // servidor fora um instante: tenta de novo
         setErroAuto(err.message);
         mudarAuto({ ativo: false });
       });
+      atualizarComputadores();
       const t = setInterval(renovar, 30000);
       const soltar = () => { try { fetch(SERVICO + '/api/auto/soltar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteId: CLIENTE_ID }) }); } catch { /* sem rede */ } };
       window.addEventListener('beforeunload', soltar);
-      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); };
+      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); setComputadoresAuto([]); };
     }, [auto.ativo]); // eslint-disable-line
 
-    // Automático: a cada atualização da lista (e quando uma execução termina), pega até
-    // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados, tipos
-    // desmarcados, já tentados aqui e os que deram erro na última execução (esses voltam
-    // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
+    // Robô do WhatsApp: com o automático ligado, este navegador também abre os chamados que chegaram pelos grupos
+    // (fila no Hub). O chamado é aberto com o token de quem está com o automático e o requerente do pedido; depois o
+    // próprio automático o executa como qualquer outro. Falha de rede aqui não atrapalha o resto da tela.
     useEffect(() => {
-      if (!auto.ativo || !pronto || lista.carregando || rodandoAlgo) return;
+      if (!auto.ativo || !pronto || !acessos.userToken) return undefined;
+      let vivo = true;
+      let ocupado = false;
+      const cabecalho = { 'Content-Type': 'application/json', 'X-Glpi-Token': acessos.userToken };
+      const puxar = async () => {
+        if (ocupado || document.hidden) return;
+        ocupado = true;
+        try {
+          const r = await fetch('/api/whatsapp/fila', { headers: cabecalho, cache: 'no-store' });
+          if (!r.ok) return;
+          const fila = await r.json();
+          if (vivo) setFilaWhatsapp(fila.length);
+          let abertos = 0;
+          for (const p of fila) {
+            if (!vivo) break;
+            const ab = await fetch(`/api/whatsapp/fila/${p.id}/abrir`, { method: 'POST', headers: cabecalho }).catch(() => null); // 409 = outro computador pegou
+            if (ab && ab.ok) abertos += 1;
+          }
+          if (vivo) setFilaWhatsapp(Math.max(0, fila.length - abertos));
+        } catch {
+          // Hub fora do ar um instante: tenta na próxima volta
+        } finally {
+          ocupado = false;
+        }
+      };
+      puxar();
+      const t = setInterval(puxar, 10000);
+      return () => { vivo = false; clearInterval(t); setFilaWhatsapp(0); };
+    }, [auto.ativo, pronto, acessos.userToken]); // eslint-disable-line
+
+    // Avisa o Hub quando uma automação termina um chamado (o robô do WhatsApp reage ou responde no grupo). Só vale para
+    // chamados abertos pelo robô; para os outros o Hub responde que não há pedido e nada acontece. Resultado de teste não conta.
+    const avisadosRef = useRef(new Set());
+    useEffect(() => {
+      if (!acessos.userToken) return;
+      for (const [id, r] of Object.entries(resultados)) {
+        if (!r || avisadosRef.current.has(id) || !['concluido', 'erro', 'nao_rodou'].includes(r.status)) continue;
+        avisadosRef.current.add(id);
+        fetch('/api/whatsapp/resultado', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': acessos.userToken },
+          body: JSON.stringify({ ticketId: Number(id), ok: r.status === 'concluido' && r.ok !== false, texto: String(r.texto || '').slice(0, 300) }),
+        }).catch(() => {});
+      }
+    }, [resultados, acessos.userToken]); // eslint-disable-line
+
+    // Automático: a cada atualização da lista (e quando uma execução termina), pega a sua parte, até
+    // "limite" chamados prontos de uma vez. Pula: com pendência, dispensados,
+    // já tentados aqui e os que deram erro na última execução (esses voltam
+    // só no "Rodar novamente", pra não ficar repetindo o mesmo erro).
+    // Com vários computadores no automático, cada um pega a SUA parte (a divisão dos prontos pelos computadores ligados, até o
+    // limite) e o que ficou com outro computador é tentado de novo de 15 em 15 s, sem depender de a lista mudar.
+    const [tentativaAuto, setTentativaAuto] = useState(0);
+    const novaTentativaRef = useRef(null);
+    useEffect(() => () => clearTimeout(novaTentativaRef.current), []);
+    useEffect(() => {
+      if (!auto.ativo || !pronto || lista.carregando || lista.guardado || rodandoAlgo) return;
+      // `lote` = TODOS os prontos, na ordem da lista; a parte deste computador é decidida na reserva (max)
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !auto.fora.includes(i.tipo) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
-          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)))
-        .slice(0, auto.limite);
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
+          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)));
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
-      rodar(lote);
-    }, [auto, pronto, lista.carregando, lista.itens, rodandoAlgo, resultados, dispensados]); // eslint-disable-line
+      // Vários computadores podem estar no automático: antes de rodar, RESERVA no servidor (atômico) os chamados deste lote.
+      // O que outro computador já pegou é descartado aqui. Se o controle (Redis) estiver fora do ar, o automático para.
+      (async () => {
+        const nome = lista.usuario && lista.usuario.nome;
+        try {
+          // quantos computadores estão no automático: cada um pega a sua parte (com 1 computador, pega até o limite como sempre)
+          const quantos = await api('/api/auto').then((x) => Math.max(1, Number(x.quantos) || 1)).catch(() => 1);
+          const quero = Math.min(auto.limite, Math.ceil(lote.length / quantos));
+          const reservar = () => api('/api/auto/reservar', { clienteId: CLIENTE_ID, ids: lote.map((i) => i.id), max: quero });
+          let r;
+          try {
+            r = await reservar();
+          } catch (err) {
+            if (!/^Assuma/.test(err.message)) throw err;
+            await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: nome }); // o servidor reiniciou e esqueceu este computador
+            r = await reservar();
+          }
+          const meus = lote.filter((i) => r.reservados.includes(i.id));
+          lote.filter((i) => !r.reservados.includes(i.id)).forEach((i) => autoRef.current.delete(i.id)); // com outro computador (ou fora da minha parte): reavalia depois
+          if (lote.length > meus.length) {
+            clearTimeout(novaTentativaRef.current);
+            novaTentativaRef.current = setTimeout(() => setTentativaAuto((x) => x + 1), 15000);
+          }
+          if (meus.length) {
+            setUltimoAuto({ hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), quantos: meus.length });
+            rodar(meus);
+          }
+        } catch (err) {
+          lote.forEach((i) => autoRef.current.delete(i.id));
+          setErroAuto(err.message);
+        }
+      })();
+    }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados, tentativaAuto]); // eslint-disable-line
 
     if (!pronto) {
       return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
@@ -464,7 +687,7 @@
       const execEste = execDoChamado(item.id);
       const rodandoEste = !!execEste;
       const c = escolha(item);
-      const pendente = item.problemas.length ? null : falta(item);
+      const pendente = item.problemas.length ? null : lista.guardado ? TEXTO_AGUARDANDO : falta(item);
       const pode = !item.problemas.length && !pendente;
 
       let detalhes = null;
@@ -506,6 +729,8 @@
             f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
           ]) : null,
         ]);
+      } else if (item.tipo === 'senha_sistemas' || ehSenhaSga(item)) {
+        detalhes = detalhesSenha(item);
       } else if (item.tipo === 'senha_crm') {
         detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
       } else if (item.tipo === 'erro_exportar_modelo') {
@@ -623,7 +848,7 @@
         rodape = e('div', { key: 'conf', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
           e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar em modo real? O chamado ficará atribuído ao titular do token e será solucionado no GLPI.'),
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item]) }, 'Confirmar'),
+            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item], { manual: true }) }, 'Confirmar'),
             e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => setConfirmando(null) }, 'Cancelar'),
           ]),
         ]);
@@ -640,7 +865,11 @@
 
       return e('div', { key: item.id, style: { ...S.card, animationDelay: Math.min(i, 10) * 35 + 'ms', borderColor: rodandoEste ? 'var(--accent)' : 'var(--border)' } }, [
         e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-          e('span', { key: 'tipo', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+          e('div', { key: 'tipo', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0 } }, [
+            e('span', { key: 't', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
+            mostrarEntidade && item.entidade ? e('span', { key: 'ent', title: 'Entidade no GLPI', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, border: '1px solid var(--border)', color: 'var(--muted)' } }, item.entidade) : null,
+            rotuloConfianca(item) ? e('span', { key: 'conf', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: 'var(--warn-tint)', color: 'var(--warn)', border: '1px solid var(--warn)' } }, rotuloConfianca(item)) : null,
+          ]),
           e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
             // colar o link na barra de endereço sempre funciona
@@ -654,6 +883,10 @@
           e('div', { key: 't', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.4 } }, item.titulo),
           e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5, marginTop: 4 } }, `${dataBr(item.abertoEm)} · ${item.requerente || ''} · ${item.statusNome}`),
         ]),
+        avisoConfianca(item) ? e('div', { key: 'confianca', role: 'status', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 } }, [
+          e('strong', { key: 't' }, avisoConfianca(item).titulo),
+          e('div', { key: 'o' }, avisoConfianca(item).orientacao),
+        ]) : null,
         detalhes,
         item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
         item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
@@ -664,41 +897,58 @@
     // ---------- tela de cards ----------
     // Só aparece o que dá pra fazer; o resto (dados faltando, sistema não
     // automatizado...) fica atrás de um link, pra análise manual.
-    const possiveis = lista.itens.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
-    const manuais = lista.itens.filter((i) => i.problemas.length);
-    const naoRodar = lista.itens.filter((i) => !i.problemas.length && dispensados.includes(i.id));
+    const itensDaEntidade = Cache.puro.filtrarPorEntidade(lista.itens, entidadeAtiva);
+    const possiveis = itensDaEntidade.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
+    const manuais = itensDaEntidade.filter((i) => i.problemas.length);
+    const naoRodar = itensDaEntidade.filter((i) => !i.problemas.length && dispensados.includes(i.id));
     const visiveis = verOutros ? [...possiveis, ...naoRodar, ...manuais] : possiveis;
-    // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento
-    const prontosTodos = possiveis.filter((i) => !falta(i) && !resultados[i.id] && !execDoChamado(i.id));
+    // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento;
+    // nenhum enquanto a lista for a guardada (só a lista confirmada pelo servidor roda)
+    const prontosTodos = lista.guardado ? [] : possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
 
     // cartões da barra do topo: mesma altura e mesmo desenho
     const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
-    const tiposAuto = [...new Map(lista.itens.filter((i) => i.tipo).map((i) => [i.tipo, i.tipoNome])).entries()];
-    // faixa abaixo da barra: confirmação, tipos que rodam sozinhos, erro e estado do automático
+    const descreverAuto = (window.ChamadosAuto && window.ChamadosAuto.descreverAuto) || (() => ({}));
+    const estadoAuto = descreverAuto({
+      computadores: computadoresAuto, rodando: Object.values(execucoes).filter((x) => !x.fim).reduce((n, x) => n + x.ids.length, 0),
+      ultima: ultimoAuto, filaWhatsapp, modoTeste, limite: auto.limite,
+    });
+    // faixa abaixo da barra: confirmação, erro e estado do automático
     const faixaAuto = (confirmandoAuto || auto.ativo || erroAuto) ? e('div', { key: 'faixa', style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', marginBottom: 16, borderRadius: 10, border: '1px solid ' + (confirmandoAuto ? 'var(--warn)' : 'var(--border)'), background: confirmandoAuto ? 'var(--warn-tint)' : 'transparent', fontSize: 12.5 } }, [
       confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
         e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Os chamados serão processados em modo real, até ${auto.limite} por vez, sem confirmação individual.`),
         e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
         e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
       ]) : null,
-      tiposAuto.length ? e('div', { key: 'tp', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' } }, [
-        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Rodam sozinhos:'),
-        ...tiposAuto.map(([tipo, nome]) => {
-          const marcado = !auto.fora.includes(tipo);
-          return e('button', { key: tipo, style: S.chip(marcado), onClick: () => mudarAuto({ fora: marcado ? [...auto.fora, tipo] : auto.fora.filter((x) => x !== tipo) }) }, nome);
-        }),
-      ]) : null,
       erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-      auto.ativo ? e('div', { key: 'st', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, `Ativo: processa os chamados prontos assim que aparecem (verificação no GLPI a cada 30 s), até ${auto.limite} por vez. Mantenha esta aba aberta.`) : null,
+      auto.ativo ? e('div', { key: 'st', className: 'auto-estado', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, [
+        e('div', { key: 'tt', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--text)' } }, [
+          e('span', { key: 'p', 'aria-hidden': 'true', style: { width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 } }),
+          e('span', { key: 't' }, 'Modo automático ligado'),
+        ]),
+        estadoAuto.computadores ? e('div', { key: 'c', style: { color: 'var(--muted)', fontSize: 12 } }, estadoAuto.computadores) : null,
+        e('div', { key: 'ag', style: { color: 'var(--muted)', fontSize: 12 } }, [estadoAuto.agora, estadoAuto.ultima, estadoAuto.whatsapp].filter(Boolean).join(' ')),
+        estadoAuto.aviso ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12, fontWeight: 600 } }, estadoAuto.aviso) : null,
+        e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, 'Mantenha esta aba aberta: é este navegador que roda os chamados.'),
+      ]) : null,
     ]) : null;
 
     const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
       e('div', { key: 't' }, [
         e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
-          lista.usuario
-            ? `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} na entidade Sistemas · aprovação como ${lista.usuario.nome}${lista.em ? ' · atualizado ' + lista.em.toLocaleTimeString('pt-BR') : ''}${verificadoEm ? ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR') : ''}`
-            : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
+        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } }, lista.usuario ? [
+          e('span', { key: 'a' }, `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} ${mostrarEntidade ? 'em ' + plural(lista.entidades.length, 'entidade', 'entidades') : 'na entidade ' + (lista.entidades[0] || 'Sistemas')} · aprovação como ${lista.usuario.nome}`),
+          // o tooltip do carimbo mostra quanto durou a leitura do GLPI (só quando o servidor mede)
+          lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR')}`) : null,
+          // ponto discreto: o aviso do GLPI (webhook) está chegando, a lista atualiza sozinha
+          lista.aoVivo ? e('span', { key: 'ao-vivo', title: 'Atualização automática ligada', 'aria-label': 'Atualização automática ligada', role: 'img', style: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', marginLeft: 6, verticalAlign: 'middle' } }) : null,
+          verificadoEm ? e('span', { key: 'v' }, ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR')) : null,
+          // região viva sempre presente para o leitor de tela anunciar a troca
+          e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8, color: 'var(--muted)' } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),
+        ] : [
+          e('span', { key: 'a' }, 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
+          e('span', { key: 'vivo', 'aria-live': 'polite' }, ''),
+        ]),
       ]),
       e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
         e('label', { key: 'mt', title: modoTeste ? 'Modo teste: nada é escrito no GLPI' : 'Modo real: o resultado é gravado no GLPI', style: { ...cartaoTopo(modoTeste, 'var(--warn)', 'var(--warn-tint)'), cursor: 'pointer' } }, [
@@ -706,7 +956,7 @@
           e('span', { key: 't', style: { fontWeight: 600, color: modoTeste ? 'var(--warn)' : 'var(--text)' } }, 'Modo teste'),
           e('span', { key: 's', style: { fontSize: 11.5, color: modoTeste ? 'var(--warn)' : 'var(--muted-soft)' } }, modoTeste ? 'não escreve no GLPI' : 'gravando no GLPI'),
         ]),
-        e('div', { key: 'auto', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
+        e('div', { key: 'auto', title: 'Quantos chamados este computador pega de cada vez. Com mais computadores ligados, cada um pega a sua parte.', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
           e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--text)' } }, [
             e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
               if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
@@ -736,8 +986,22 @@
       ]),
     ]);
 
+    const horaGuardada = lista.em ? lista.em.toLocaleTimeString('pt-BR') : 'Não informado';
+    const comListaGuardada = lista.guardado && lista.itens.length > 0;
+    const avisoGuardada = lista.erro && comListaGuardada
+      ? e('div', { key: 'aviso-guardada', role: 'alert', style: { fontSize: 12.5, color: 'var(--warn)', marginBottom: 14 } }, `Não foi possível atualizar a lista: ${lista.erro}. Mostrando a lista guardada às ${horaGuardada}. Nada roda até a lista ser atualizada.`)
+      : null;
+    // filtro por entidade: só existe com mais de uma entidade na lista
+    const barraEntidade = mostrarEntidade
+      ? e('div', { key: 'filtro-entidade', role: 'group', 'aria-label': 'Filtrar por entidade', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 14 } }, [
+        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Entidade:'),
+        e('button', { key: 'todas', 'aria-pressed': entidadeAtiva === '', style: S.chip(entidadeAtiva === ''), onClick: () => setFiltroEntidade('') }, 'Todas'),
+        ...lista.entidades.map((nome) => e('button', { key: nome, 'aria-pressed': entidadeAtiva === nome, style: S.chip(entidadeAtiva === nome), onClick: () => setFiltroEntidade(nome) }, nome)),
+      ])
+      : null;
+
     let corpo;
-    if (lista.erro) {
+    if (lista.erro && !comListaGuardada) {
       corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os chamados: ' + lista.erro);
     } else if (!lista.usuario && lista.carregando) {
       corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
@@ -788,9 +1052,10 @@
       ]));
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
+    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, avisoGuardada, barraEntidade, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
   }
 
   window.ChamadosView = ChamadosView;
   window.VerChamado = VerChamado; // a aba Resultados abre o mesmo painel
+  window.ChamadosSenhas = { nomeSistema, avisoSenha, bloqueioSenha, detalhesSenha, SELOS_REGRA, rotuloConfianca, deveExcluirDoAutomatico, avisoConfianca, montarPedidoItem }; // testados em app/test
 })();

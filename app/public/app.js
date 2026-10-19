@@ -239,13 +239,13 @@
       return () => document.removeEventListener('mousedown', onDown);
     }, [tabsMenuOpen]);
 
+    // o token do GLPI fica no cofre dos acessos (cifrado); aqui só se lê e se atualiza quando o cofre destrava ou muda
     useEffect(() => {
-      try {
-        const saved = localStorage.getItem(GLPI_TOKEN_STORAGE_KEY);
-        if (saved) setGlpiToken(saved);
-      } catch (err) {
-        // localStorage indisponível (modo privado, etc.) — segue sem token salvo
-      }
+      const hub = window.ArxAcessosHub;
+      if (!hub) return undefined;
+      const token = (hub.ler() || {}).userToken;
+      if (token) setGlpiToken(token);
+      return hub.aoMudar((a) => setGlpiToken(a.userToken || null));
     }, []);
 
     useEffect(() => {
@@ -314,20 +314,14 @@
     function saveGlpiToken() {
       const value = glpiTokenDraft.trim();
       if (!value) return;
-      try {
-        localStorage.setItem(GLPI_TOKEN_STORAGE_KEY, value);
-      } catch (err) {
-        // segue mesmo se não conseguir persistir — vale só para esta sessão
-      }
+      if (window.ArxAcessosHub) window.ArxAcessosHub.definirToken(value); // vai para o cofre (cifrado)
       setGlpiToken(value);
       setGlpiTokenDraft('');
       loadGlpiLookup(value);
     }
 
     function forgetGlpiToken() {
-      try {
-        localStorage.removeItem(GLPI_TOKEN_STORAGE_KEY);
-      } catch (err) {}
+      if (window.ArxAcessosHub) window.ArxAcessosHub.definirToken('');
       setGlpiToken(null);
       setGlpiLookup(null);
       setGlpiLookupError(null);
@@ -628,30 +622,32 @@
       ]) : null,
     ]) : null;
 
-    const header = e('div', { style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
-      e('div', { key: 'left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
+    const header = e('div', { className: 'hub-header', style: sx('display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10;position:relative') }, [
+      e('div', { key: 'left', className: 'hub-header-left', style: sx('display:flex;align-items:stretch;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden') }, [
         e('button', {
-          key: 'panel', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
+          key: 'panel', className: 'panel-tab' + (abaFixaAtiva('painel') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrirPainel,
           title: 'Painel', 'aria-label': 'Painel',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('painel') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('painel') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('LayoutDashboard', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Painel')]),
         e('button', {
-          key: 'chamados', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: abrirChamados,
+          key: 'chamados', className: 'panel-tab' + (abaFixaAtiva('chamados') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrirChamados,
           title: 'Chamados do GLPI', 'aria-label': 'Chamados',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('chamados') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('chamados') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('Headset', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Chamados')]),
         e('button', {
-          key: 'resultados', className: 'panel-tab' + (panelCompact ? ' compact' : ''), onClick: () => abrirAbaFixa('resultados'),
+          key: 'resultados', className: 'panel-tab' + (abaFixaAtiva('resultados') ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: () => abrirAbaFixa('resultados'),
           title: 'Resultados das automações', 'aria-label': 'Resultados',
           style: sx('display:flex;align-items:center;gap:7px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ' + (abaFixaAtiva('resultados') ? 'var(--accent)' : 'transparent') + ';color:' + (abaFixaAtiva('resultados') ? 'var(--text)' : 'var(--muted)') + ';font-size:13px;font-family:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap'),
         }, [Icon('BarChart3', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Resultados')]),
+        // admin.js: aba "Administração", só aparece para quem é administrador (identificado pelo token do GLPI)
+        window.AdminAba ? e(window.AdminAba, { key: 'admin', ativa: abaFixaAtiva('admin'), aoAbrir: () => abrirAbaFixa('admin'), compacto: panelCompact }) : null,
         openTabItems.length ? e('span', { key: 'sep', className: 'tabs-sep' }) : null,
         navScroll,
       ]),
       tabsMenu,
-      e('div', { key: 'spacer', style: { flex: 1, minWidth: 20 } }),
-      e('div', { key: 'right', style: sx('display:flex;align-items:center;gap:16px;flex-shrink:0') }, [
-        e('div', { key: 'search', className: 'search-box', style: sx('display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;flex-shrink:0;width:220px') }, [
+      e('div', { key: 'spacer', className: 'hub-header-spacer', style: { flex: 1, minWidth: 20 } }),
+      e('div', { key: 'right', className: 'hub-header-right', style: sx('display:flex;align-items:center;gap:16px;flex-shrink:0') }, [
+        e('div', { key: 'search', className: 'search-box hub-search', style: sx('display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;flex-shrink:0;width:220px') }, [
           Icon('Search', 15, 'var(--muted-soft)'),
           e('input', {
             key: 'input', ref: searchRef, value: search, onChange: (ev) => setSearch(ev.target.value),
@@ -1100,6 +1096,9 @@
         e('div', { key: 'panel', style: { display: abaFixaAtiva('painel') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
         abasMontadas.chamados && window.ChamadosView
           ? e('div', { key: 'chamados', style: { display: abaFixaAtiva('chamados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ChamadosView))
+          : null,
+        abasMontadas.admin && window.AdminView
+          ? e('div', { key: 'admin', style: { display: abaFixaAtiva('admin') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.AdminView))
           : null,
         abasMontadas.resultados && window.ResultadosView
           ? e('div', { key: 'resultados', style: { display: abaFixaAtiva('resultados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ResultadosView))

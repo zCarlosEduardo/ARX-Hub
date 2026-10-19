@@ -4,6 +4,10 @@ const { pool, init, waitForDb, rowToAutomation } = require('./db');
 const glpi = require('./glpi');
 const { validarId, validarAutomacao, validarUrlTeste } = require('./validacao');
 const { asyncHandler, ErroHttp, erroFinal } = require('./http');
+const { criarRotasAdmin } = require('./rotasAdmin');
+const { repoPg } = require('./repoAdmin');
+const { criarRotasWhatsapp } = require('./rotasWhatsapp');
+const { repoWhatsapp } = require('./repoWhatsapp');
 
 const { lerConfig, verificarSenhaProducao } = require('./config');
 const { calcularMudancas } = require('./varredura');
@@ -59,7 +63,8 @@ function invalidarCache() { cacheLista = null; }
 
 async function listarAutomacoes() {
   if (!cacheLista) {
-    const { rows } = await pool.query('SELECT * FROM automations ORDER BY id');
+    // ordem escolhida no painel de administração; as que ainda não têm ordem ficam no fim, pelo id
+    const { rows } = await pool.query('SELECT * FROM automations ORDER BY ordem NULLS LAST, id');
     const lista = rows.map(rowToAutomation);
     cacheLista = { lista, json: JSON.stringify(lista) };
   }
@@ -303,6 +308,44 @@ app.get('/api/glpi/history', asyncHandler(async (req, res) => {
   })));
 }));
 
+// Administração (painel de configuração): só admins do GLPI. Veja rotasAdmin.js.
+const rotasAdmin = criarRotasAdmin({
+  repo: repoPg(pool),
+  glpi,
+  asyncHandler,
+  ErroHttp,
+  aoMudarOrdem: async () => {
+    invalidarCache();
+    await broadcastAutomations();
+  },
+});
+rotasAdmin.registrar(app);
+
+// Robô do WhatsApp (veja rotasWhatsapp.js). O robô é um serviço à parte; o Hub decide o que cada mensagem vira.
+const URL_CHAMADOS = (process.env.CHAMADOS_GLPI_URL || 'http://host.docker.internal:4013').replace(/\/+$/, '');
+async function classificarMensagem(texto) {
+  const r = await fetch(`${URL_CHAMADOS}/api/classificar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }), signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error(`classificador respondeu ${r.status}`);
+  return r.json();
+}
+const rotasWhatsapp = criarRotasWhatsapp({
+  repo: repoWhatsapp(pool),
+  admin: rotasAdmin,
+  glpi,
+  classificar: classificarMensagem,
+  tokenBot: process.env.WHATSAPP_BOT_TOKEN || '',
+  tokenServico: process.env.HUB_GLPI_TOKEN_SERVICO || '',
+  asyncHandler,
+  ErroHttp,
+  registrarHistorico: async ({ id, titulo, descricao, pedido }) => {
+    await pool.query(
+      'INSERT INTO glpi_tickets (ticket_id, titulo, descricao, categoria_label, requerente_label, atribuido_label) VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, titulo, descricao, '', pedido.solicitante || '', null]
+    );
+  },
+});
+rotasWhatsapp.registrar(app);
+
 // Sempre por último: converte qualquer erro das rotas em JSON {error}.
 app.use(erroFinal());
 
@@ -314,6 +357,12 @@ async function start() {
   await init();
   await sweepAll().catch((err) => console.error('[varredura]', err.message));
   setInterval(() => sweepAll().catch((err) => console.error('[varredura]', err.message)), CHECK_INTERVAL_MS);
+  // com o token de serviço, confere a cada minuto se os chamados que o robô abriu já foram solucionados
+  if (process.env.HUB_GLPI_TOKEN_SERVICO) {
+    setInterval(() => rotasWhatsapp.verificarAbertos().catch((err) => console.error('[whatsapp]', err.message)), 60000);
+    // pedido parado na fila por mais de 1 minuto (ninguém com o Chamados automático) é aberto pelo servidor
+    setInterval(() => rotasWhatsapp.abrirPendentesAtrasados().catch((err) => console.error('[whatsapp]', err.message)), 20000);
+  }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
 }
 

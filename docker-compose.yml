@@ -31,6 +31,16 @@ services:
       GLPI_BASE_URL: ${GLPI_BASE_URL:-}
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
       GLPI_ENTITY_ID: ${GLPI_ENTITY_ID:-}
+      # Quem é administrador do Hub na primeira subida (nome completo ou login do GLPI, separados por ;). Depois a lista
+      # é gerida no painel de administração.
+      HUB_ADMINS_INICIAIS: ${HUB_ADMINS_INICIAIS:-Carlos Eduardo de Souza Alonso}
+      # Robô do WhatsApp: segredo que só o robô conhece e, se quiser abrir chamado 24 horas, o token de um usuário de serviço do
+      # GLPI. Os dois ficam no .env (fora do Git), nunca aqui.
+      WHATSAPP_BOT_TOKEN: ${WHATSAPP_BOT_TOKEN:-}
+      HUB_GLPI_TOKEN_SERVICO: ${HUB_GLPI_TOKEN_SERVICO:-}
+      CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://host.docker.internal:4013}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy

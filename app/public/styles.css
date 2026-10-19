@@ -285,10 +285,16 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* "Painel" fixo no início da faixa: compacto (só ícone) quando as abas não cabem */
-.panel-tab-label { display: inline-block; max-width: 64px; overflow: hidden; transition: max-width 0.25s var(--ease), opacity 0.2s ease; }
-.panel-tab.compact { gap: 0 !important; padding: 8px 10px !important; }
-.panel-tab.compact .panel-tab-label { max-width: 0; opacity: 0; }
-.panel-tab { transition: color 0.15s, border-color 0.2s, background 0.15s, padding 0.25s var(--ease); border-radius: 8px 8px 0 0; }
+/* abas fixas do cabeçalho: só o ícone; o nome aparece ao passar o mouse, ao focar com o teclado ou na aba aberta */
+.panel-tab-label { display: inline-block; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; transition: max-width 0.28s var(--ease), opacity 0.2s ease 0.04s; }
+.panel-tab { gap: 0 !important; padding: 8px 10px !important; transition: color 0.15s, border-color 0.2s, background 0.15s, padding 0.28s var(--ease), gap 0.28s var(--ease); }
+.panel-tab:hover, .panel-tab:focus-visible, .panel-tab.ativa { gap: 7px !important; padding: 8px 12px !important; }
+/* o nome só abre depois de um instante com o mouse em cima (não pisca ao passar de raspão); ao sair, fecha na hora */
+.panel-tab:not(.ativa):hover { transition-delay: 0s, 0s, 0s, 0.5s, 0.5s; }
+.panel-tab:not(.ativa):hover .panel-tab-label { transition-delay: 0.5s, 0.54s; }
+.panel-tab:hover .panel-tab-label, .panel-tab:focus-visible .panel-tab-label, .panel-tab.ativa .panel-tab-label { max-width: 140px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .panel-tab, .panel-tab-label { transition: none; } }
+.panel-tab { border-radius: 8px 8px 0 0; }
 .panel-tab:hover { background: var(--hover-bg-soft); }
 .tabs-sep { width: 1px; height: 20px; align-self: center; margin: 0 6px; background: var(--border); flex-shrink: 0; animation: fadeIn 0.2s ease both; }
 
@@ -531,3 +537,31 @@ select option, select optgroup { background-color: var(--card); color: var(--tex
 .gfx-hbar-seg { height: 100%; min-width: 3px; }
 .res-duas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 560px) { .gfx-hbar-topo { flex-direction: column; gap: 1px; } }
+
+/* tela de Administração: menu lateral (vira faixa horizontal no celular) e painel de conteúdo */
+.admin-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.admin-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 8px; }
+.admin-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--muted); font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.admin-nav-item:hover { background: var(--hover-bg-soft); color: var(--text); }
+.admin-nav-item.ativo { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.admin-corpo { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; min-width: 0; animation: fadeInUp 0.25s ease both; }
+@media (max-width: 760px) {
+  .admin-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-nav { flex-direction: row; overflow-x: auto; position: static; }
+  .admin-nav-item { flex-shrink: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .admin-corpo { animation: none; } .admin-nav-item { transition: none; } }
+
+/* cartões do Painel: o botão Abrir fica sempre na base, então as linhas de cartões alinham mesmo com descrições de tamanhos diferentes */
+.card-open-btn { margin-top: auto !important; }
+
+/* cabeçalho no celular: as abas (Painel, Chamados, Resultados, Administração) têm a primeira linha só para elas e a busca
+   e os botões descem para a segunda; antes a coluna da direita ocupava tudo e as abas sumiam */
+@media (max-width: 760px) {
+  .hub-header { flex-wrap: wrap !important; height: auto !important; padding: 8px 12px !important; gap: 6px 8px !important; }
+  .hub-header-left { order: 0; flex: 1 1 100% !important; overflow-x: auto !important; scrollbar-width: none; }
+  .hub-header-left::-webkit-scrollbar { display: none; }
+  .hub-header-spacer { display: none !important; }
+  .hub-header-right { order: 1; flex: 1 1 100% !important; flex-wrap: wrap; gap: 8px !important; }
+  .hub-search { flex: 1 1 150px; width: auto !important; min-width: 0; }
+}
