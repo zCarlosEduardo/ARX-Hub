@@ -49,6 +49,20 @@ function repoPg(pool) {
         [chave, JSON.stringify(valor), atualizadoPor]
       );
     },
+    async registrarHistorico({ quem, quemGlpiId, acao, alvo, antes, depois }) {
+      await pool.query(
+        'INSERT INTO hub_historico (quem, quem_glpi_id, acao, alvo, antes, depois) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)',
+        [quem || '', quemGlpiId == null ? null : quemGlpiId, acao, alvo || '', antes == null ? null : JSON.stringify(antes), depois == null ? null : JSON.stringify(depois)]
+      );
+    },
+    /** Mais recentes primeiro; `antesDe` (id) pagina para trás. */
+    async listarHistorico({ limite, antesDe }) {
+      const { rows } = await pool.query(
+        'SELECT * FROM hub_historico WHERE ($1::bigint IS NULL OR id < $1) ORDER BY id DESC LIMIT $2',
+        [antesDe || null, limite]
+      );
+      return rows.map((r) => ({ id: Number(r.id), quando: r.quando, quem: r.quem, quemGlpiId: r.quem_glpi_id, acao: r.acao, alvo: r.alvo, antes: r.antes, depois: r.depois }));
+    },
     /** `ids` na nova ordem: grava 1, 2, 3... em `ordem`. Automação fora da lista fica depois. */
     async gravarOrdem(ids) {
       await pool.query(

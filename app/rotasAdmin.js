@@ -80,11 +80,31 @@ function criarRotasAdmin(deps) {
     next();
   });
 
-  /** Cadastro de automações e URLs reais: só admin, a não ser que a administração tenha liberado para todos. */
+  /**
+   * Cadastro de automações e URLs reais: só admin, a não ser que a administração tenha liberado para todos.
+   * Deixa em `req.quemHub` quem chamou (null quando liberado e sem token válido), para o histórico.
+   */
   const podeGerenciarAutomacoes = asyncHandler(async (req, res, next) => {
-    if ((await configAtual()).automacoes.cadastro !== 'todos') await exigirAdmin(req);
+    if ((await configAtual()).automacoes.cadastro !== 'todos') req.quemHub = await exigirAdmin(req);
+    else req.quemHub = await identificar(req).catch(() => null); // liberado: quem não manda token entra sem nome
     next();
   });
+
+  /** Grava no histórico. Falha aqui não desfaz nem bloqueia a mudança, que já aconteceu: só vai para o log. */
+  async function anotar(usuario, acao, alvo, antes, depois) {
+    try {
+      await repo.registrarHistorico({
+        quem: usuario ? usuario.nome || usuario.login || '' : 'Sem identificação',
+        quemGlpiId: usuario && usuario.id != null ? usuario.id : null,
+        acao,
+        alvo: String(alvo || ''),
+        antes: antes === undefined ? null : antes,
+        depois: depois === undefined ? null : depois,
+      });
+    } catch (err) {
+      console.error('[historico] não gravou', acao, err && err.message);
+    }
+  }
 
   function registrar(app) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
@@ -111,8 +131,19 @@ function criarRotasAdmin(deps) {
       if (!SECOES.includes(secao)) throw new ErroHttp(404, 'seção de configuração desconhecida');
       const v = validarSecao(secao, req.body);
       if (!v.ok) throw new ErroHttp(400, v.error);
+      const antes = (await configAtual())[secao];
       await repo.gravarConfig(secao, v.valor, usuario.nome || usuario.login);
+      await anotar(usuario, 'config.alterar', secao, antes, v.valor);
       res.json(v.valor);
+    }));
+
+    app.get('/api/admin/historico', asyncHandler(async (req, res) => {
+      await exigirAdmin(req);
+      const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 200);
+      const antesDe = req.query.antesDe === undefined ? null : Number(req.query.antesDe);
+      if (antesDe !== null && (!Number.isSafeInteger(antesDe) || antesDe < 1)) throw new ErroHttp(400, 'antesDe inválido');
+      res.set('Cache-Control', 'no-store');
+      res.json(await repo.listarHistorico({ limite, antesDe }));
     }));
 
     app.get('/api/admin/admins', asyncHandler(async (req, res) => {
@@ -127,29 +158,33 @@ function criarRotasAdmin(deps) {
       if (!v.ok) throw new ErroHttp(400, v.error);
       const criado = await repo.criarAdmin(v.valor, usuario.nome || usuario.login);
       if (!criado) throw new ErroHttp(409, 'Essa pessoa já é administradora.');
+      await anotar(usuario, 'admin.adicionar', criado.nome || criado.login || criado.glpiId, null, criado);
       res.status(201).json(criado);
     }));
 
     app.delete('/api/admin/admins/:id', asyncHandler(async (req, res) => {
-      await exigirAdmin(req);
+      const usuario = await exigirAdmin(req);
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id < 1) throw new ErroHttp(400, 'id inválido');
       if ((await repo.contarAdmins()) <= 1) throw new ErroHttp(409, 'Não dá para remover o último administrador.');
+      const removido = (await repo.listarAdmins()).find((a) => a.id === id);
       if (!(await repo.removerAdmin(id))) throw new ErroHttp(404, 'não encontrado');
+      await anotar(usuario, 'admin.remover', removido ? removido.nome || removido.login : id, removido || null, null);
       res.status(204).end();
     }));
 
     app.put('/api/admin/automations/ordem', asyncHandler(async (req, res) => {
-      await exigirAdmin(req);
+      const usuario = await exigirAdmin(req);
       const v = validarOrdem(req.body);
       if (!v.ok) throw new ErroHttp(400, v.error);
       await repo.gravarOrdem(v.valor);
+      await anotar(usuario, 'automacao.ordem', 'Automações', null, { ids: v.valor });
       if (deps.aoMudarOrdem) await deps.aoMudarOrdem();
       res.json({ ids: v.valor });
     }));
   }
 
-  return { registrar, configAtual, quemE, identificar, exigirAdmin, soAdmin, podeGerenciarAutomacoes };
+  return { registrar, configAtual, quemE, identificar, exigirAdmin, soAdmin, podeGerenciarAutomacoes, anotar };
 }
 
 module.exports = { criarRotasAdmin };

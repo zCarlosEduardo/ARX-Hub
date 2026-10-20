@@ -30,6 +30,8 @@ function repoMemoria(adminsIniciais) {
     async lerConfig(chave) { return estado.config.has(chave) ? estado.config.get(chave) : null; },
     async gravarConfig(chave, valor, por) { estado.config.set(chave, valor); estado.ultimoPor = por; },
     async gravarOrdem(ids) { estado.ordem = ids; },
+    async registrarHistorico(h) { (estado.historico = estado.historico || []).push({ id: (estado.historico || []).length + 1, ...h }); },
+    async listarHistorico({ limite }) { return (estado.historico || []).slice().reverse().slice(0, limite); },
   };
 }
 
@@ -190,14 +192,51 @@ async function subirCadastroAutomacoes() {
   const app = express();
   app.use(express.json());
   rotas.registrar(app);
-  app.delete('/api/automations/:id', rotas.podeGerenciarAutomacoes, (req, res) => res.status(204).end());
+  // como o server.js: remove e anota no histórico com quem chamou
+  app.delete('/api/automations/:id', rotas.podeGerenciarAutomacoes, async (req, res) => {
+    await rotas.anotar(req.quemHub, 'automacao.remover', 'Automação de teste', { name: 'Automação de teste' }, null);
+    res.status(204).end();
+  });
   app.use(erroFinal(() => {}));
   const servidor = await new Promise((ok) => { const s = app.listen(0, '127.0.0.1', () => ok(s)); });
   const base = `http://127.0.0.1:${servidor.address().port}`;
   const apagar = (token) => fetch(`${base}/api/automations/1`, { method: 'DELETE', headers: token ? { 'X-Glpi-Token': token } : {} }).then((r) => r.status);
   const configurar = (token, corpo) => fetch(`${base}/api/admin/config/automacoes`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token }, body: JSON.stringify(corpo) }).then((r) => r.status);
-  return { apagar, configurar, fechar: () => new Promise((ok) => servidor.close(ok)) };
+  const historico = (token) => fetch(`${base}/api/admin/historico`, { headers: token ? { 'X-Glpi-Token': token } : {} }).then(async (r) => ({ status: r.status, corpo: await r.json() }));
+  return { repo, apagar, configurar, historico, fechar: () => new Promise((ok) => servidor.close(ok)) };
 }
+
+test('histórico: grava quem mudou a configuração (antes e depois) e quem removeu; só admin lê', async () => {
+  const s = await subirCadastroAutomacoes();
+  try {
+    assert.equal(await s.configurar(TOKEN_ADMIN, { cadastro: 'todos' }), 200);
+    assert.equal(await s.apagar(), 204); // liberado para todos e sem token: entra como "Sem identificação"
+    assert.equal(await s.apagar(TOKEN_ADMIN), 204);
+    assert.equal((await s.historico(TOKEN_COMUM)).status, 403);
+    const { status, corpo } = await s.historico(TOKEN_ADMIN);
+    assert.equal(status, 200);
+    assert.deepEqual(corpo.map((h) => [h.acao, h.quem]), [
+      ['automacao.remover', 'Carlos Eduardo de Souza Alonso'],
+      ['automacao.remover', 'Sem identificação'],
+      ['config.alterar', 'Carlos Eduardo de Souza Alonso'],
+    ]);
+    const config = corpo[2];
+    assert.equal(config.alvo, 'automacoes');
+    assert.equal(config.antes.cadastro, 'admins');
+    assert.equal(config.depois.cadastro, 'todos');
+    assert.equal(config.quemGlpiId, 7);
+  } finally { await s.fechar(); }
+});
+
+test('histórico: falha ao gravar não bloqueia a mudança', async () => {
+  const s = await subirCadastroAutomacoes();
+  const erroOriginal = console.error;
+  console.error = () => {}; // o erro esperado vai para o log; aqui não precisa aparecer
+  s.repo.registrarHistorico = async () => { throw new Error('banco fora'); };
+  try {
+    assert.equal(await s.configurar(TOKEN_ADMIN, { cadastro: 'todos' }), 200);
+  } finally { console.error = erroOriginal; await s.fechar(); }
+});
 
 test('cadastro de automação: por padrão só admin (sem token 401, comum 403)', async () => {
   const s = await subirCadastroAutomacoes();

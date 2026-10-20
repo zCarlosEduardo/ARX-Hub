@@ -207,14 +207,24 @@ app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
   );
   const created = rows[0];
   invalidarCache();
+  await rotasAdmin.anotar(req.quemHub, 'automacao.criar', created.name, null, cadastroDe(rowToAutomation(created)));
   broadcastAutomations().catch(() => {});
   checkAndPersist(created.id, created.url).then(() => broadcastAutomations()).catch(() => {});
   res.status(201).json(rowToAutomation(created));
 }));
 
+/** Só os campos do cadastro (sem status e datas), para o histórico mostrar o que mudou de fato. */
+function cadastroDe(a) {
+  if (!a) return null;
+  const { name, url, container, description, icon, color, categories, vncPorta } = a;
+  return { name, url, container, description, icon, color, categories, vncPorta };
+}
+const automacaoAtual = async (id) => (await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || null;
+
 app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   const d = dadosOuErro(req);
+  const antes = await automacaoAtual(id);
   const { rows } = await pool.query(
     `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, vnc_porta=$8, updated_at=now()
      WHERE id=$9 RETURNING *`,
@@ -223,6 +233,7 @@ app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => 
   if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const updated = rows[0];
   invalidarCache();
+  await rotasAdmin.anotar(req.quemHub, 'automacao.editar', updated.name, cadastroDe(antes), cadastroDe(rowToAutomation(updated)));
   broadcastAutomations().catch(() => {});
   checkAndPersist(updated.id, updated.url).then(() => broadcastAutomations()).catch(() => {});
   res.json(rowToAutomation(updated));
@@ -230,8 +241,10 @@ app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => 
 
 app.delete('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
-  await pool.query('DELETE FROM automations WHERE id=$1', [id]);
+  const antes = await automacaoAtual(id);
+  const { rowCount } = await pool.query('DELETE FROM automations WHERE id=$1', [id]);
   invalidarCache();
+  if (rowCount) await rotasAdmin.anotar(req.quemHub, 'automacao.remover', antes ? antes.name : id, cadastroDe(antes), null);
   broadcastAutomations().catch(() => {});
   res.status(204).end();
 }));
