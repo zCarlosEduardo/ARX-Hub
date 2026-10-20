@@ -5,6 +5,31 @@ const http = require('http');
 const { criarProxyAutomacoes, reescreverLocation } = require('../proxy');
 const { criarPasses } = require('../passe');
 
+test('observador: o POST de início chega com corpo, resposta e quem abriu, sem mudar o que a tela recebe', async () => {
+  const avisos = [];
+  const observador = { aoIniciar: (x) => avisos.push(x), abrirSse: () => null };
+  const automacao = http.createServer((req, res) => { let c = ''; req.on('data', (d) => { c += d; }); req.on('end', () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ jobId: 'j9', eco: c })); }); });
+  const porta = await ouvir(automacao);
+  const passes = criarPasses();
+  const p = criarProxyAutomacoes({ buscarDestino: async () => ({ id: '7', name: 'Teste', url: `http://127.0.0.1:${porta}/` }), passes, observador });
+  const proxy = http.createServer(p.atender);
+  const base = `http://127.0.0.1:${await ouvir(proxy)}`;
+  try {
+    const passe = passes.emitir({ automacaoId: 7, usuario: { id: 3, nome: 'Fulano' } });
+    const r = await fetch(`${base}/a/7/api/start?passe=${passe}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"modoTeste":true}' });
+    assert.deepEqual(await r.json(), { jobId: 'j9', eco: '{"modoTeste":true}' });
+    for (let i = 0; i < 50 && !avisos.length; i++) await new Promise((ok) => setTimeout(ok, 10));
+    assert.equal(avisos.length, 1);
+    assert.equal(avisos[0].caminho, '/api/start');
+    assert.equal(avisos[0].status, 200);
+    assert.deepEqual(avisos[0].quem, { id: 3, nome: 'Fulano' });
+    assert.equal(avisos[0].corpoPedido.toString(), '{"modoTeste":true}');
+    assert.equal(JSON.parse(avisos[0].corpoResposta.toString()).jobId, 'j9');
+    await fetch(`${base}/a/7/api/opcoes`, { method: 'POST' }); // não é início: não avisa
+    assert.equal(avisos.length, 1);
+  } finally { await fechar(proxy); await fechar(automacao); }
+});
+
 test('automação restrita: sem passe 403; o passe da query vira cookie e não vai para a automação', async () => {
   const s = await subir();
   try {

@@ -15,6 +15,8 @@ const { criarProxyAutomacoes, repassar } = require('./proxy');
 const { mascararUrl } = require('./mascara');
 const { criarPasses } = require('./passe');
 const { podeVer, validarGrupos } = require('./admin');
+const { resumirExecucoes } = require('./execucoes');
+const { criarRegistroExecucoes, repoExecucoes } = require('./execucoesRegistro');
 
 const passes = criarPasses();
 
@@ -196,6 +198,34 @@ app.get('/api/automations', asyncHandler(async (req, res) => {
   res.json((await listarAutomacoes()).publica.filter((a) => podeVer(a, quem)));
 }));
 
+// Execuções manuais (rodadas pela tela da automação, registradas pelo proxy) para a aba Resultados.
+// GET /api/execucoes/resumo?desde=YYYY-MM-DD&ate=YYYY-MM-DD&incluirTeste=0|1 (datas no fuso de São Paulo)
+const linhaExecucao = (r) => ({
+  id: Number(r.id), automacaoId: String(r.automacao_id), automacaoNome: r.automacao_nome, quem: r.quem, quemGlpiId: r.quem_glpi_id,
+  inicio: r.inicio, fim: r.fim, situacao: r.situacao, itens: r.itens, concluidos: r.concluidos, erros: r.erros, modoTeste: r.modo_teste, detalhe: r.detalhe,
+});
+app.get('/api/execucoes/resumo', asyncHandler(async (req, res) => {
+  const data = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+  const desde = data(req.query.desde);
+  const ate = data(req.query.ate);
+  if (!desde || !ate || desde > ate) throw new ErroHttp(400, 'Informe desde e ate (AAAA-MM-DD), com desde até ate.');
+  const incluirTeste = req.query.incluirTeste === '1';
+  const { rows } = await pool.query(
+    `SELECT * FROM hub_execucoes
+     WHERE inicio >= ($1::date)::timestamp AT TIME ZONE 'America/Sao_Paulo'
+       AND inicio < (($2::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+     ORDER BY inicio DESC LIMIT 20000`,
+    [desde, ate]
+  );
+  const linhas = rows.map(linhaExecucao);
+  const minutos = Object.fromEntries((await listarAutomacoes()).lista.map((a) => [String(a.id), a.minutosPorItem]));
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ...resumirExecucoes(linhas, minutos, { incluirTeste }),
+    recentes: linhas.filter((l) => incluirTeste || !l.modoTeste).slice(0, 30),
+  });
+}));
+
 // Passe para abrir a tela pelo proxy (passe.js): confere se a pessoa vê a automação e diz ao proxy quem abriu.
 app.post('/api/automations/:id/passe', asyncHandler(async (req, res) => {
   const id = idOuErro(req);
@@ -258,9 +288,9 @@ app.put('/api/admin/automations/:id/grupos', soAdmin, asyncHandler(async (req, r
 app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
-    `INSERT INTO automations (name, url, container, description, icon, color, categories, vnc_porta, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'checking') RETURNING *`,
-    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta]
+    `INSERT INTO automations (name, url, container, description, icon, color, categories, vnc_porta, minutos_por_item, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'checking') RETURNING *`,
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta, d.minutosPorItem]
   );
   const created = rows[0];
   invalidarCache();
@@ -273,8 +303,8 @@ app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
 /** Só os campos do cadastro (sem status e datas), para o histórico mostrar o que mudou de fato. */
 function cadastroDe(a) {
   if (!a) return null;
-  const { name, url, container, description, icon, color, categories, vncPorta } = a;
-  return { name, url, container, description, icon, color, categories, vncPorta };
+  const { name, url, container, description, icon, color, categories, vncPorta, minutosPorItem } = a;
+  return { name, url, container, description, icon, color, categories, vncPorta, minutosPorItem };
 }
 const automacaoAtual = async (id) => (await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || null;
 
@@ -283,9 +313,9 @@ app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => 
   const d = dadosOuErro(req);
   const antes = await automacaoAtual(id);
   const { rows } = await pool.query(
-    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, vnc_porta=$8, updated_at=now()
-     WHERE id=$9 RETURNING *`,
-    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta, id]
+    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, vnc_porta=$8, minutos_por_item=$9, updated_at=now()
+     WHERE id=$10 RETURNING *`,
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta, d.minutosPorItem, id]
   );
   if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const updated = rows[0];
@@ -458,7 +488,10 @@ async function start() {
   }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
   const buscarDestino = async (id) => (await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || null; // BIGSERIAL chega do pg como texto
-  const proxy = criarProxyAutomacoes({ buscarDestino, passes });
+  // execuções manuais (rodadas pela tela da automação): o proxy avisa, execucoesRegistro grava e acompanha até o fim
+  const registroExecucoes = criarRegistroExecucoes({ repo: repoExecucoes(pool) });
+  await registroExecucoes.aoSubir();
+  const proxy = criarProxyAutomacoes({ buscarDestino, passes, observador: registroExecucoes });
   require('http').createServer(proxy.atender)
     .on('upgrade', proxy.atenderUpgrade)
     .listen(PROXY_PORT, () => console.log(`Proxy das automações ouvindo na porta ${PROXY_PORT}`));

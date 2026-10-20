@@ -27,8 +27,16 @@ test('validarAutomacao normaliza e aplica padrões', () => {
   assert.equal(r.ok, true);
   assert.deepEqual(r.valor, {
     name: 'Boletos', url: 'http://h:1', container: '', description: '',
-    icon: 'Workflow', color: '#1E4A9E', categories: [], vncPorta: null,
+    icon: 'Workflow', color: '#1E4A9E', categories: [], vncPorta: null, minutosPorItem: null,
   });
+});
+
+test('validarAutomacao: minutos por item aceitam vírgula, arredondam a 1 casa e recusam fora da faixa', () => {
+  const base = { name: 'x', url: 'http://a' };
+  assert.equal(validarAutomacao({ ...base, minutosPorItem: '4,25' }).valor.minutosPorItem, 4.3);
+  assert.equal(validarAutomacao({ ...base, minutosPorItem: 0 }).valor.minutosPorItem, 0);
+  assert.equal(validarAutomacao({ ...base, minutosPorItem: -1 }).ok, false);
+  assert.equal(validarAutomacao({ ...base, minutosPorItem: 'muito' }).ok, false);
 });
 
 test('validarAutomacao: porta da tela ao vivo é opcional e precisa ser porta válida', () => {

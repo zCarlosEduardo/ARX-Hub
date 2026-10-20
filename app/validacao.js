@@ -76,7 +76,13 @@ function validarAutomacao(body) {
     vncPorta = Number(b.vncPorta);
     if (!Number.isInteger(vncPorta) || vncPorta < 1 || vncPorta > 65535) return { ok: false, error: 'a porta da tela ao vivo deve ser um número de 1 a 65535' };
   }
-  return { ok: true, valor: { name, url, container: container.v, description: description.v, icon, color, categories, vncPorta } };
+  let minutosPorItem = null;
+  if (b.minutosPorItem !== undefined && b.minutosPorItem !== null && b.minutosPorItem !== '') {
+    minutosPorItem = Number(String(b.minutosPorItem).replace(',', '.'));
+    if (!Number.isFinite(minutosPorItem) || minutosPorItem < 0 || minutosPorItem > 9999) return { ok: false, error: 'os minutos por item devem ser um número de 0 a 9999' };
+    minutosPorItem = Math.round(minutosPorItem * 10) / 10;
+  }
+  return { ok: true, valor: { name, url, container: container.v, description: description.v, icon, color, categories, vncPorta, minutosPorItem } };
 }
 
 function validarUrlTeste(raw) {

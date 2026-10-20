@@ -557,6 +557,7 @@
         color: f.color || '#1E4A9E',
         categories: Array.isArray(f.categories) ? f.categories : [],
         vncPorta: f.vncPorta == null ? '' : String(f.vncPorta).trim(),
+        minutosPorItem: f.minutosPorItem == null ? '' : String(f.minutosPorItem).trim(),
       };
       try {
         if (f.id) {
@@ -887,6 +888,11 @@
             e('div', { key: 'url' }, [
               e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'URL (vista pelo servidor do Hub)'),
               e('input', { key: 'i', className: 'field-input', value: modalForm.url, onChange: (ev) => setModalField('url', ev.target.value), placeholder: 'http://alterar-senha-sga:4016/', style: sx("width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:'JetBrains Mono',monospace") }),
+            ]),
+            e('div', { key: 'min' }, [
+              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'Minutos que um item levaria à mão (opcional)'),
+              e('input', { key: 'i', className: 'field-input', inputMode: 'decimal', value: modalForm.minutosPorItem == null ? '' : modalForm.minutosPorItem, onChange: (ev) => setModalField('minutosPorItem', ev.target.value), placeholder: '4', style: sx("width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:'JetBrains Mono',monospace") }),
+              e('div', { key: 'd', style: sx('font-size:11px;color:var(--muted-soft);margin-top:4px') }, 'Base do tempo economizado das execuções manuais na aba Resultados (itens concluídos x minutos).'),
             ]),
             e('div', { key: 'vnc' }, [
               e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'Porta da tela ao vivo, VNC (opcional)'),
