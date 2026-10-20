@@ -16,7 +16,7 @@ async function subir({ ehAdmin = true, respostas = {} } = {}) {
     configAtual: async () => ({ ia: { ligada: false, automaticoTipos: [] } }),
     anotar: async (...a) => anotados.push(a),
   };
-  const repo = { gravarConfig: async (s, v) => gravados.push([s, v]) };
+  const repo = { gravarConfig: async (s, v) => gravados.push([s, v]), lerConfig: async () => null };
   const buscar = async (url, op) => {
     pedidos.push({ url, metodo: op.method, cab: op.headers, corpo: op.body && JSON.parse(op.body) });
     const chave = Object.keys(respostas).find((k) => url.endsWith(k));
@@ -73,5 +73,25 @@ test('quem não é admin não usa nenhuma rota da IA', async () => {
       assert.equal((await s.chamar(m, p)).status, 403, p);
     }
     assert.equal(s.pedidos.length, 0);
+  } finally { await s.fechar(); }
+});
+
+test('auditoria pública: só agregados (nenhum chamado ou texto) e cópia guardada para quando a IA estiver desligada', async () => {
+  const auditoria = {
+    estado: { treinado: true, exemplos: 10, modelos: { texto: 'q', embed: 'b' }, treino: { etapa: 'pronto', rodando: false } },
+    metricas: { total: 10, acertoIa: 90, acertoRegras: 80, porTipo: {}, distribuicao: {} },
+    modelos: [{ nome: 'bge-m3', tamanhoMb: 1200, modificadoEm: 'x' }],
+    eventos: [{ quando: 't', tipo: 'treino.fim', exemplos: 10, detalheGrande: { x: 1 } }],
+    decisoes: [{ chamado: '123', tipoRegra: 'a', tipoIa: 'a', concorda: true, origem: 'classificador' }, { chamado: '456', concorda: false, origem: 'modelo de texto' }],
+  };
+  const s = await subir({ respostas: { '/api/auditoria': [200, auditoria] } });
+  try {
+    const r = await s.chamar('GET', '/api/ia/auditoria-publica');
+    assert.equal(r.status, 200);
+    assert.equal(r.corpo.aoVivo, true);
+    assert.deepEqual(r.corpo.decisoes, { total: 2, concorda: 1, discorda: 1, porOrigem: { classificador: 1, 'modelo de texto': 1 } });
+    assert.ok(!JSON.stringify(r.corpo).includes('"123"'), 'não pode sair o número do chamado');
+    assert.deepEqual(r.corpo.eventos[0], { quando: 't', tipo: 'treino.fim', exemplos: 10 });
+    assert.equal(s.gravados[0][0], 'ia_auditoria');
   } finally { await s.fechar(); }
 });

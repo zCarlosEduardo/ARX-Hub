@@ -77,9 +77,42 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
       res.set('Cache-Control', 'no-store');
       res.json(r.ok ? r.dados : { indisponivel: true, motivo: 'IA desligada ou fora do ar: ligue para ver os dados ao vivo.' });
     }));
+
+    // Página web da auditoria (public/ia-auditoria.html): só números agregados, nenhum chamado, texto ou pessoa. Com a IA
+    // desligada, mostra a última fotografia guardada (hub_config, chave ia_auditoria).
+    app.get('/api/ia/auditoria-publica', asyncHandler(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      const r = await ia('/api/auditoria');
+      if (r.ok) {
+        const foto = { ...resumirAuditoria(r.dados), aoVivo: true, em: new Date().toISOString() };
+        await repo.gravarConfig('ia_auditoria', foto, 'auditoria').catch(() => {}); // sem gravar, a página só não tem a cópia
+        return res.json(foto);
+      }
+      const guardada = await repo.lerConfig('ia_auditoria').catch(() => null);
+      res.json(guardada ? { ...guardada, aoVivo: false } : { aoVivo: false, vazio: true });
+    }));
   }
 
-  return { registrar, chamarIa: ia };
+  /** Só agregados: eventos (o que e quando), métricas do treino, modelos e contagem das decisões. */
+  function resumirAuditoria(d) {
+    const dec = Array.isArray(d.decisoes) ? d.decisoes : [];
+    const porOrigem = {};
+    let concorda = 0;
+    for (const x of dec) {
+      porOrigem[x.origem] = (porOrigem[x.origem] || 0) + 1;
+      if (x.concorda) concorda += 1;
+    }
+    const numeros = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => typeof v === 'number' || typeof v === 'string' && v.length < 80));
+    return {
+      estado: d.estado ? { treinado: d.estado.treinado, exemplos: d.estado.exemplos, treinadoEm: d.estado.treinadoEm, modelos: d.estado.modelos, tipos: d.estado.tipos, treino: d.estado.treino && { etapa: d.estado.treino.etapa, rodando: d.estado.treino.rodando, iniciouEm: d.estado.treino.iniciouEm, terminouEm: d.estado.treino.terminouEm } } : null,
+      metricas: d.metricas ? { total: d.metricas.total, acertoIa: d.metricas.acertoIa, acertoRegras: d.metricas.acertoRegras, porTipo: d.metricas.porTipo, distribuicao: d.metricas.distribuicao, treinadoEm: d.metricas.treinadoEm, modeloEmbed: d.metricas.modeloEmbed, modeloTexto: d.metricas.modeloTexto } : null,
+      modelos: (d.modelos || []).map((m) => ({ nome: m.nome, tamanhoMb: m.tamanhoMb })),
+      eventos: (d.eventos || []).slice(-100).map((ev) => ({ quando: ev.quando, tipo: ev.tipo, ...numeros(ev) })),
+      decisoes: { total: dec.length, concorda, discorda: dec.length - concorda, porOrigem },
+    };
+  }
+
+  return { registrar, chamarIa: ia, resumirAuditoria };
 }
 
 module.exports = { criarRotasIa };
