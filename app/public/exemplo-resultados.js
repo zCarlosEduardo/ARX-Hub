@@ -278,7 +278,8 @@
     const foraTotal = linhas.reduce((s, l) => s + l.fora, 0);
     const media = linhas.reduce((s, l) => s + l.pct, 0) / linhas.length;
     const corDia = (d) => { const m = d.quedas.reduce((t, q) => t + q.minutos, 0); return m === 0 ? '' : m < 15 ? ' alerta' : ' queda'; };
-    const fmtPct = (p) => p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+    // arredonda para baixo: um minuto fora já não aparece como 100%
+    const fmtPct = (p) => (Math.floor(p * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
     const kpi = (k, rot, val, det) => e('div', { key: k, className: 'exu-kpi' }, [e('div', { key: 'r', className: 'exu-kpi-rot' }, rot), e('div', { key: 'v', className: 'exu-kpi-val' }, val), e('div', { key: 'd', className: 'exu-kpi-det' }, det)]);
     return e(React.Fragment, null, [
       e('div', { key: 'k', className: 'exu-kpis' }, [

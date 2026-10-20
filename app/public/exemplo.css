@@ -20,7 +20,7 @@
 .exu-busca input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
 .exu-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .exu-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--secondary); }
-.exu-seg button { height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.exu-seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .exu-seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow-card); }
 .exu-cartao { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); min-width: 0; }
 .exu-cartao-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px 0; flex-wrap: wrap; }
@@ -180,10 +180,10 @@ button.exu-kpi:hover { border-color: var(--border-hover); }
 .exu-modal.perigo .exu-btn.primario { background: var(--error); border-color: var(--error); color: #fff; }
 .exu-campo { display: flex; flex-direction: column; gap: 6px; }
 .exu-campo label { font-size: 13px; font-weight: 600; }
-.exu-campo input, .exu-campo textarea, .exu-campo select { height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text); font: inherit; font-size: 13.5px; outline: none; box-sizing: border-box; width: 100%; }
-.exu-campo select { appearance: none; background: var(--field-bg) var(--select-arrow) no-repeat right 8px center; padding-right: 30px; }
-.exu-campo textarea { height: 80px; padding: 8px 10px; resize: vertical; }
-.exu-campo input:focus, .exu-campo textarea:focus, .exu-campo select:focus { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
+.exu-campo > input, .exu-campo > textarea, .exu-campo > select { height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text); font: inherit; font-size: 13.5px; outline: none; box-sizing: border-box; width: 100%; }
+.exu-campo > select { appearance: none; background: var(--field-bg) var(--select-arrow) no-repeat right 8px center; padding-right: 30px; }
+.exu-campo > textarea { height: 80px; padding: 8px 10px; resize: vertical; }
+.exu-campo > input:focus, .exu-campo > textarea:focus, .exu-campo > select:focus { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
 .exu-campo-ajuda { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .exu-campo-erro { margin: 0; font-size: 12px; color: var(--error); }
 .exu-duas-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
