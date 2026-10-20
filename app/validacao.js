@@ -71,7 +71,12 @@ function validarAutomacao(body) {
     }
     categories = b.categories;
   }
-  return { ok: true, valor: { name, url, container: container.v, description: description.v, icon, color, categories } };
+  let vncPorta = null;
+  if (b.vncPorta !== undefined && b.vncPorta !== null && b.vncPorta !== '') {
+    vncPorta = Number(b.vncPorta);
+    if (!Number.isInteger(vncPorta) || vncPorta < 1 || vncPorta > 65535) return { ok: false, error: 'a porta da tela ao vivo deve ser um número de 1 a 65535' };
+  }
+  return { ok: true, valor: { name, url, container: container.v, description: description.v, icon, color, categories, vncPorta } };
 }
 
 function validarUrlTeste(raw) {

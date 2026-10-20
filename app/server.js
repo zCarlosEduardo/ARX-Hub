@@ -201,9 +201,9 @@ app.get('/api/admin/automations/urls', podeGerenciar, asyncHandler(async (req, r
 app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
-    `INSERT INTO automations (name, url, container, description, icon, color, categories, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'checking') RETURNING *`,
-    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories]
+    `INSERT INTO automations (name, url, container, description, icon, color, categories, vnc_porta, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'checking') RETURNING *`,
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta]
   );
   const created = rows[0];
   invalidarCache();
@@ -216,9 +216,9 @@ app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => 
   const id = idOuErro(req);
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
-    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, updated_at=now()
-     WHERE id=$8 RETURNING *`,
-    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, id]
+    `UPDATE automations SET name=$1, url=$2, container=$3, description=$4, icon=$5, color=$6, categories=$7, vnc_porta=$8, updated_at=now()
+     WHERE id=$9 RETURNING *`,
+    [d.name, d.url, d.container, d.description, d.icon, d.color, d.categories, d.vncPorta, id]
   );
   if (!rows.length) throw new ErroHttp(404, 'não encontrado');
   const updated = rows[0];
@@ -387,8 +387,10 @@ async function start() {
     setInterval(() => rotasWhatsapp.abrirPendentesAtrasados().catch((err) => console.error('[whatsapp]', err.message)), 20000);
   }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
-  const buscarUrl = async (id) => ((await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || {}).url || null; // BIGSERIAL chega do pg como texto
-  require('http').createServer(criarProxyAutomacoes({ buscarUrl }))
+  const buscarDestino = async (id) => (await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || null; // BIGSERIAL chega do pg como texto
+  const proxy = criarProxyAutomacoes({ buscarDestino });
+  require('http').createServer(proxy.atender)
+    .on('upgrade', proxy.atenderUpgrade)
     .listen(PROXY_PORT, () => console.log(`Proxy das automações ouvindo na porta ${PROXY_PORT}`));
 }
 

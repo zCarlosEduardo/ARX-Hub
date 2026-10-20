@@ -40,7 +40,12 @@ services:
       # GLPI. Os dois ficam no .env (fora do Git), nunca aqui.
       WHATSAPP_BOT_TOKEN: ${WHATSAPP_BOT_TOKEN:-}
       HUB_GLPI_TOKEN_SERVICO: ${HUB_GLPI_TOKEN_SERVICO:-}
-      CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://host.docker.internal:4013}
+      CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://chamados-glpi:4013}
+    # Rede das automações (projeto ARX-Automacoes): o Hub e o proxy falam com elas pelo nome do container, e as portas 40xx
+    # ficam publicadas só em 127.0.0.1 (ninguém na rede as acessa direto).
+    networks:
+      - default
+      - automacoes
     # Tutoriais em vídeo do botão "?" (pasta fora do Git): TUTORIAIS_DIR no .env aponta para a pasta videos gerada
     # em Documentacao-Automacoes; sem ela, o Hub sobe igual e o botão não aparece.
     volumes:
@@ -54,3 +59,8 @@ services:
 
 volumes:
   arxhub_db_data:
+
+networks:
+  automacoes:
+    external: true
+    name: arx-automacoes_default

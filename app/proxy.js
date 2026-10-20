@@ -87,32 +87,95 @@ function idDoPedido(req) {
   return r ? { id: Number(r[1]), porCaminho: false } : null;
 }
 
-/** Servidor da porta das automações. `buscarUrl(id)` devolve a URL cadastrada ou null. */
-function criarProxyAutomacoes({ buscarUrl }) {
-  return async function atender(req, res) {
-    const achado = idDoPedido(req);
-    const nada = (status, texto) => {
-      res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end(texto);
-    };
-    if (!achado) return nada(404, 'Não encontrado.');
-    const prefixo = `/a/${achado.id}`;
-    if (achado.porCaminho && !achado.temBarra) {
-      // sem a barra final os caminhos relativos da tela (app.js, style.css) sairiam de /a/
-      const query = req.url.slice(prefixo.length);
-      res.writeHead(301, { Location: prefixo + '/' + query });
-      return res.end();
+/**
+ * Para onde vai o pedido: a URL da automação ou, em /a/<id>/vnc/..., a tela ao vivo (noVNC) na porta `vncPorta` do
+ * mesmo host. Devolve { base, caminho, prefixo } ou null (sem tela ao vivo cadastrada).
+ */
+function alvo(destino, achado, url) {
+  const prefixo = `/a/${achado.id}`;
+  const caminho = achado.porCaminho ? url.slice(prefixo.length) : url;
+  if (!/^\/vnc(\/|\?|$)/.test(caminho)) return { base: destino.url, caminho, prefixo };
+  if (!destino.vncPorta) return null;
+  const base = new URL(destino.url);
+  base.port = String(destino.vncPorta);
+  base.pathname = '/';
+  return { base: base.toString(), caminho: caminho.slice('/vnc'.length) || '/', prefixo: prefixo + '/vnc' };
+}
+
+/** WebSocket (tela ao vivo): repassa o aperto de mão e depois liga os dois sockets. */
+function repassarUpgrade(req, socket, cabeca, destino, caminho) {
+  const base = new URL(destino);
+  const cabecalhos = { ...req.headers, host: base.host };
+  delete cabecalhos.referer;
+  const pedido = http.request({ hostname: base.hostname, port: base.port, method: req.method, path: base.pathname.replace(/\/+$/, '') + caminho, headers: cabecalhos });
+  pedido.on('upgrade', (resposta, socketAuto, cabecaAuto) => {
+    const linhas = [`HTTP/1.1 ${resposta.statusCode} ${resposta.statusMessage}`];
+    for (let i = 0; i < resposta.rawHeaders.length; i += 2) linhas.push(`${resposta.rawHeaders[i]}: ${resposta.rawHeaders[i + 1]}`);
+    socket.write(linhas.join('\r\n') + '\r\n\r\n');
+    if (cabecaAuto && cabecaAuto.length) socket.write(cabecaAuto);
+    if (cabeca && cabeca.length) socketAuto.write(cabeca);
+    socketAuto.pipe(socket).pipe(socketAuto);
+    const fechar = () => { socket.destroy(); socketAuto.destroy(); };
+    socket.on('error', fechar);
+    socketAuto.on('error', fechar);
+    // um lado terminou: derruba o outro (socket de WebSocket aceita meia conexão aberta e ficaria pendurado)
+    for (const s of [socket, socketAuto]) {
+      s.on('end', fechar);
+      s.on('close', fechar);
     }
+  });
+  pedido.on('response', (resposta) => {
+    // a automação não aceitou o WebSocket: devolve a resposta dela e fecha
+    socket.end(`HTTP/1.1 ${resposta.statusCode} ${resposta.statusMessage}\r\nConnection: close\r\n\r\n`);
+    resposta.resume();
+  });
+  pedido.on('error', () => socket.destroy());
+  pedido.end();
+}
+
+/**
+ * Servidor da porta das automações. `buscarDestino(id)` devolve { url, vncPorta } da automação cadastrada ou null.
+ * Devolve `atender` (pedidos HTTP) e `atenderUpgrade` (WebSocket, evento 'upgrade' do servidor).
+ */
+function criarProxyAutomacoes({ buscarDestino }) {
+  async function resolver(req) {
+    const achado = idDoPedido(req);
+    if (!achado) return { status: 404, texto: 'Não encontrado.' };
+    if (achado.porCaminho && !achado.temBarra) return { achado };
     let destino;
     try {
-      destino = await buscarUrl(achado.id);
+      destino = await buscarDestino(achado.id);
     } catch {
-      return nada(503, 'Hub sem acesso ao cadastro das automações.');
+      return { status: 503, texto: 'Hub sem acesso ao cadastro das automações.' };
     }
-    if (!destino) return nada(404, 'Automação não cadastrada.');
-    const caminho = achado.porCaminho ? req.url.slice(prefixo.length) : req.url;
-    repassar(req, res, destino, caminho, prefixo);
-  };
+    if (!destino) return { status: 404, texto: 'Automação não cadastrada.' };
+    const a = alvo(destino, achado, req.url);
+    return a ? { achado, alvo: a } : { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
+  }
+
+  async function atender(req, res) {
+    const r = await resolver(req);
+    if (r.status) {
+      res.writeHead(r.status, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end(r.texto);
+    }
+    if (!r.alvo) {
+      // sem a barra final os caminhos relativos da tela (app.js, style.css) sairiam de /a/
+      const prefixo = `/a/${r.achado.id}`;
+      res.writeHead(301, { Location: prefixo + '/' + req.url.slice(prefixo.length) });
+      return res.end();
+    }
+    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo);
+  }
+
+  async function atenderUpgrade(req, socket, cabeca) {
+    socket.on('error', () => socket.destroy()); // navegador caiu no meio do aperto de mão
+    const r = await resolver(req);
+    if (!r.alvo) return socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+    repassarUpgrade(req, socket, cabeca, r.alvo.base, r.alvo.caminho);
+  }
+
+  return { atender, atenderUpgrade };
 }
 
 module.exports = { criarProxyAutomacoes, repassar, reescreverLocation, idDoPedido };

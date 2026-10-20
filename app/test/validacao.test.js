@@ -27,8 +27,16 @@ test('validarAutomacao normaliza e aplica padrões', () => {
   assert.equal(r.ok, true);
   assert.deepEqual(r.valor, {
     name: 'Boletos', url: 'http://h:1', container: '', description: '',
-    icon: 'Workflow', color: '#1E4A9E', categories: [],
+    icon: 'Workflow', color: '#1E4A9E', categories: [], vncPorta: null,
   });
+});
+
+test('validarAutomacao: porta da tela ao vivo é opcional e precisa ser porta válida', () => {
+  const base = { name: 'x', url: 'http://a' };
+  assert.equal(validarAutomacao({ ...base, vncPorta: '4004' }).valor.vncPorta, 4004);
+  assert.equal(validarAutomacao({ ...base, vncPorta: '' }).valor.vncPorta, null);
+  assert.equal(validarAutomacao({ ...base, vncPorta: 70000 }).ok, false);
+  assert.equal(validarAutomacao({ ...base, vncPorta: 'abc' }).ok, false);
 });
 
 test('validarAutomacao exige name e url válida', () => {
