@@ -547,6 +547,7 @@
         icon: f.icon || 'Workflow',
         color: f.color || '#1E4A9E',
         categories: Array.isArray(f.categories) ? f.categories : [],
+        vncPorta: f.vncPorta == null ? '' : String(f.vncPorta).trim(),
       };
       try {
         if (f.id) {
@@ -875,8 +876,12 @@
               e('input', { key: 'i', className: 'field-input', value: modalForm.name, onChange: (ev) => setModalField('name', ev.target.value), placeholder: 'Ex: Emissão de Boletos', style: sx('width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px') }),
             ]),
             e('div', { key: 'url' }, [
-              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'URL (IP:porta)'),
-              e('input', { key: 'i', className: 'field-input', value: modalForm.url, onChange: (ev) => setModalField('url', ev.target.value), placeholder: 'http://192.168.0.10:8081', style: sx("width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:'JetBrains Mono',monospace") }),
+              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'URL (vista pelo servidor do Hub)'),
+              e('input', { key: 'i', className: 'field-input', value: modalForm.url, onChange: (ev) => setModalField('url', ev.target.value), placeholder: 'http://alterar-senha-sga:4016/', style: sx("width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:'JetBrains Mono',monospace") }),
+            ]),
+            e('div', { key: 'vnc' }, [
+              e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'Porta da tela ao vivo, VNC (opcional)'),
+              e('input', { key: 'i', className: 'field-input', inputMode: 'numeric', value: modalForm.vncPorta == null ? '' : modalForm.vncPorta, onChange: (ev) => setModalField('vncPorta', ev.target.value), placeholder: '4004', style: sx("width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13.5px;font-family:'JetBrains Mono',monospace") }),
             ]),
             e('div', { key: 'container' }, [
               e('div', { key: 'l', style: sx('font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600') }, 'Container Docker (opcional)'),

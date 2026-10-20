@@ -70,6 +70,8 @@ async function init() {
     );
   `);
   await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS ordem INTEGER;');
+  // porta da tela ao vivo (noVNC) no mesmo host da automação; o proxy a serve em /a/<id>/vnc/
+  await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS vnc_porta INTEGER;');
   // robô do WhatsApp: quem é quem (telefone -> usuário do GLPI) e os pedidos que chegam pelos grupos
   await pool.query(`
     CREATE TABLE IF NOT EXISTS whatsapp_vinculos (
@@ -148,6 +150,7 @@ function rowToAutomation(row) {
     color: row.color,
     categories: row.categories || [],
     ordem: row.ordem == null ? null : row.ordem,
+    vncPorta: row.vnc_porta == null ? null : row.vnc_porta,
     status: row.status,
     lastCheckedAt: row.last_checked_at,
     createdAt: row.created_at,

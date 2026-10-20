@@ -26,11 +26,53 @@ async function subir() {
     });
   });
   const portaAuto = await ouvir(automacao);
-  const urls = { 7: `http://127.0.0.1:${portaAuto}/`, 8: 'http://127.0.0.1:1/' }; // 8: ninguém escuta
-  const proxy = http.createServer(criarProxyAutomacoes({ buscarUrl: async (id) => urls[id] || null }));
-  const base = `http://127.0.0.1:${await ouvir(proxy)}`;
-  return { base, portaAuto, vistos, fim: async () => { await fechar(proxy); await fechar(automacao); } };
+  // tela ao vivo de mentira (noVNC): página HTTP e WebSocket que devolve o que recebe
+  const vnc = http.createServer((req, res) => { res.writeHead(200); res.end(`vnc ${req.url}`); });
+  vnc.on('upgrade', (req, socket) => {
+    socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nX-Caminho: ${req.url}\r\n\r\n`);
+    socket.on('data', (d) => socket.write(d)); // eco
+    socket.on('end', () => socket.destroy());
+    socketsVnc.push(socket);
+  });
+  const socketsVnc = [];
+  const portaVnc = await ouvir(vnc);
+  const destinos = {
+    7: { url: `http://127.0.0.1:${portaAuto}/`, vncPorta: portaVnc },
+    8: { url: 'http://127.0.0.1:1/' }, // ninguém escuta e não tem tela ao vivo
+  };
+  const p = criarProxyAutomacoes({ buscarDestino: async (id) => destinos[id] || null });
+  const proxy = http.createServer(p.atender);
+  proxy.on('upgrade', p.atenderUpgrade);
+  const porta = await ouvir(proxy);
+  const base = `http://127.0.0.1:${porta}`;
+  return { base, porta, portaAuto, vistos, fim: async () => { socketsVnc.forEach((x) => x.destroy()); await fechar(proxy); await fechar(automacao); await fechar(vnc); } };
 }
+
+test('tela ao vivo: /a/<id>/vnc/ vai para a porta VNC da automação; sem VNC cadastrado dá 404', async () => {
+  const s = await subir();
+  try {
+    assert.equal(await (await fetch(`${s.base}/a/7/vnc/arx_vnc.html?x=1`)).text(), 'vnc /arx_vnc.html?x=1');
+    assert.equal((await fetch(`${s.base}/a/8/vnc/arx_vnc.html`)).status, 404);
+  } finally { await s.fim(); }
+});
+
+test('tela ao vivo: o WebSocket passa pelo proxy nos dois sentidos', async () => {
+  const s = await subir();
+  try {
+    const { resposta, socket } = await new Promise((ok, falha) => {
+      const req = http.request({ host: '127.0.0.1', port: s.porta, path: '/a/7/vnc/websockify', headers: { Connection: 'Upgrade', Upgrade: 'websocket' } });
+      req.on('upgrade', (r, sock) => ok({ resposta: r, socket: sock }));
+      req.on('response', (r) => falha(new Error(`sem upgrade: ${r.statusCode}`)));
+      req.on('error', falha);
+      req.end();
+    });
+    assert.equal(resposta.statusCode, 101);
+    assert.equal(resposta.headers['x-caminho'], '/websockify');
+    const eco = await new Promise((ok) => { socket.once('data', (d) => ok(d.toString())); socket.write('oi'); });
+    assert.equal(eco, 'oi');
+    socket.destroy();
+  } finally { await s.fim(); }
+});
 
 test('repassa por /a/<id>/ sem o prefixo, com corpo, e o host vira o da automação', async () => {
   const s = await subir();
