@@ -78,8 +78,14 @@
   }
   chamados.sort((a, b) => a.abertoHaMin - b.abertoHaMin);
 
-  // Resultados: 84 dias de execuções, com a semana e o tipo de cada uma.
-  const DIAS = 84;
+  // Resultados: 120 dias de execuções (dá para comparar 12 semanas e o mês passado com o período anterior).
+  const DIAS = 120;
+  const MOTIVOS = {
+    erro_exportar_modelo: ['Card sem modelo no SGA', 'Placa não encontrada no CRM'],
+    sincronizar_vistoria: ['Vistoria sem fotos no CRM', 'Card não encontrado pela placa'],
+    geral: ['SGA não respondeu a tempo', 'Sessão do SGA expirou', 'Usuário não encontrado', 'Login do CRM recusado'],
+  };
+  const agora = new Date();
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const porDia = [];
@@ -92,10 +98,34 @@
     for (let k = 0; k < total; k++) {
       const tipo = um(tipos);
       const erro = r() < (tipo === 'erro_exportar_modelo' ? 0.22 : tipo === 'sincronizar_vistoria' ? 0.15 : 0.06);
-      execucoes.push({ tipo, erro, associacao: um(ASSOCIACOES), segundos: entre(25, 240) });
+      // expediente das 8 às 18 h, com pico de manhã
+      const hora = Math.min(18, 8 + Math.floor(Math.pow(r(), 1.4) * 11));
+      if (d === 0 && hora > agora.getHours()) continue;
+      execucoes.push({
+        tipo, erro, hora, associacao: um(ASSOCIACOES), segundos: entre(25, 240),
+        origem: r() < 0.68 ? 'automatico' : 'manual',
+        motivo: erro ? um(MOTIVOS[tipo] ? MOTIVOS[tipo].concat(MOTIVOS.geral.slice(0, 1)) : MOTIVOS.geral) : null,
+        chamado: 47000 + entre(0, 1800), solicitante: pessoa(),
+      });
     }
     porDia.push({ data, execucoes });
   }
 
-  window.ExemploDados = { TIPOS, ASSOCIACOES, chamados, porDia, pessoa, DEPTOS };
+  // Disponibilidade: minutos fora do ar por dia de cada automação (a maioria dos dias sem queda).
+  const AUTOMACOES = ['Chamados GLPI', 'Alterar senha SGA', 'Cadastro de usuário', 'Foto de perfil', 'Relatórios SGA', 'Sincronizar vistoria', 'Converter planilha', 'Banco central', 'Robô do WhatsApp', 'GLPI'];
+  const MOTIVOS_QUEDA = ['Não respondeu à checagem de saúde', 'Reiniciado na atualização', 'Sem memória e reiniciado', 'Servidor do GLPI fora do ar', 'Rede interna instável'];
+  const disponibilidade = AUTOMACOES.map((nome, i) => {
+    const fragil = i === 4 || i === 9; // duas com mais quedas, para o exemplo ter contraste
+    const dias = porDia.map((p) => {
+      const quedas = [];
+      if (r() < (fragil ? 0.12 : 0.035)) {
+        const n = r() < 0.2 ? 2 : 1;
+        for (let k = 0; k < n; k++) quedas.push({ inicio: new Date(p.data.getTime() + entre(7, 19) * 3600000 + entre(0, 59) * 60000), minutos: Math.round(Math.pow(r(), 2.2) * 180) + 1, motivo: um(MOTIVOS_QUEDA) });
+      }
+      return { data: p.data, quedas };
+    });
+    return { nome, dias, agora: i === 9 ? 'offline' : 'online' };
+  });
+
+  window.ExemploDados = { TIPOS, ASSOCIACOES, chamados, porDia, pessoa, DEPTOS, disponibilidade };
 })();

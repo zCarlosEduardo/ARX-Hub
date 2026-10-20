@@ -126,12 +126,8 @@
 
     /* tela de uma automação aberta */
     .ex-visor { position: absolute; inset: 0; display: flex; flex-direction: column; }
-    .ex-visor-barra { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); background: var(--card); font-size: 12.5px; flex-shrink: 0; }
-    .ex-visor-barra .acoes { margin-left: auto; display: flex; gap: 4px; }
-    .ex-visor-barra button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-    .ex-visor-barra button:hover { background: var(--hover-bg); color: var(--text); }
     .ex-visor iframe { flex: 1; width: 100%; border: none; background: var(--bg); }
-    .ex-carregando { position: absolute; inset: 40px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; background: var(--bg); }
+    .ex-carregando { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; background: var(--bg); }
 
     /* busca geral (Ctrl K) */
     .ex-fundo { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; z-index: 50; animation: fadeIn 0.12s ease; }
@@ -171,6 +167,7 @@
   <script src="acessos.js" defer></script>
   <script src="alertas.js" defer></script>
   <script src="exemplo-dados.js" defer></script>
+  <script src="exemplo-ui.js" defer></script>
   <script src="exemplo-chamados.js" defer></script>
   <script src="exemplo-resultados.js" defer></script>
   <script src="arx-ajuda.js" defer></script>
@@ -237,7 +234,44 @@
         return cabe;
       }
 
+      const ICONES_NOVA = ['Workflow', 'Bot', 'FileText', 'Users', 'Database', 'BarChart3', 'Server', 'Receipt'];
+      // Janela "Nova automação" do exemplo: valida como o Hub valida, mas não salva nada.
+      function NovaAutomacao({ fechar, salvar }) {
+        const [f, setF] = useState({ nome: '', url: '', icone: 'Workflow', categoria: 'Painel', descricao: '' });
+        const [tocado, setTocado] = useState(false);
+        const [teste, setTeste] = useState('');
+        const mudar = (k) => (ev) => setF(Object.assign({}, f, { [k]: ev.target.value }));
+        const erros = {
+          nome: !f.nome.trim() ? 'Informe o nome.' : '',
+          url: !/^https?:\/\/[\w.-]+(:\d+)?\/?/.test(f.url.trim()) ? 'Use um endereço como http://container:4016/' : '',
+        };
+        const ok = !erros.nome && !erros.url;
+        const { Modal, Campo } = window.ExemploUI;
+        return e(Modal, {
+          titulo: 'Nova automação', descricao: 'Ela aparece no Painel para quem tem acesso e o Hub passa a conferir se está no ar.', fechar, largura: 560,
+          rodape: [
+            e('button', { key: 't', type: 'button', className: 'exu-btn', style: { marginRight: 'auto' }, disabled: !!erros.url, onClick: () => { setTeste('testando'); setTimeout(() => setTeste('ok'), 900); } },
+              teste === 'testando' ? 'Testando…' : teste === 'ok' ? 'Respondeu em 42 ms' : 'Testar conexão'),
+            e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: fechar }, 'Cancelar'),
+            e('button', { key: 's', type: 'button', className: 'exu-btn primario', onClick: () => { setTocado(true); if (ok) salvar(f); } }, 'Cadastrar'),
+          ],
+        }, [
+          e('div', { key: 'd', className: 'exu-duas-col' }, [
+            e(Campo, { key: 'n', rotulo: 'Nome', id: 'nvNome', erro: tocado && erros.nome }, e('input', { id: 'nvNome', value: f.nome, onChange: mudar('nome'), placeholder: 'Ex.: Alterar senha SGA', maxLength: 60, 'aria-invalid': tocado && !!erros.nome })),
+            e(Campo, { key: 'c', rotulo: 'Categoria', id: 'nvCat' }, e('select', { id: 'nvCat', value: f.categoria, onChange: mudar('categoria') }, ['Painel', 'SGA', 'PowerCRM', 'Banco de Dados'].map((c) => e('option', { key: c }, c)))),
+          ]),
+          e(Campo, { key: 'u', rotulo: 'Endereço interno', id: 'nvUrl', erro: tocado && erros.url, ajuda: 'O navegador nunca vê este endereço: a tela abre pelo proxy do Hub.' }, e('input', { id: 'nvUrl', value: f.url, onChange: (ev) => { setTeste(''); mudar('url')(ev); }, placeholder: 'http://container:4016/', spellCheck: false, 'aria-invalid': tocado && !!erros.url, style: { fontFamily: 'var(--font-mono)', fontSize: 13 } })),
+          e('div', { key: 'i', className: 'exu-campo' }, [
+            e('label', { key: 'l' }, 'Ícone'),
+            e('div', { key: 'g', className: 'exu-icones', role: 'group', 'aria-label': 'Ícone' }, ICONES_NOVA.map((nome) => e('button', { key: nome, type: 'button', 'aria-pressed': f.icone === nome ? 'true' : 'false', 'aria-label': nome, onClick: () => setF(Object.assign({}, f, { icone: nome })) }, Icon(nome, 17, 'currentColor')))),
+          ]),
+          e(Campo, { key: 'ds', rotulo: 'Descrição', id: 'nvDesc', ajuda: f.descricao.length + '/160 · aparece no cartão, em até duas linhas.' }, e('textarea', { id: 'nvDesc', value: f.descricao, onChange: mudar('descricao'), maxLength: 160 })),
+        ]);
+      }
+
       function Painel({ lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef }) {
+        const [nova, setNova] = useState(false);
+        const [avisar, avisos] = window.ExemploUI.useAvisos();
         const [busca, setBusca] = useState('');
         const [filtro, setFiltro] = useState('todas');
         const [grupo, setGrupo] = useState('todas');
@@ -304,7 +338,10 @@
               e('h2', { key: 'h' }, 'Automações'),
               e('p', { key: 'p' }, lista ? plural(todas.length, 'automação', 'automações') + ', ' + no + ' no ar · atualizado às ' + hora(atualizado) : 'Carregando automações'),
             ]),
+            e('button', { key: 'n', type: 'button', className: 'exu-btn primario', onClick: () => setNova(true) }, [Icon('Plus', 15, 'currentColor'), 'Nova automação']),
           ]),
+          nova ? e(NovaAutomacao, { key: 'nova', fechar: () => setNova(false), salvar: (f) => { setNova(false); avisar('Exemplo: "' + f.nome + '" seria cadastrada. Nada foi salvo.', 'ok'); } }) : null,
+          avisos,
 
           fora.length ? e('div', { key: 'alerta', className: 'ex-alerta', role: 'status' }, [
             Icon('AlertCircle', 18, 'var(--error)'),
@@ -402,13 +439,10 @@
         const [carregado, setCarregado] = useState(false);
         useEffect(() => setCarregado(false), [recarga, passe]);
         return e('div', { className: 'ex-visor', style: ativo ? null : { display: 'none' } }, [
-          e('div', { key: 'b', className: 'ex-visor-barra' }, [
-            icone(a, 13, 'ex-pilula-ic'), e('b', { key: 'n' }, a.name), e(Status, { key: 's', s: a.status }),
-            e('div', { key: 'a', className: 'acoes' }, [
-              e('button', { key: 'r', type: 'button', onClick: recarregar, title: 'Recarregar a tela' }, [Icon('RefreshCw', 13, 'currentColor'), 'Recarregar']),
-              e('button', { key: 'n', type: 'button', onClick: () => window.open(urlTela(a, passe), '_blank'), title: 'Abrir em nova aba do navegador' }, [Icon('ExternalLink', 13, 'currentColor'), 'Nova aba']),
-              e('button', { key: 'f', type: 'button', onClick: fechar, title: 'Fechar' }, [Icon('X', 13, 'currentColor'), 'Fechar']),
-            ]),
+          // barrinha flutuante: só recarregar e fechar (a tela da automação fica com a área inteira)
+          e('div', { key: 'm', className: 'ex-mini', role: 'toolbar', 'aria-label': 'Ações da tela ' + a.name }, [
+            e('button', { key: 'r', type: 'button', onClick: recarregar, title: 'Recarregar a tela', 'aria-label': 'Recarregar a tela' }, Icon('RefreshCw', 15, 'currentColor')),
+            e('button', { key: 'f', type: 'button', onClick: fechar, title: 'Fechar', 'aria-label': 'Fechar ' + a.name }, Icon('X', 15, 'currentColor')),
           ]),
           passe === null ? null : e('iframe', { key: 'f' + recarga, src: urlTela(a, passe), title: a.name, onLoad: () => setCarregado(true) }),
           carregado ? null : e('div', { key: 'c', className: 'ex-carregando' }, a.status === 'offline'
