@@ -206,6 +206,8 @@ app.get('/api/exemplo/automacoes', asyncHandler(async (req, res) => {
     const geral = { ...a };
     delete geral.endereco;
     delete geral.grupos;
+    delete geral.container;
+    delete geral.vncPorta;
     return geral;
   }));
 }));
