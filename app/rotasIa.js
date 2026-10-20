@@ -72,6 +72,35 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
       res.json(r.dados);
     }));
 
+    // Revisão: a IA local lê todos os chamados e as divergências são decididas aqui, uma por uma (gabarito humano)
+    app.get('/api/admin/ia/revisao', admin.soAdmin, asyncHandler(async (req, res) => {
+      const r = await ia('/api/revisao');
+      res.set('Cache-Control', 'no-store');
+      res.json(r.ok ? r.dados : { indisponivel: true });
+    }));
+    for (const acao of ['iniciar', 'parar']) {
+      app.post(`/api/admin/ia/revisao/${acao}`, admin.soAdmin, asyncHandler(async (req, res) => {
+        const usuario = await admin.exigirAdmin(req);
+        const r = await ia(`/api/revisao/${acao}`, 'POST', {});
+        if (!r.ok) throw new ErroHttp(r.status === 409 || r.status === 400 ? r.status : 424, r.dados.error || 'IA fora do ar.');
+        await admin.anotar(usuario, `ia.revisao.${acao}`, 'IA local', null, { feito: r.dados.feito, total: r.dados.total });
+        res.json(r.dados);
+      }));
+    }
+    app.get('/api/admin/ia/revisao/divergencias', admin.soAdmin, asyncHandler(async (req, res) => {
+      const r = await ia('/api/revisao/divergencias', 'POST', { offset: Number(req.query.offset) || 0, limite: Number(req.query.limite) || 20, pendentes: req.query.todas !== '1' });
+      if (!r.ok) throw new ErroHttp(424, r.dados.error || 'IA fora do ar.');
+      res.set('Cache-Control', 'no-store');
+      res.json(r.dados);
+    }));
+    app.post('/api/admin/ia/revisao/decidir', admin.soAdmin, asyncHandler(async (req, res) => {
+      const usuario = await admin.exigirAdmin(req);
+      const b = req.body || {};
+      const r = await ia('/api/revisao/decidir', 'POST', { id: String(b.id || ''), tipo: String(b.tipo || ''), quem: usuario.nome || usuario.login });
+      if (!r.ok) throw new ErroHttp(r.status === 400 || r.status === 404 ? r.status : 424, r.dados.error || 'IA fora do ar.');
+      res.json(r.dados);
+    }));
+
     app.get('/api/admin/ia/auditoria', admin.soAdmin, asyncHandler(async (req, res) => {
       const r = await ia('/api/auditoria');
       res.set('Cache-Control', 'no-store');
@@ -104,8 +133,8 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
     }
     const numeros = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => typeof v === 'number' || typeof v === 'string' && v.length < 80));
     return {
-      estado: d.estado ? { treinado: d.estado.treinado, exemplos: d.estado.exemplos, treinadoEm: d.estado.treinadoEm, modelos: d.estado.modelos, tipos: d.estado.tipos, treino: d.estado.treino && { etapa: d.estado.treino.etapa, rodando: d.estado.treino.rodando, iniciouEm: d.estado.treino.iniciouEm, terminouEm: d.estado.treino.terminouEm } } : null,
-      metricas: d.metricas ? { total: d.metricas.total, acertoIa: d.metricas.acertoIa, acertoRegras: d.metricas.acertoRegras, porTipo: d.metricas.porTipo, distribuicao: d.metricas.distribuicao, treinadoEm: d.metricas.treinadoEm, modeloEmbed: d.metricas.modeloEmbed, modeloTexto: d.metricas.modeloTexto, confirmados: d.metricas.confirmados ? { total: d.metricas.confirmados.total, acertoIa: d.metricas.confirmados.acertoIa, acertoRegras: d.metricas.confirmados.acertoRegras } : null } : null,
+      estado: d.estado ? { revisao: d.estado.revisao || null, treinado: d.estado.treinado, exemplos: d.estado.exemplos, treinadoEm: d.estado.treinadoEm, modelos: d.estado.modelos, tipos: d.estado.tipos, treino: d.estado.treino && { etapa: d.estado.treino.etapa, rodando: d.estado.treino.rodando, iniciouEm: d.estado.treino.iniciouEm, terminouEm: d.estado.treino.terminouEm } } : null,
+      metricas: d.metricas ? { total: d.metricas.total, acertoIa: d.metricas.acertoIa, acertoRegras: d.metricas.acertoRegras, porTipo: d.metricas.porTipo, distribuicao: d.metricas.distribuicao, treinadoEm: d.metricas.treinadoEm, modeloEmbed: d.metricas.modeloEmbed, modeloTexto: d.metricas.modeloTexto, confirmados: d.metricas.confirmados ? { total: d.metricas.confirmados.total, acertoIa: d.metricas.confirmados.acertoIa, acertoRegras: d.metricas.confirmados.acertoRegras } : null, humanos: d.metricas.humanos ? { total: d.metricas.humanos.total, acertoIa: d.metricas.humanos.acertoIa, acertoRegras: d.metricas.humanos.acertoRegras } : null } : null,
       modelos: (d.modelos || []).map((m) => ({ nome: m.nome, tamanhoMb: m.tamanhoMb })),
       eventos: (d.eventos || []).slice(-100).map((ev) => ({ quando: ev.quando, tipo: ev.tipo, ...numeros(ev) })),
       decisoes: { total: dec.length, concorda, discorda: dec.length - concorda, porOrigem },
