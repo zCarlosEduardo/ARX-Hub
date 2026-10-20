@@ -9,6 +9,8 @@ function inteiroPositivo(valor, padrao) {
 function lerConfig(env = process.env) {
   return {
     port: inteiroPositivo(env.PORT, 8317),
+    // porta do proxy das automações (proxy.js); o front (app.js e acessos.js) usa a mesma, fixa em 8318
+    proxyPort: inteiroPositivo(env.PROXY_PORT, 8318),
     checkIntervalMs: inteiroPositivo(env.CHECK_INTERVAL_MS, 15000),
     checkTimeoutMs: inteiroPositivo(env.CHECK_TIMEOUT_MS, 3000),
   };

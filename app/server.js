@@ -11,11 +11,16 @@ const { repoWhatsapp } = require('./repoWhatsapp');
 
 const { lerConfig, verificarSenhaProducao } = require('./config');
 const { calcularMudancas } = require('./varredura');
+const { criarProxyAutomacoes, repassar } = require('./proxy');
+const { mascararUrl } = require('./mascara');
 
-const { port: PORT, checkIntervalMs: CHECK_INTERVAL_MS, checkTimeoutMs: CHECK_TIMEOUT_MS } = lerConfig();
+const { port: PORT, proxyPort: PROXY_PORT, checkIntervalMs: CHECK_INTERVAL_MS, checkTimeoutMs: CHECK_TIMEOUT_MS } = lerConfig();
 const HEARTBEAT_MS = 25000;
+const URL_CHAMADOS = (process.env.CHAMADOS_GLPI_URL || 'http://host.docker.internal:4013').replace(/\/+$/, '');
 
 const app = express();
+// O front do Hub fala com o chamados-glpi por aqui, sem ver o endereço dele. Antes do express.json: o corpo passa em fluxo.
+app.use('/servicos/chamados', (req, res) => repassar(req, res, URL_CHAMADOS, req.url, '/servicos/chamados'));
 app.use(express.json());
 
 // Versão do front (hash da pasta public): a tela aberta consulta e recarrega quando muda. O index sai com
@@ -73,7 +78,9 @@ async function listarAutomacoes() {
     // ordem escolhida no painel de administração; as que ainda não têm ordem ficam no fim, pelo id
     const { rows } = await pool.query('SELECT * FROM automations ORDER BY ordem NULLS LAST, id');
     const lista = rows.map(rowToAutomation);
-    cacheLista = { lista, json: JSON.stringify(lista) };
+    // o navegador recebe só o endereço mascarado; a tela abre pelo proxy (/a/<id>/) e a URL real fica no servidor
+    const publica = lista.map(({ url, ...a }) => ({ ...a, endereco: mascararUrl(url) }));
+    cacheLista = { lista, json: JSON.stringify(publica), publica };
   }
   return cacheLista;
 }
@@ -166,7 +173,7 @@ app.get('/api/events', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/automations', asyncHandler(async (req, res) => {
-  res.json((await listarAutomacoes()).lista);
+  res.json((await listarAutomacoes()).publica);
 }));
 
 function idOuErro(req) {
@@ -184,6 +191,12 @@ function dadosOuErro(req) {
 // Cadastro de automações (criar, editar, remover, testar conexão): só admin. `rotasAdmin` é criado mais abaixo;
 // a função só roda na requisição, quando ele já existe.
 const soAdmin = (req, res, next) => rotasAdmin.soAdmin(req, res, next);
+
+// URL real de cada automação ({ id: url }): só admin, para editar, copiar e abrir direto.
+app.get('/api/admin/automations/urls', soAdmin, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(Object.fromEntries((await listarAutomacoes()).lista.map((a) => [a.id, a.url])));
+}));
 
 app.post('/api/automations', soAdmin, asyncHandler(async (req, res) => {
   const d = dadosOuErro(req);
@@ -333,7 +346,6 @@ const rotasAdmin = criarRotasAdmin({
 rotasAdmin.registrar(app);
 
 // Robô do WhatsApp (veja rotasWhatsapp.js). O robô é um serviço à parte; o Hub decide o que cada mensagem vira.
-const URL_CHAMADOS = (process.env.CHAMADOS_GLPI_URL || 'http://host.docker.internal:4013').replace(/\/+$/, '');
 async function classificarMensagem(texto) {
   const r = await fetch(`${URL_CHAMADOS}/api/classificar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }), signal: AbortSignal.timeout(5000) });
   if (!r.ok) throw new Error(`classificador respondeu ${r.status}`);
@@ -375,6 +387,9 @@ async function start() {
     setInterval(() => rotasWhatsapp.abrirPendentesAtrasados().catch((err) => console.error('[whatsapp]', err.message)), 20000);
   }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
+  const buscarUrl = async (id) => ((await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || {}).url || null; // BIGSERIAL chega do pg como texto
+  require('http').createServer(criarProxyAutomacoes({ buscarUrl }))
+    .listen(PROXY_PORT, () => console.log(`Proxy das automações ouvindo na porta ${PROXY_PORT}`));
 }
 
 start().catch((err) => {

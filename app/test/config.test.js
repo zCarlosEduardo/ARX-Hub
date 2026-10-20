@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { lerConfig, verificarSenhaProducao } = require('../config');
 
 test('lerConfig usa padrões e aceita override válido', () => {
-  assert.deepEqual(lerConfig({}), { port: 8317, checkIntervalMs: 15000, checkTimeoutMs: 3000 });
+  assert.deepEqual(lerConfig({}), { port: 8317, proxyPort: 8318, checkIntervalMs: 15000, checkTimeoutMs: 3000 });
   assert.equal(lerConfig({ CHECK_INTERVAL_MS: '30000' }).checkIntervalMs, 30000);
   assert.equal(lerConfig({ CHECK_INTERVAL_MS: 'abc' }).checkIntervalMs, 15000);
   assert.equal(lerConfig({ CHECK_TIMEOUT_MS: '-1' }).checkTimeoutMs, 3000);

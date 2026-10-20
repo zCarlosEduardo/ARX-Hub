@@ -8,7 +8,7 @@
   const LIMITE_BYTES = 800 * 1024; // acima disso não grava
   const KEY_ULTIMO = 'arxhub_chamados_lista_ultimo';
   const KEY_LISTA = 'arxhub_chamados_lista:';
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`; // chamados-glpi
+  const SERVICO = `${location.origin}/servicos/chamados`; // chamados-glpi
 
   /** Impressão curta (FNV-1a 32 bits) só para saber se o token mudou; não permite recuperar o token. */
   function hashToken(token) {

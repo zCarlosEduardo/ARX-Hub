@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mascararUrl } = require('../public/mascara.js');
+const { mascararUrl } = require('../mascara');
 
 test('mascararUrl esconde o host e deixa só a porta', () => {
   assert.equal(mascararUrl('http://192.168.0.10:4016/'), 'xxx.xxx.xxx.xxx:4016');
