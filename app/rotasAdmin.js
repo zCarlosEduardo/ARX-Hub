@@ -9,6 +9,7 @@
 //   POST   /api/admin/admins              acrescenta um admin
 //   DELETE /api/admin/admins/:id          tira um admin (nunca o último)
 //   PUT    /api/admin/automations/ordem   nova ordem das automações
+// `soAdmin` protege também o cadastro de automações (criar, editar, remover, testar conexão) no server.js.
 const crypto = require('crypto');
 const { adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
 
@@ -72,6 +73,12 @@ function criarRotasAdmin(deps) {
     return saida;
   }
 
+  /** Middleware para rotas de fora deste arquivo: só admin passa. */
+  const soAdmin = asyncHandler(async (req, res, next) => {
+    await exigirAdmin(req);
+    next();
+  });
+
   function registrar(app) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
       res.set('Cache-Control', 'no-store');
@@ -134,7 +141,7 @@ function criarRotasAdmin(deps) {
     }));
   }
 
-  return { registrar, configAtual, quemE, identificar, exigirAdmin };
+  return { registrar, configAtual, quemE, identificar, exigirAdmin, soAdmin };
 }
 
 module.exports = { criarRotasAdmin };

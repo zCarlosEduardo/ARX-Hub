@@ -179,3 +179,20 @@ test('a identidade fica em cache por um tempo (não bate no GLPI a cada clique) 
     assert.equal(s.chamadasGlpi.length, 2);
   } finally { await s.fechar(); }
 });
+
+test('soAdmin: cadastro de automação só passa para admin (sem token 401, comum 403)', async () => {
+  const repo = repoMemoria([{ nome: 'Carlos Eduardo de Souza Alonso' }]);
+  const glpi = { async identificarUsuario(token) { if (USUARIOS[token]) return USUARIOS[token]; throw new Error('token inválido'); } };
+  const rotas = criarRotasAdmin({ repo, glpi, asyncHandler, ErroHttp });
+  const app = express();
+  app.delete('/api/automations/:id', rotas.soAdmin, (req, res) => res.status(204).end());
+  app.use(erroFinal(() => {}));
+  const servidor = await new Promise((ok) => { const s = app.listen(0, '127.0.0.1', () => ok(s)); });
+  const url = `http://127.0.0.1:${servidor.address().port}/api/automations/1`;
+  const apagar = (token) => fetch(url, { method: 'DELETE', headers: token ? { 'X-Glpi-Token': token } : {} }).then((r) => r.status);
+  try {
+    assert.equal(await apagar(), 401);
+    assert.equal(await apagar(TOKEN_COMUM), 403);
+    assert.equal(await apagar(TOKEN_ADMIN), 204);
+  } finally { await new Promise((ok) => servidor.close(ok)); }
+});
