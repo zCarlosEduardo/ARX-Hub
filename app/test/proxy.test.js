@@ -3,6 +3,28 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { criarProxyAutomacoes, reescreverLocation } = require('../proxy');
+const { criarPasses } = require('../passe');
+
+test('automação restrita: sem passe 403; o passe da query vira cookie e não vai para a automação', async () => {
+  const s = await subir();
+  try {
+    assert.equal((await fetch(`${s.base}/a/9/`)).status, 403);
+    assert.equal((await fetch(`${s.base}/a/9/?passe=lixo`)).status, 403);
+    assert.equal((await fetch(`${s.base}/a/9/?passe=${s.passes.emitir({ automacaoId: 7, usuario: null })}`)).status, 403); // passe de outra
+    const passe = s.passes.emitir({ automacaoId: 9, usuario: { id: 7, nome: 'Fulano' } });
+    const r = await fetch(`${s.base}/a/9/tela?x=1&passe=${passe}`);
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).url, '/tela?x=1');
+    const cookie = r.headers.get('set-cookie');
+    assert.match(cookie, /^arx_passe_9=.+; Path=\/; HttpOnly; SameSite=Lax/);
+    // pedido seguinte (caminho absoluto da tela, pelo Referer) com o cookie: passa, e o cookie não chega à automação
+    const r2 = await fetch(`${s.base}/api/opcoes`, { headers: { Referer: `${s.base}/a/9/`, Cookie: cookie.split(';')[0] } });
+    assert.equal(r2.status, 200);
+    assert.equal(s.vistos.some((v) => v.cookie), false);
+    // automação sem grupos continua aberta sem passe
+    assert.equal((await fetch(`${s.base}/a/7/`)).status, 200);
+  } finally { await s.fim(); }
+});
 
 const ouvir = (servidor) => new Promise((ok) => servidor.listen(0, '127.0.0.1', () => ok(servidor.address().port)));
 const fechar = (servidor) => new Promise((ok) => { servidor.closeAllConnections(); servidor.close(ok); });
@@ -10,7 +32,7 @@ const fechar = (servidor) => new Promise((ok) => { servidor.closeAllConnections(
 async function subir() {
   const vistos = [];
   const automacao = http.createServer((req, res) => {
-    vistos.push({ url: req.url, host: req.headers.host, referer: req.headers.referer });
+    vistos.push({ url: req.url, host: req.headers.host, referer: req.headers.referer, cookie: req.headers.cookie });
     if (req.url === '/pasta') { res.writeHead(301, { Location: '/pasta/' }); return res.end(); }
     if (req.url === '/api/logs/1') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -39,13 +61,15 @@ async function subir() {
   const destinos = {
     7: { url: `http://127.0.0.1:${portaAuto}/`, vncPorta: portaVnc },
     8: { url: 'http://127.0.0.1:1/' }, // ninguém escuta e não tem tela ao vivo
+    9: { url: `http://127.0.0.1:${portaAuto}/`, grupos: [5] }, // restrita a um grupo do GLPI
   };
-  const p = criarProxyAutomacoes({ buscarDestino: async (id) => destinos[id] || null });
+  const passes = criarPasses();
+  const p = criarProxyAutomacoes({ buscarDestino: async (id) => destinos[id] || null, passes });
   const proxy = http.createServer(p.atender);
   proxy.on('upgrade', p.atenderUpgrade);
   const porta = await ouvir(proxy);
   const base = `http://127.0.0.1:${porta}`;
-  return { base, porta, portaAuto, vistos, fim: async () => { socketsVnc.forEach((x) => x.destroy()); await fechar(proxy); await fechar(automacao); await fechar(vnc); } };
+  return { base, porta, portaAuto, vistos, passes, fim: async () => { socketsVnc.forEach((x) => x.destroy()); await fechar(proxy); await fechar(automacao); await fechar(vnc); } };
 }
 
 test('tela ao vivo: /a/<id>/vnc/ vai para a porta VNC da automação; sem VNC cadastrado dá 404', async () => {

@@ -93,6 +93,15 @@
     const urlVisivel = (a) => (podeGerenciar && urlReal(a) ? urlReal(a).replace(/^https?:\/\//, '') : cfgAuto.endereco === 'oculto' ? '' : a.endereco);
     const urlProxy = (a) => `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/`;
     const podeNovaAba = podeGerenciar || cfgAuto.novaAba;
+    // Passe de cada tela aberta (passe.js): o proxy exige nas automações restritas por grupo e anota quem abriu.
+    // '' = não deu para pegar (sem token): a tela abre sem passe e só funciona se a automação for de todo mundo.
+    const [passes, setPasses] = useState({});
+    const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
+    const comPasse = (a, passe) => urlProxy(a) + (passe ? '?passe=' + encodeURIComponent(passe) : '');
+    function abrirEmNovaAba(a) {
+      const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
+      pedirPasse(a.id).then((passe) => { if (janela) janela.location = comPasse(a, passe); });
+    }
     const [toasts, setToasts] = useState([]);
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [confirmDialog, setConfirmDialog] = useState(null);
@@ -163,13 +172,8 @@
       let es;
       try {
         es = new EventSource('/api/events');
-        es.onmessage = (ev) => {
-          try {
-            setAutomations(JSON.parse(ev.data));
-            setAutomationsLoaded(true);
-            setLastRefresh(new Date());
-          } catch (err) {}
-        };
+        // o SSE só avisa que mudou: a lista vem de /api/automations com o token (cada um vê os seus grupos)
+        es.onmessage = () => refresh();
       } catch (err) {}
       // Safety-net poll in case the SSE connection is ever blocked (e.g. a proxy buffering it).
       const t = setInterval(refresh, 15000);
@@ -272,6 +276,8 @@
       if (token) setGlpiToken(token);
       return hub.aoMudar((a) => setGlpiToken(a.userToken || null));
     }, []);
+    // token novo (cofre destravou, trocou de pessoa): as automações visíveis dependem dos grupos dela
+    useEffect(() => { refresh(); }, [glpiToken, refresh]);
 
     useEffect(() => {
       if (!glpiOpen) return;
@@ -399,6 +405,9 @@
       // so force a real reload by remounting the iframe with a fresh key.
       viewerNonce.current[id] = (viewerNonce.current[id] || 0) + 1;
       setViewerLoad((v) => ({ ...v, [id]: 'loading' }));
+      // passe novo a cada carga; o iframe só monta quando ele chega (ou falha)
+      setPasses((p) => { const n = { ...p }; delete n[id]; return n; });
+      pedirPasse(id).then((passe) => setPasses((p) => ({ ...p, [id]: passe })));
       viewerTimers.current[id] = setTimeout(() => {
         setViewerLoad((v) => (v[id] === 'loading' ? { ...v, [id]: 'error' } : v));
       }, 8000);
@@ -752,7 +761,7 @@
           style: sx('position:absolute;top:44px;right:10px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -8px rgba(0,0,0,0.12);z-index:5;overflow:hidden;min-width:170px'),
         }, [
           e('button', { key: 'edit', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); openEditModal({ ...a, url: urlReal(a) }); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Pencil', 14), ' Editar']),
-          e('button', { key: 'newtab', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); window.open(urlProxy(a), '_blank'); setMenuOpenId(null); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+          e('button', { key: 'newtab', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); abrirEmNovaAba(a); setMenuOpenId(null); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
           e('button', { key: 'copy', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); copyUrl(urlReal(a)); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Copy', 14), ' Copiar URL']),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           e('button', { key: 'del', className: 'menu-item-danger', onClick: (ev) => { ev.stopPropagation(); deleteAutomation(a.id); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--error);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Trash2', 14), ' Remover']),
@@ -829,7 +838,7 @@
             e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-soft);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap") }, urlVisivel(a)),
           ]),
           fabItem('reload', 'RefreshCw', 'Recarregar', () => startViewerLoad(a.id)),
-          podeNovaAba && fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(urlProxy(a), '_blank')),
+          podeNovaAba && fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => abrirEmNovaAba(a)),
           fabItem('full', 'Maximize2', 'Tela cheia', toggleFullscreen),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           fabItem('close', 'X', 'Fechar aba', () => closeTab(a.id), true),
@@ -847,12 +856,12 @@
             : 'O serviço pode estar bloqueando exibição em iframe (X-Frame-Options / CSP) ou estar fora do alcance desta rede.'),
           e('div', { key: 'actions', style: sx('display:flex;gap:10px;margin-top:6px') }, [
             e('button', { key: 'retry', className: 'btn-primary', onClick: () => startViewerLoad(a.id), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('RefreshCw', 14), ' Tentar novamente']),
-            podeNovaAba && e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(urlProxy(a), '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+            podeNovaAba && e('button', { key: 'ext', className: 'btn-outline', onClick: () => abrirEmNovaAba(a), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
           ]),
         ]) : null,
-        e('iframe', {
+        passes[a.id] === undefined ? null : e('iframe', {
           key: 'frame-' + a.id + '-' + (viewerNonce.current[a.id] || 0),
-          src: urlProxy(a), title: a.name,
+          src: comPasse(a, passes[a.id]), title: a.name,
           onLoad: () => onIframeLoad(a.id),
           style: Object.assign({ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', background: 'var(--bg)' }, state === 'loaded' ? {} : { visibility: 'hidden' }),
         }),

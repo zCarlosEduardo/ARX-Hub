@@ -1,6 +1,28 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { usuarioDaSessao, adminCorrespondente, adminsIniciais, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO } = require('../admin');
+const { usuarioDaSessao, adminCorrespondente, adminsIniciais, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, validarGrupos, podeVer, TIPOS_SOLICITACAO } = require('../admin');
+
+test('usuarioDaSessao lê os grupos do GLPI (lista ou objeto) sem repetir', () => {
+  assert.deepEqual(usuarioDaSessao({ glpiID: 3, glpiname: 'x', glpigroups: [4, '9', 4] }).grupos, [4, 9]);
+  assert.deepEqual(usuarioDaSessao({ glpiID: 3, glpiname: 'x', glpigroups: { 5: 5, 6: '6' } }).grupos, [5, 6]);
+  assert.deepEqual(usuarioDaSessao({ glpiID: 3, glpiname: 'x' }).grupos, []);
+});
+
+test('validarGrupos: ids positivos sem repetir; lista vazia libera para todos', () => {
+  assert.deepEqual(validarGrupos({ grupos: ['3', 3, 8] }), { ok: true, valor: [3, 8] });
+  assert.deepEqual(validarGrupos({ grupos: [] }), { ok: true, valor: [] });
+  assert.equal(validarGrupos({ grupos: [0] }).ok, false);
+  assert.equal(validarGrupos({}).ok, false);
+});
+
+test('podeVer: sem grupos todos veem; com grupos só quem está neles, e admin sempre', () => {
+  const restrita = { grupos: [10, 20] };
+  assert.equal(podeVer({ grupos: [] }, null), true);
+  assert.equal(podeVer(restrita, null), false);
+  assert.equal(podeVer(restrita, { admin: false, usuario: { grupos: [20] } }), true);
+  assert.equal(podeVer(restrita, { admin: false, usuario: { grupos: [30] } }), false);
+  assert.equal(podeVer(restrita, { admin: true, usuario: { grupos: [] } }), true);
+});
 
 const SESSAO = { session: { glpiID: 7, glpiname: 'carlos.alonso', glpifirstname: 'Carlos Eduardo', glpirealname: 'de Souza Alonso', glpifriendlyname: 'Carlos Eduardo de Souza Alonso' } };
 

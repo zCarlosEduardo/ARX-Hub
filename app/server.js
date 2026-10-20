@@ -13,6 +13,10 @@ const { lerConfig, verificarSenhaProducao } = require('./config');
 const { calcularMudancas } = require('./varredura');
 const { criarProxyAutomacoes, repassar } = require('./proxy');
 const { mascararUrl } = require('./mascara');
+const { criarPasses } = require('./passe');
+const { podeVer, validarGrupos } = require('./admin');
+
+const passes = criarPasses();
 
 const { port: PORT, proxyPort: PROXY_PORT, checkIntervalMs: CHECK_INTERVAL_MS, checkTimeoutMs: CHECK_TIMEOUT_MS } = lerConfig();
 const HEARTBEAT_MS = 25000;
@@ -80,9 +84,23 @@ async function listarAutomacoes() {
     const lista = rows.map(rowToAutomation);
     // o navegador recebe só o endereço mascarado; a tela abre pelo proxy (/a/<id>/) e a URL real fica no servidor
     const publica = lista.map(({ url, ...a }) => ({ ...a, endereco: mascararUrl(url) }));
-    cacheLista = { lista, json: JSON.stringify(publica), publica };
+    cacheLista = { lista, publica };
   }
   return cacheLista;
+}
+
+/**
+ * Quem está pedindo, pelo token do GLPI no cabeçalho: { admin, usuario } ou null (sem token ou token inválido).
+ * Decide quais automações a pessoa vê (grupos do GLPI) e quem abriu cada tela.
+ */
+async function quemVe(req) {
+  if (!String(req.get('X-Glpi-Token') || '').trim()) return null;
+  try {
+    const { usuario, admin } = await rotasAdmin.quemE(req);
+    return { usuario, admin: !!admin };
+  } catch {
+    return null; // token recusado pelo GLPI: vê só o que é de todo mundo, como quem não mandou token
+  }
 }
 
 function escreverSse(res, texto) {
@@ -94,10 +112,11 @@ function escreverSse(res, texto) {
   }
 }
 
+// O SSE só avisa que a lista mudou: cada navegador busca GET /api/automations com o próprio token, porque cada pessoa
+// vê as automações dos seus grupos (o EventSource não manda cabeçalho).
 async function broadcastAutomations() {
   if (sseClients.size === 0) return;
-  const { json } = await listarAutomacoes();
-  const payload = `data: ${json}\n\n`;
+  const payload = 'data: {"mudou":true}\n\n';
   for (const res of sseClients) escreverSse(res, payload);
 }
 
@@ -168,12 +187,23 @@ app.get('/api/events', asyncHandler(async (req, res) => {
   res.flushHeaders();
   sseClients.add(res);
   req.on('close', () => sseClients.delete(res));
-  const { json } = await listarAutomacoes();
-  escreverSse(res, `data: ${json}\n\n`);
+  escreverSse(res, 'data: {"mudou":true}\n\n');
 }));
 
 app.get('/api/automations', asyncHandler(async (req, res) => {
-  res.json((await listarAutomacoes()).publica);
+  const quem = await quemVe(req);
+  res.set('Cache-Control', 'no-store');
+  res.json((await listarAutomacoes()).publica.filter((a) => podeVer(a, quem)));
+}));
+
+// Passe para abrir a tela pelo proxy (passe.js): confere se a pessoa vê a automação e diz ao proxy quem abriu.
+app.post('/api/automations/:id/passe', asyncHandler(async (req, res) => {
+  const id = idOuErro(req);
+  const a = (await listarAutomacoes()).lista.find((x) => String(x.id) === String(id));
+  const quem = await quemVe(req);
+  if (!a || !podeVer(a, quem)) throw new ErroHttp(403, 'Sem acesso a esta automação.');
+  res.set('Cache-Control', 'no-store');
+  res.json({ passe: passes.emitir({ automacaoId: id, usuario: quem ? quem.usuario : null }) });
 }));
 
 function idOuErro(req) {
@@ -194,8 +224,35 @@ const podeGerenciar = (req, res, next) => rotasAdmin.podeGerenciarAutomacoes(req
 
 // URL real de cada automação ({ id: url }): para editar, copiar e abrir direto.
 app.get('/api/admin/automations/urls', podeGerenciar, asyncHandler(async (req, res) => {
+  const quem = await quemVe(req);
   res.set('Cache-Control', 'no-store');
-  res.json(Object.fromEntries((await listarAutomacoes()).lista.map((a) => [a.id, a.url])));
+  res.json(Object.fromEntries((await listarAutomacoes()).lista.filter((a) => podeVer(a, quem)).map((a) => [a.id, a.url])));
+}));
+
+// Grupos do GLPI que veem cada automação: só admin (mesmo com o cadastro liberado para todos).
+const soAdmin = (req, res, next) => rotasAdmin.soAdmin(req, res, next);
+
+app.get('/api/admin/grupos-glpi', soAdmin, asyncHandler(async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json(await glpi.listarGrupos(String(req.get('X-Glpi-Token')).trim()));
+  } catch (err) {
+    throw new ErroHttp(502, glpi.sanitizar((err && err.message) || 'Falha ao ler os grupos do GLPI.', [req.get('X-Glpi-Token')]));
+  }
+}));
+
+app.put('/api/admin/automations/:id/grupos', soAdmin, asyncHandler(async (req, res) => {
+  const id = idOuErro(req);
+  const v = validarGrupos(req.body);
+  if (!v.ok) throw new ErroHttp(400, v.error);
+  const antes = await automacaoAtual(id);
+  if (!antes) throw new ErroHttp(404, 'não encontrado');
+  await pool.query('UPDATE automations SET grupos = $1, updated_at = now() WHERE id = $2', [v.valor, id]);
+  invalidarCache();
+  const quem = await quemVe(req);
+  await rotasAdmin.anotar(quem && quem.usuario, 'automacao.grupos', antes.name, { grupos: antes.grupos }, { grupos: v.valor });
+  broadcastAutomations().catch(() => {});
+  res.json({ id, grupos: v.valor });
 }));
 
 app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
@@ -401,7 +458,7 @@ async function start() {
   }
   app.listen(PORT, () => console.log(`ARX Hub ouvindo na porta ${PORT}`));
   const buscarDestino = async (id) => (await listarAutomacoes()).lista.find((a) => String(a.id) === String(id)) || null; // BIGSERIAL chega do pg como texto
-  const proxy = criarProxyAutomacoes({ buscarDestino });
+  const proxy = criarProxyAutomacoes({ buscarDestino, passes });
   require('http').createServer(proxy.atender)
     .on('upgrade', proxy.atenderUpgrade)
     .listen(PROXY_PORT, () => console.log(`Proxy das automações ouvindo na porta ${PROXY_PORT}`));
