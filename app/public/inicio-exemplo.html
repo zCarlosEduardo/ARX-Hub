@@ -3,94 +3,211 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ARX Exemplo do painel</title>
+  <title>ARX Hub de exemplo</title>
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
   <link rel="stylesheet" href="styles.css">
   <script>
     (function () {
       var t = null;
-      try { t = localStorage.getItem('arx-tema'); } catch (e) { /* sem armazenamento: tema claro */ }
+      try { t = localStorage.getItem('arxhub_exemplo_tema') || localStorage.getItem('arx-tema'); } catch (e) { /* sem armazenamento: tema claro */ }
       document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    })();
+    // Repassa o tema para as automações abertas em iframe (igual ao index.html).
+    (function () {
+      function post(f) {
+        try { f.contentWindow.postMessage({ type: 'arx-theme', theme: document.documentElement.getAttribute('data-theme') }, '*'); } catch (e) { /* iframe ainda sem janela */ }
+      }
+      document.addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'IFRAME') post(ev.target); }, true);
+      new MutationObserver(function () { document.querySelectorAll('iframe').forEach(post); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     })();
   </script>
   <style>
-    /* Exemplo de tela inicial: só tokens do styles.css (mesmas cores do Hub e da Administração). */
-    .ini-faixa { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12.5px; background: var(--warn-tint); color: var(--text); text-align: center; }
-    .ini-faixa a { color: inherit; font-weight: 600; }
-    .ini-tela { max-width: 1120px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 20px; }
-    .ini-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-    .ini-cab h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-    .ini-cab p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
-    .ini-acoes { display: flex; align-items: center; gap: 8px; }
-    .ini-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
-    .ini-btn:hover { background: var(--hover-bg); }
-    .ini-btn:focus-visible, .ini-card:focus-visible, .ini-seg button:focus-visible, .ini-chip:focus-visible, .ini-estrela:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
-    .ini-alerta { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--error-tint); border: 1px solid var(--error-border); font-size: 13px; line-height: 1.5; }
-    .ini-alerta b { color: var(--error); }
-    .ini-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .ini-busca { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); }
-    .ini-busca:focus-within { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
-    .ini-busca input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13.5px; }
-    .ini-busca kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--secondary); color: var(--muted-soft); }
-    .ini-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--secondary); }
-    .ini-seg button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
-    .ini-seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow-card); }
-    .ini-seg .n { font-variant-numeric: tabular-nums; color: var(--muted-soft); }
-    .ini-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .ini-chip { height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-    .ini-chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
-    .ini-secao-cab { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
-    .ini-secao-cab h2 { margin: 0; font-size: 14px; font-weight: 600; }
-    .ini-secao-cab span { font-size: 12px; color: var(--muted); }
-    .ini-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
-    .ini-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px; min-width: 0; text-align: left; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); cursor: pointer; text-decoration: none; transition: box-shadow 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.15s var(--ease); }
-    .ini-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
-    .ini-card.fora { border-color: var(--error-border); }
-    .ini-card-topo { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .ini-icone { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .ini-nome { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .ini-desc { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
-    .ini-rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
-    .ini-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
-    .ini-status i { width: 7px; height: 7px; border-radius: 50%; }
-    .ini-status.online { color: var(--accent-fg); } .ini-status.online i { background: var(--accent); }
-    .ini-status.offline { color: var(--error); } .ini-status.offline i { background: var(--error); }
-    .ini-status.checking { color: var(--warn); } .ini-status.checking i { background: var(--warn); }
-    .ini-abrir { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
-    .ini-card:hover .ini-abrir { color: var(--text); }
-    .ini-estrela { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; background: transparent; color: var(--muted-soft); cursor: pointer; font-size: 16px; line-height: 1; opacity: 0; }
-    .ini-card:hover .ini-estrela, .ini-estrela:focus-visible, .ini-estrela[aria-pressed="true"] { opacity: 1; }
-    .ini-estrela[aria-pressed="true"] { color: var(--warn); }
-    .ini-estrela:hover { background: var(--hover-bg); }
-    .ini-lista { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
-    .ini-linha { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 2fr) 110px 28px; align-items: center; gap: 12px; padding: 10px 14px; text-decoration: none; color: var(--text); font-size: 13px; }
-    .ini-linha + .ini-linha { border-top: 1px solid var(--border); }
-    .ini-linha:hover { background: var(--hover-bg-soft); }
-    .ini-linha .ini-desc { min-height: 0; -webkit-line-clamp: 1; }
-    .ini-esqueleto { height: 150px; border-radius: 12px; background: linear-gradient(90deg, var(--secondary) 25%, var(--hover-bg-soft) 50%, var(--secondary) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
-    @media (max-width: 640px) {
-      .ini-linha { grid-template-columns: 36px minmax(0, 1fr) 90px; }
-      .ini-linha .ini-desc, .ini-linha .ini-estrela-lin { display: none; }
-      .ini-estrela { opacity: 1; }
+    /* Hub de exemplo: só tokens do styles.css (mesmas cores do Hub e da Administração). */
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); overflow: hidden; }
+    .ex-app { --lado: 232px; display: grid; grid-template-columns: var(--lado) minmax(0, 1fr); height: 100vh; transition: grid-template-columns 0.2s var(--ease); }
+    .ex-app.recolhido { --lado: 64px; }
+
+    /* menu lateral */
+    .ex-lado { display: flex; flex-direction: column; min-width: 0; background: var(--card); border-right: 1px solid var(--border); overflow: hidden; }
+    .ex-marca { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .ex-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+    .ex-marca b { font-size: 14px; white-space: nowrap; }
+    .ex-tag { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); }
+    .ex-nav { flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 18px; }
+    .ex-grupo { display: flex; flex-direction: column; gap: 2px; }
+    .ex-grupo-titulo { font-size: 11px; font-weight: 600; color: var(--muted-soft); padding: 0 10px 6px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+    .ex-item { position: relative; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: none; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; text-align: left; white-space: nowrap; min-width: 0; }
+    .ex-item:hover { background: var(--hover-bg); color: var(--text); }
+    .ex-item.ativo { background: var(--secondary); color: var(--text); font-weight: 600; }
+    .ex-item.ativo::before { content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+    .ex-item svg { flex-shrink: 0; }
+    .ex-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .ex-item .ponto { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .ex-item .fechar { display: none; width: 20px; height: 20px; border-radius: 5px; align-items: center; justify-content: center; color: var(--muted-soft); flex-shrink: 0; }
+    .ex-item:hover .fechar, .ex-item:focus-within .fechar { display: flex; }
+    .ex-item .fechar:hover { background: var(--border); color: var(--text); }
+    .ex-vazio-lado { font-size: 12px; color: var(--muted-soft); padding: 2px 10px; line-height: 1.5; }
+    .ex-pe { border-top: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+    .ex-app.recolhido .rot, .ex-app.recolhido .ex-grupo-titulo, .ex-app.recolhido .ex-marca b, .ex-app.recolhido .ex-tag, .ex-app.recolhido .ex-vazio-lado, .ex-app.recolhido .fechar { display: none !important; }
+    .ex-app.recolhido .ex-item { justify-content: center; padding: 0; }
+    .ex-app.recolhido .ex-item .ponto { position: absolute; top: 6px; right: 8px; width: 6px; height: 6px; }
+    .ex-app.recolhido .ex-marca { justify-content: center; padding: 0; }
+
+    /* área principal */
+    .ex-principal { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .ex-topo { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .ex-topo h1 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .ex-topo .migalha { color: var(--muted); font-weight: 400; }
+    .ex-espaco { flex: 1; }
+    .ex-busca-btn { display: flex; align-items: center; gap: 8px; width: 260px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--muted-soft); font: inherit; font-size: 13px; cursor: pointer; }
+    .ex-busca-btn span { flex: 1; text-align: left; }
+    .ex-busca-btn:hover { border-color: var(--border-hover); }
+    kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--secondary); color: var(--muted-soft); }
+    .ex-saude { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+    .ex-saude i { width: 7px; height: 7px; border-radius: 50%; }
+    .ex-icone-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; flex-shrink: 0; }
+    .ex-icone-btn:hover { background: var(--hover-bg); }
+    .ex-menu-movel { display: none; }
+    .ex-conteudo { flex: 1; min-height: 0; position: relative; }
+    .ex-pagina { position: absolute; inset: 0; overflow-y: auto; }
+    .ex-pagina[hidden] { display: none; }
+
+    /* Painel */
+    .ex-tela { max-width: 1180px; margin: 0 auto; padding: 24px 24px 32px; display: flex; flex-direction: column; gap: 18px; }
+    .ex-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .ex-cab h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .ex-cab p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .ex-alerta { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--error-tint); border: 1px solid var(--error-border); font-size: 13px; line-height: 1.5; }
+    .ex-alerta b { color: var(--error); }
+    .ex-rapido { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .ex-rapido::-webkit-scrollbar { display: none; }
+    .ex-rapido-rot { font-size: 12px; color: var(--muted); white-space: nowrap; margin-right: 2px; }
+    .ex-pilula { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .ex-pilula:hover { border-color: var(--border-hover); background: var(--hover-bg-soft); }
+    .ex-pilula-ic { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ex-pilula .ic { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .ex-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ex-filtro { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); }
+    .ex-filtro:focus-within { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
+    .ex-filtro input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+    .ex-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--secondary); }
+    .ex-seg button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .ex-seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow-card); }
+    .ex-seg .n { font-variant-numeric: tabular-nums; color: var(--muted-soft); }
+    .ex-grade { display: grid; grid-template-columns: repeat(var(--colunas, 4), minmax(0, 1fr)); gap: 12px; }
+    .ex-card { position: relative; display: flex; flex-direction: column; gap: 8px; height: 148px; box-sizing: border-box; padding: 14px 16px; min-width: 0; text-align: left; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); cursor: pointer; transition: box-shadow 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.15s var(--ease); }
+    .ex-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+    .ex-card.fora { border-color: var(--error-border); }
+    .ex-card-topo { display: flex; align-items: center; gap: 10px; min-width: 0; padding-right: 28px; }
+    .ex-ic { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ex-nome { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ex-cat { font-size: 11px; color: var(--muted-soft); }
+    .ex-desc { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .ex-rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
+    .ex-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .ex-status i { width: 7px; height: 7px; border-radius: 50%; }
+    .ex-status.online { color: var(--accent-fg); } .ex-status.online i { background: var(--accent); }
+    .ex-status.offline { color: var(--error); } .ex-status.offline i { background: var(--error); }
+    .ex-status.checking { color: var(--warn); } .ex-status.checking i { background: var(--warn); }
+    :root[data-theme="dark"] .ex-status.online { color: var(--accent); }
+    .ex-abrir { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+    .ex-card:hover .ex-abrir { color: var(--text); }
+    .ex-estrela { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; background: transparent; color: var(--muted-soft); cursor: pointer; font-size: 16px; line-height: 1; opacity: 0; }
+    .ex-card:hover .ex-estrela, .ex-linha:hover .ex-estrela, .ex-estrela:focus-visible, .ex-estrela[aria-pressed="true"] { opacity: 1; }
+    .ex-estrela[aria-pressed="true"] { color: var(--warn); }
+    .ex-estrela:hover { background: var(--hover-bg); }
+    .ex-lista { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+    .ex-linha { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1.2fr) minmax(0, 2fr) 104px 28px; align-items: center; gap: 12px; height: 52px; box-sizing: border-box; padding: 0 14px; cursor: pointer; }
+    .ex-linha + .ex-linha { border-top: 1px solid var(--border); }
+    .ex-linha:hover { background: var(--hover-bg-soft); }
+    .ex-linha .ex-desc { -webkit-line-clamp: 1; }
+    .ex-linha .ex-estrela { position: static; }
+    .ex-paginacao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+    .ex-paginas { display: flex; align-items: center; gap: 4px; }
+    .ex-pag { min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .ex-pag:hover:not(:disabled) { background: var(--hover-bg); }
+    .ex-pag[aria-current="page"] { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+    .ex-pag:disabled { opacity: 0.45; cursor: default; }
+    .ex-link { border: none; background: none; color: var(--text); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .ex-esqueleto { height: 148px; border-radius: 12px; background: linear-gradient(90deg, var(--secondary) 25%, var(--hover-bg-soft) 50%, var(--secondary) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+    button:focus-visible, .ex-card:focus-visible, .ex-linha:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
+
+    /* tela de uma automação aberta */
+    .ex-visor { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    .ex-visor-barra { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); background: var(--card); font-size: 12.5px; flex-shrink: 0; }
+    .ex-visor-barra .acoes { margin-left: auto; display: flex; gap: 4px; }
+    .ex-visor-barra button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+    .ex-visor-barra button:hover { background: var(--hover-bg); color: var(--text); }
+    .ex-visor iframe { flex: 1; width: 100%; border: none; background: var(--bg); }
+    .ex-carregando { position: absolute; inset: 40px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; background: var(--bg); }
+
+    /* Chamados e Resultados (componentes reais) dentro da moldura nova */
+    .ex-legado > div[style*="max-width: 1200px"] { max-width: 1180px !important; padding: 24px 24px 48px !important; }
+    .ex-legado > div > div[style*="padding: 18px 24px 0"] { max-width: 1180px !important; }
+    .ex-legado [style*="font-size: 19px"] { font-size: 20px !important; letter-spacing: -0.01em; }
+    .ex-legado [style*="border-radius: 14px"] { border-radius: 12px !important; box-shadow: var(--shadow-card); }
+    .ex-legado [style*="animation: fadeInUp"] { animation: none !important; }
+
+    /* busca geral (Ctrl K) */
+    .ex-fundo { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; z-index: 50; animation: fadeIn 0.12s ease; }
+    .ex-paleta { width: 100%; max-width: 560px; background: var(--popover); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden; animation: modalIn 0.16s var(--ease); }
+    .ex-paleta-busca { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 48px; border-bottom: 1px solid var(--border); }
+    .ex-paleta-busca input { flex: 1; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
+    .ex-paleta ul { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+    .ex-paleta li.titulo { font-size: 11px; font-weight: 600; color: var(--muted-soft); padding: 8px 10px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ex-paleta li.opcao { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .ex-paleta li.opcao[aria-selected="true"] { background: var(--secondary); }
+    .ex-paleta li.opcao .dir { margin-left: auto; font-size: 11.5px; color: var(--muted-soft); }
+    .ex-paleta-pe { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted-soft); }
+
+    @media (max-width: 860px) {
+      .ex-app, .ex-app.recolhido { grid-template-columns: minmax(0, 1fr); --lado: 260px; }
+      .ex-lado { position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 40; transform: translateX(-100%); transition: transform 0.2s var(--ease); box-shadow: var(--shadow-pop); }
+      .ex-app.gaveta .ex-lado { transform: none; }
+      .ex-app.gaveta .ex-sombra { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 39; }
+      .ex-menu-movel { display: inline-flex; }
+      .ex-recolher { display: none !important; }
+      .ex-busca-btn { width: 34px; padding: 0; justify-content: center; }
+      .ex-busca-btn span, .ex-busca-btn kbd, .ex-saude span { display: none; }
+      .ex-topo { padding: 0 12px; gap: 8px; }
+      .ex-tela { padding: 16px 16px 24px; }
+      .ex-linha { grid-template-columns: 34px minmax(0, 1fr) 90px; }
+      .ex-linha .ex-desc, .ex-linha .ex-estrela { display: none; }
+      .ex-estrela { opacity: 1; }
     }
-    @media (prefers-reduced-motion: reduce) { .ini-card, .ini-esqueleto { transition: none; animation: none; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .ex-card, .ex-esqueleto, .ex-app, .ex-lado { transition: none; animation: none; transform: none; } }
   </style>
   <script src="vendor/react.production.min.js"></script>
   <script src="vendor/react-dom.production.min.js"></script>
   <script src="icons.js" defer></script>
+  <script src="vendor/arx-cripto.min.js" defer></script>
+  <script src="cofre.js" defer></script>
+  <script src="acessos.js" defer></script>
+  <script src="alertas.js" defer></script>
+  <script src="chamados-cache.js" defer></script>
+  <script src="chamados-auto.js" defer></script>
+  <script src="chamados.js" defer></script>
+  <script src="graficos-dados.js" defer></script>
+  <script src="graficos.js" defer></script>
+  <script src="disponibilidade.js" defer></script>
+  <script src="resultados.js" defer></script>
+  <script src="arx-ajuda.js" defer></script>
+  <script src="ajuda.js" defer></script>
 </head>
 <body>
-  <div class="ini-faixa">Exemplo de nova tela inicial com as automações reais (só leitura). A tela atual não mudou. <a href="/">Voltar ao Hub</a></div>
   <div id="root"></div>
   <script>
     window.addEventListener('DOMContentLoaded', function () {
       const e = React.createElement;
-      const { useState, useEffect, useRef } = React;
+      const { useState, useEffect, useRef, useLayoutEffect } = React;
       const { Icon, CATEGORY_CHOICES } = window.Icons;
       const CATEGORIAS = CATEGORY_CHOICES.reduce((acc, c) => { acc[c.key] = c; return acc; }, {});
       const STATUS = { online: 'No ar', offline: 'Fora do ar', checking: 'Verificando' };
-      const CHAVE_FAV = 'arxhub_exemplo_favoritas';
-      const CHAVE_VISAO = 'arxhub_exemplo_visao';
+      const COR_STATUS = { online: 'var(--accent)', offline: 'var(--error)', checking: 'var(--warn)' };
+      const PAGINAS = { painel: ['Painel', 'LayoutDashboard'], chamados: ['Chamados', 'Headset'], resultados: ['Resultados', 'BarChart3'] };
+      const PORTA_PROXY = 8318; // a mesma do app.js
+      const CARTAO_ALTURA = 148, CARTAO_LARGURA_MIN = 240, LINHA_ALTURA = 52, VAO = 12;
 
       function ler(chave, padrao) {
         try { const v = localStorage.getItem(chave); return v ? JSON.parse(v) : padrao; } catch (err) { return padrao; }
@@ -99,155 +216,356 @@
         try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (err) { /* sem armazenamento: vale só nesta aba */ }
       }
       const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
-      const hora = (d) => d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const hora = (d) => (d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+      const token = () => ((window.ArxAcessosHub && window.ArxAcessosHub.ler()) || {}).userToken || '';
+      const isDb = (a) => (a.categories || []).includes('db');
+      const categoria = (a) => ((a.categories || []).map((k) => CATEGORIAS[k] && CATEGORIAS[k].label).filter(Boolean)[0]) || 'Geral';
+      // passe do proxy: sem token (cofre travado) a tela abre sem passe e só funciona se a automação for de todo mundo
+      const pedirPasse = (id) => fetch('/api/automations/' + id + '/passe', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token() } })
+        .then((r) => (r.ok ? r.json() : {})).then((r) => r.passe || '').catch(() => '');
+      const urlTela = (a, passe) => `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/` + (passe ? '?passe=' + encodeURIComponent(passe) : '');
 
       function Status({ s }) {
-        return e('span', { className: 'ini-status ' + (s || 'checking') }, [e('i', { key: 'i' }), STATUS[s] || STATUS.checking]);
+        return e('span', { className: 'ex-status ' + (s || 'checking') }, [e('i', { key: 'i' }), STATUS[s] || STATUS.checking]);
+      }
+      const icone = (a, tam, cls) => e('span', { key: 'ic', className: cls || 'ex-ic', style: { background: a.color + '22' } }, Icon(a.icon, tam || 18, a.color));
+
+      // Quantos cartões cabem na área visível: colunas pela largura, linhas pela altura que sobra abaixo da grade.
+      function useCabe(refArea, refGrade, visao, deps) {
+        const [cabe, setCabe] = useState({ colunas: 4, porPagina: 12 });
+        useLayoutEffect(() => {
+          const medir = () => {
+            const area = refArea.current, grade = refGrade.current;
+            if (!area || !grade || !area.clientHeight) return;
+            const largura = grade.clientWidth;
+            const topo = grade.getBoundingClientRect().top - area.getBoundingClientRect().top + area.scrollTop;
+            const sobra = area.clientHeight - topo - 72; // 72: paginação e respiro do fim
+            const colunas = visao === 'lista' ? 1 : Math.max(1, Math.floor((largura + VAO) / (CARTAO_LARGURA_MIN + VAO)));
+            const linhas = visao === 'lista'
+              ? Math.max(4, Math.floor(sobra / LINHA_ALTURA))
+              : Math.max(1, Math.floor((sobra + VAO) / (CARTAO_ALTURA + VAO)));
+            setCabe((c) => (c.colunas === colunas && c.porPagina === colunas * linhas ? c : { colunas, porPagina: colunas * linhas }));
+          };
+          medir();
+          const ro = new ResizeObserver(medir);
+          if (refArea.current) ro.observe(refArea.current);
+          window.addEventListener('resize', medir);
+          return () => { ro.disconnect(); window.removeEventListener('resize', medir); };
+        }, deps);
+        return cabe;
       }
 
-      function Inicio() {
-        const [lista, setLista] = useState(null);
-        const [atualizado, setAtualizado] = useState(null);
+      function Painel({ lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef }) {
         const [busca, setBusca] = useState('');
         const [filtro, setFiltro] = useState('todas');
-        const [categoria, setCategoria] = useState('');
-        const [visao, setVisao] = useState(() => ler(CHAVE_VISAO, 'grade'));
-        const [favoritas, setFavoritas] = useState(() => ler(CHAVE_FAV, []));
-        const buscaRef = useRef(null);
+        const [grupo, setGrupo] = useState('todas');
+        const [visao, setVisao] = useState(() => ler('arxhub_exemplo_visao', 'grade'));
+        const [pagina, setPagina] = useState(0);
+        const gradeRef = useRef(null);
+
+        const todas = lista || [];
+        const no = todas.filter((a) => a.status === 'online').length;
+        const fora = todas.filter((a) => a.status === 'offline');
+        const q = busca.trim().toLowerCase();
+        const filtradas = todas.filter((a) =>
+          (!q || (a.name + ' ' + (a.description || '')).toLowerCase().includes(q)) &&
+          (filtro === 'todas' || a.status === filtro) &&
+          (grupo === 'todas' || (grupo === 'db') === isDb(a)));
+        const rapidas = [...favoritas, ...recentes.filter((id) => !favoritas.includes(id))]
+          .map((id) => todas.find((a) => a.id === id)).filter(Boolean).slice(0, 8);
+
+        const cabe = useCabe(areaRef, gradeRef, visao, [visao, !!lista, fora.length > 0, rapidas.length > 0]);
+        const total = Math.max(1, Math.ceil(filtradas.length / cabe.porPagina));
+        const atual = Math.min(pagina, total - 1);
+        const fatia = filtradas.slice(atual * cabe.porPagina, (atual + 1) * cabe.porPagina);
+        useEffect(() => setPagina(0), [q, filtro, grupo]);
+
+        const trocarVisao = (v) => { setVisao(v); gravar('arxhub_exemplo_visao', v); };
+        const estrela = (a) => e('button', {
+          key: 'fav', type: 'button', className: 'ex-estrela', 'aria-pressed': favoritas.includes(a.id) ? 'true' : 'false',
+          'aria-label': (favoritas.includes(a.id) ? 'Tirar ' : 'Marcar ') + a.name + ' como favorita', title: 'Favorita',
+          onClick: (ev) => { ev.stopPropagation(); alternarFav(a.id); },
+        }, favoritas.includes(a.id) ? '★' : '☆');
+        const teclaAbre = (a) => (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(a); } };
+        const cartao = (a) => e('div', {
+          key: a.id, role: 'button', tabIndex: 0, className: 'ex-card' + (a.status === 'offline' ? ' fora' : ''),
+          'aria-label': 'Abrir ' + a.name, onClick: () => abrir(a), onKeyDown: teclaAbre(a),
+        }, [
+          estrela(a),
+          e('div', { key: 't', className: 'ex-card-topo' }, [icone(a), e('div', { key: 'n', style: { minWidth: 0 } }, [
+            e('div', { key: 'n', className: 'ex-nome', title: a.name }, a.name),
+            e('div', { key: 'c', className: 'ex-cat' }, categoria(a)),
+          ])]),
+          e('p', { key: 'd', className: 'ex-desc' }, a.description || 'Sem descrição'),
+          e('div', { key: 'r', className: 'ex-rodape' }, [e(Status, { key: 's', s: a.status }), e('span', { key: 'a', className: 'ex-abrir' }, ['Abrir', Icon('ExternalLink', 13, 'currentColor')])]),
+        ]);
+        const linha = (a) => e('div', { key: a.id, role: 'button', tabIndex: 0, className: 'ex-linha', 'aria-label': 'Abrir ' + a.name, onClick: () => abrir(a), onKeyDown: teclaAbre(a) }, [
+          icone(a),
+          e('span', { key: 'n', className: 'ex-nome' }, a.name),
+          e('p', { key: 'd', className: 'ex-desc' }, a.description || 'Sem descrição'),
+          e(Status, { key: 's', s: a.status }),
+          estrela(a),
+        ]);
+        const seg = (valor, atualV, set, rotulo, n) => e('button', { key: valor, type: 'button', 'aria-pressed': atualV === valor ? 'true' : 'false', onClick: () => set(valor) },
+          n == null ? rotulo : [rotulo, ' ', e('span', { key: 'n', className: 'n' }, n)]);
+
+        // números de página com reticências: 1 … 4 5 6 … 10
+        const numeros = [];
+        for (let i = 0; i < total; i++) {
+          if (i === 0 || i === total - 1 || Math.abs(i - atual) <= 1) numeros.push(i);
+          else if (numeros[numeros.length - 1] !== '…') numeros.push('…');
+        }
+
+        return e('div', { className: 'ex-tela' }, [
+          e('header', { key: 'cab', className: 'ex-cab' }, [
+            e('div', { key: 't' }, [
+              e('h2', { key: 'h' }, 'Automações'),
+              e('p', { key: 'p' }, lista ? plural(todas.length, 'automação', 'automações') + ', ' + no + ' no ar · atualizado às ' + hora(atualizado) : 'Carregando automações'),
+            ]),
+          ]),
+
+          fora.length ? e('div', { key: 'alerta', className: 'ex-alerta', role: 'status' }, [
+            Icon('AlertCircle', 18, 'var(--error)'),
+            e('div', { key: 't' }, [e('b', { key: 'b' }, plural(fora.length, 'automação fora do ar', 'automações fora do ar') + ': '), fora.map((a) => a.name).join(', '), '.']),
+          ]) : null,
+
+          rapidas.length ? e('div', { key: 'rap', className: 'ex-rapido', 'aria-label': 'Acesso rápido' }, [
+            e('span', { key: 'r', className: 'ex-rapido-rot' }, 'Acesso rápido'),
+            ...rapidas.map((a) => e('button', { key: a.id, type: 'button', className: 'ex-pilula', onClick: () => abrir(a), title: favoritas.includes(a.id) ? 'Favorita' : 'Aberta há pouco' }, [
+              icone(a, 13, 'ic'), a.name, e('span', { key: 'p', style: { width: 6, height: 6, borderRadius: '50%', background: COR_STATUS[a.status] || COR_STATUS.checking } }),
+            ])),
+          ]) : null,
+
+          e('div', { key: 'barra', className: 'ex-barra' }, [
+            e('label', { key: 'b', className: 'ex-filtro' }, [
+              Icon('Search', 15, 'var(--muted-soft)'),
+              e('input', { key: 'i', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Filtrar por nome ou descrição', 'aria-label': 'Filtrar automações' }),
+            ]),
+            e('div', { key: 'g', className: 'ex-seg', role: 'group', 'aria-label': 'Grupo' }, [
+              seg('todas', grupo, setGrupo, 'Todas'), seg('auto', grupo, setGrupo, 'Automações'), seg('db', grupo, setGrupo, 'Banco de Dados'),
+            ]),
+            e('div', { key: 's', className: 'ex-seg', role: 'group', 'aria-label': 'Situação' }, [
+              seg('todas', filtro, setFiltro, 'Todas', todas.length), seg('online', filtro, setFiltro, 'No ar', no), seg('offline', filtro, setFiltro, 'Fora', fora.length),
+            ]),
+            e('div', { key: 'v', className: 'ex-seg', role: 'group', 'aria-label': 'Exibição' }, [
+              e('button', { key: 'g', type: 'button', 'aria-pressed': visao === 'grade' ? 'true' : 'false', onClick: () => trocarVisao('grade'), title: 'Cartões', 'aria-label': 'Cartões' }, Icon('LayoutDashboard', 14, 'currentColor')),
+              e('button', { key: 'l', type: 'button', 'aria-pressed': visao === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista'), title: 'Lista', 'aria-label': 'Lista' }, Icon('FileText', 14, 'currentColor')),
+            ]),
+          ]),
+
+          !lista
+            ? e('div', { key: 'esq', ref: gradeRef, className: 'ex-grade', style: { '--colunas': cabe.colunas }, 'aria-busy': 'true' }, Array.from({ length: cabe.porPagina }, (_, i) => e('div', { key: i, className: 'ex-esqueleto' })))
+            : filtradas.length
+              ? (visao === 'lista'
+                  ? e('div', { key: 'l', ref: gradeRef, className: 'ex-lista' }, fatia.map(linha))
+                  : e('div', { key: 'g', ref: gradeRef, className: 'ex-grade', style: { '--colunas': cabe.colunas } }, fatia.map(cartao)))
+              : e('div', { key: 'vazio', ref: gradeRef, className: 'admin-vazio' }, [
+                  todas.length ? 'Nenhuma automação com esses filtros. ' : 'Nenhuma automação cadastrada.',
+                  todas.length ? e('button', { key: 'l', type: 'button', className: 'ex-link', onClick: () => { setBusca(''); setFiltro('todas'); setGrupo('todas'); } }, 'Limpar filtros') : null,
+                ]),
+
+          lista && filtradas.length ? e('nav', { key: 'pag', className: 'ex-paginacao', 'aria-label': 'Páginas' }, [
+            e('span', { key: 't' }, 'Mostrando ' + (atual * cabe.porPagina + 1) + ' a ' + (atual * cabe.porPagina + fatia.length) + ' de ' + filtradas.length),
+            total > 1 ? e('div', { key: 'p', className: 'ex-paginas' }, [
+              e('button', { key: 'ant', type: 'button', className: 'ex-pag', disabled: atual === 0, onClick: () => setPagina(atual - 1), 'aria-label': 'Página anterior' }, '‹'),
+              ...numeros.map((n, i) => n === '…'
+                ? e('span', { key: 'r' + i, style: { padding: '0 4px' } }, '…')
+                : e('button', { key: n, type: 'button', className: 'ex-pag', 'aria-current': n === atual ? 'page' : undefined, onClick: () => setPagina(n) }, String(n + 1))),
+              e('button', { key: 'prox', type: 'button', className: 'ex-pag', disabled: atual >= total - 1, onClick: () => setPagina(atual + 1), 'aria-label': 'Próxima página' }, '›'),
+            ]) : null,
+          ]) : null,
+        ]);
+      }
+
+      // Busca geral (Ctrl K): páginas e automações, setas para escolher e Enter para abrir.
+      function Paleta({ lista, irPara, abrir, fechar }) {
+        const [texto, setTexto] = useState('');
+        const [sel, setSel] = useState(0);
+        const q = texto.trim().toLowerCase();
+        const paginas = Object.keys(PAGINAS).filter((k) => !q || PAGINAS[k][0].toLowerCase().includes(q)).map((k) => ({ tipo: 'pagina', k }));
+        const autos = (lista || []).filter((a) => !q || (a.name + ' ' + (a.description || '')).toLowerCase().includes(q)).slice(0, 30).map((a) => ({ tipo: 'auto', a }));
+        const opcoes = [...paginas, ...autos];
+        const escolher = (o) => { if (!o) return; fechar(); if (o.tipo === 'pagina') irPara(o.k); else abrir(o.a); };
+        const tecla = (ev) => {
+          if (ev.key === 'ArrowDown') { ev.preventDefault(); setSel((s) => Math.min(s + 1, opcoes.length - 1)); }
+          if (ev.key === 'ArrowUp') { ev.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+          if (ev.key === 'Enter') escolher(opcoes[sel]);
+          if (ev.key === 'Escape') fechar();
+        };
+        useEffect(() => setSel(0), [q]);
+        const item = (o, i) => e('li', {
+          key: o.tipo + (o.k || o.a.id), className: 'opcao', role: 'option', 'aria-selected': i === sel ? 'true' : 'false',
+          onMouseEnter: () => setSel(i), onClick: () => escolher(o),
+        }, o.tipo === 'pagina'
+          ? [Icon(PAGINAS[o.k][1], 15, 'var(--muted)'), PAGINAS[o.k][0], e('span', { key: 'd', className: 'dir' }, 'Página')]
+          : [icone(o.a, 13, 'ex-pilula-ic'), o.a.name, e('span', { key: 'd', className: 'dir' }, STATUS[o.a.status] || STATUS.checking)]);
+        return e('div', { className: 'ex-fundo', onMouseDown: (ev) => { if (ev.target === ev.currentTarget) fechar(); } },
+          e('div', { className: 'ex-paleta', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Buscar no Hub' }, [
+            e('div', { key: 'b', className: 'ex-paleta-busca' }, [
+              Icon('Search', 16, 'var(--muted-soft)'),
+              e('input', { key: 'i', autoFocus: true, value: texto, onChange: (ev) => setTexto(ev.target.value), onKeyDown: tecla, placeholder: 'Buscar páginas e automações', 'aria-label': 'Buscar' }),
+              e('kbd', { key: 'k' }, 'Esc'),
+            ]),
+            e('ul', { key: 'l', role: 'listbox' }, opcoes.length ? [
+              paginas.length ? e('li', { key: 'tp', className: 'titulo' }, 'Páginas') : null,
+              ...paginas.map((o, i) => item(o, i)),
+              autos.length ? e('li', { key: 'ta', className: 'titulo' }, 'Automações') : null,
+              ...autos.map((o, i) => item(o, paginas.length + i)),
+            ] : [e('li', { key: 'v', className: 'titulo', style: { textTransform: 'none' } }, 'Nada encontrado')]),
+            e('div', { key: 'p', className: 'ex-paleta-pe' }, [e('span', { key: 'a' }, '↑ ↓ escolher'), e('span', { key: 'b' }, 'Enter abrir'), e('span', { key: 'c' }, 'Esc fechar')]),
+          ]));
+      }
+
+      function Visor({ a, passe, recarga, fechar, recarregar, ativo }) {
+        const [carregado, setCarregado] = useState(false);
+        useEffect(() => setCarregado(false), [recarga, passe]);
+        return e('div', { className: 'ex-visor', style: ativo ? null : { display: 'none' } }, [
+          e('div', { key: 'b', className: 'ex-visor-barra' }, [
+            icone(a, 13, 'ex-pilula-ic'), e('b', { key: 'n' }, a.name), e(Status, { key: 's', s: a.status }),
+            e('div', { key: 'a', className: 'acoes' }, [
+              e('button', { key: 'r', type: 'button', onClick: recarregar, title: 'Recarregar a tela' }, [Icon('RefreshCw', 13, 'currentColor'), 'Recarregar']),
+              e('button', { key: 'n', type: 'button', onClick: () => window.open(urlTela(a, passe), '_blank'), title: 'Abrir em nova aba do navegador' }, [Icon('ExternalLink', 13, 'currentColor'), 'Nova aba']),
+              e('button', { key: 'f', type: 'button', onClick: fechar, title: 'Fechar' }, [Icon('X', 13, 'currentColor'), 'Fechar']),
+            ]),
+          ]),
+          passe === null ? null : e('iframe', { key: 'f' + recarga, src: urlTela(a, passe), title: a.name, onLoad: () => setCarregado(true) }),
+          carregado ? null : e('div', { key: 'c', className: 'ex-carregando' }, a.status === 'offline'
+            ? [Icon('WifiOff', 26, 'var(--error)'), 'A automação está fora do ar. Tente de novo em instantes.']
+            : [e('div', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 24, 'var(--accent)')), 'Abrindo ' + a.name]),
+        ]);
+      }
+
+      function Hub() {
+        const [lista, setLista] = useState(null);
+        const [atualizado, setAtualizado] = useState(null);
+        const [pagina, setPagina] = useState('painel');
+        const [montadas, setMontadas] = useState({ painel: true });
+        const [abertas, setAbertas] = useState([]); // [{ id, passe, recarga }]
+        const [ativa, setAtiva] = useState(null);
+        const [recolhido, setRecolhido] = useState(() => ler('arxhub_exemplo_recolhido', false));
+        const [gaveta, setGaveta] = useState(false);
+        const [paleta, setPaleta] = useState(false);
+        const [favoritas, setFavoritas] = useState(() => ler('arxhub_exemplo_favoritas', []));
+        const [recentes, setRecentes] = useState(() => ler('arxhub_exemplo_recentes', []));
+        const areaRef = useRef(null);
 
         useEffect(() => {
-          let vivo = true;
-          const carregar = () => fetch('/api/automations').then((r) => (r.ok ? r.json() : null)).then((d) => {
+          let vivo = true, es;
+          const carregar = () => fetch('/api/exemplo/automacoes').then((r) => (r.ok ? r.json() : null)).then((d) => {
             if (vivo && Array.isArray(d)) { setLista(d); setAtualizado(new Date()); }
           }).catch(() => { /* rede oscilou: a próxima volta tenta de novo */ });
           carregar();
+          try { es = new EventSource('/api/events'); es.onmessage = carregar; } catch (err) { /* sem SSE: fica a volta de 15 s */ }
           const t = setInterval(carregar, 15000);
-          return () => { vivo = false; clearInterval(t); };
+          return () => { vivo = false; clearInterval(t); if (es) es.close(); };
         }, []);
 
-        // "/" ou Ctrl+K levam à busca, Esc limpa
         useEffect(() => {
           const tecla = (ev) => {
-            const digitando = /INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName);
-            if ((ev.key === '/' && !digitando) || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k')) { ev.preventDefault(); buscaRef.current.focus(); }
-            if (ev.key === 'Escape' && document.activeElement === buscaRef.current) setBusca('');
+            if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); setPaleta((p) => !p); }
+            const digitando = /INPUT|TEXTAREA|SELECT/.test(document.activeElement && document.activeElement.tagName);
+            if (ev.key === '/' && !digitando) { ev.preventDefault(); setPaleta(true); }
           };
           window.addEventListener('keydown', tecla);
           return () => window.removeEventListener('keydown', tecla);
         }, []);
 
-        const trocarVisao = (v) => { setVisao(v); gravar(CHAVE_VISAO, v); };
-        const alternarFav = (id) => setFavoritas((f) => { const n = f.includes(id) ? f.filter((x) => x !== id) : [...f, id]; gravar(CHAVE_FAV, n); return n; });
+        const irPara = (p) => { setAtiva(null); setPagina(p); setMontadas((m) => (m[p] ? m : Object.assign({}, m, { [p]: true }))); setGaveta(false); };
+        const abrir = (a) => {
+          setGaveta(false);
+          setAtiva(a.id);
+          setRecentes((r) => { const n = [a.id, ...r.filter((x) => x !== a.id)].slice(0, 6); gravar('arxhub_exemplo_recentes', n); return n; });
+          if (abertas.some((x) => x.id === a.id)) return;
+          setAbertas((l) => [...l, { id: a.id, passe: null, recarga: 0 }]);
+          pedirPasse(a.id).then((passe) => setAbertas((l) => l.map((x) => (x.id === a.id ? Object.assign({}, x, { passe }) : x))));
+        };
+        const fechar = (id) => {
+          const resto = abertas.filter((x) => x.id !== id);
+          setAbertas(resto);
+          if (ativa === id) setAtiva(resto.length ? resto[resto.length - 1].id : null);
+        };
+        const recarregar = (id) => setAbertas((l) => l.map((x) => (x.id === id ? Object.assign({}, x, { recarga: x.recarga + 1 }) : x)));
+        const alternarFav = (id) => setFavoritas((f) => { const n = f.includes(id) ? f.filter((x) => x !== id) : [...f, id]; gravar('arxhub_exemplo_favoritas', n); return n; });
+        const recolher = () => setRecolhido((r) => { gravar('arxhub_exemplo_recolhido', !r); return !r; });
         const tema = () => {
           const d = document.documentElement;
           const t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
           d.setAttribute('data-theme', t);
-          gravar('arx-tema-exemplo', t);
+          gravar('arxhub_exemplo_tema', t);
         };
 
         const todas = lista || [];
+        const porId = (id) => todas.find((a) => a.id === id);
         const no = todas.filter((a) => a.status === 'online').length;
-        const fora = todas.filter((a) => a.status === 'offline');
-        const cats = [...new Set(todas.flatMap((a) => a.categories || []))].filter((k) => CATEGORIAS[k]);
-        const q = busca.trim().toLowerCase();
-        const visiveis = todas.filter((a) =>
-          (!q || (a.name + ' ' + (a.description || '')).toLowerCase().includes(q)) &&
-          (filtro === 'todas' || a.status === filtro) &&
-          (!categoria || (a.categories || []).includes(categoria)));
-        const isDb = (a) => (a.categories || []).includes('db');
-        const favs = visiveis.filter((a) => favoritas.includes(a.id));
-        const grupos = [
-          favs.length && !q ? ['fav', 'Favoritas', favs] : null,
-          ['main', 'Automações', visiveis.filter((a) => !isDb(a))],
-          ['db', 'Banco de Dados', visiveis.filter(isDb)],
-        ].filter((g) => g && g[2].length);
+        const fora = todas.length - no - todas.filter((a) => a.status === 'checking').length;
+        const aAtiva = ativa ? porId(ativa) : null;
+        const titulo = aAtiva ? [e('span', { key: 'm', className: 'migalha' }, 'Automações / '), aAtiva.name] : PAGINAS[pagina][0];
 
-        const estrela = (a, cls) => e('button', {
-          key: 'fav', type: 'button', className: 'ini-estrela ' + (cls || ''), 'aria-pressed': favoritas.includes(a.id) ? 'true' : 'false',
-          'aria-label': (favoritas.includes(a.id) ? 'Tirar ' : 'Marcar ') + a.name + ' como favorita', title: 'Favorita',
-          onClick: (ev) => { ev.preventDefault(); ev.stopPropagation(); alternarFav(a.id); },
-        }, favoritas.includes(a.id) ? '★' : '☆');
-        const icone = (a) => e('span', { key: 'ic', className: 'ini-icone', style: { background: a.color + '22' } }, Icon(a.icon, 18, a.color));
-        // no exemplo, abrir leva ao Hub atual (as abas e o login das automações vivem lá)
-        const cartao = (a) => e('a', { key: a.id, href: '/', className: 'ini-card' + (a.status === 'offline' ? ' fora' : ''), 'aria-label': 'Abrir ' + a.name }, [
-          estrela(a),
-          e('div', { key: 't', className: 'ini-card-topo' }, [icone(a), e('span', { key: 'n', className: 'ini-nome', title: a.name }, a.name)]),
-          e('p', { key: 'd', className: 'ini-desc' }, a.description || 'Sem descrição'),
-          e('div', { key: 'r', className: 'ini-rodape' }, [e(Status, { key: 's', s: a.status }), e('span', { key: 'a', className: 'ini-abrir' }, ['Abrir ', Icon('ExternalLink', 13, 'currentColor')])]),
-        ]);
-        const linha = (a) => e('a', { key: a.id, href: '/', className: 'ini-linha', 'aria-label': 'Abrir ' + a.name }, [
-          icone(a),
-          e('span', { key: 'n', className: 'ini-nome' }, a.name),
-          e('p', { key: 'd', className: 'ini-desc' }, a.description || 'Sem descrição'),
-          e(Status, { key: 's', s: a.status }),
-          e('span', { key: 'f', className: 'ini-estrela-lin', style: { position: 'relative', width: 28, height: 28 } }, estrela(a)),
-        ]);
+        const itemNav = (k) => e('button', {
+          key: k, type: 'button', className: 'ex-item' + (!ativa && pagina === k ? ' ativo' : ''), onClick: () => irPara(k),
+          title: PAGINAS[k][0], 'aria-current': !ativa && pagina === k ? 'page' : undefined,
+        }, [Icon(PAGINAS[k][1], 17, 'currentColor'), e('span', { key: 'r', className: 'rot' }, PAGINAS[k][0])]);
 
-        const seg = (valor, rotulo, n) => e('button', { key: valor, type: 'button', 'aria-pressed': filtro === valor ? 'true' : 'false', onClick: () => setFiltro(valor) }, [rotulo, ' ', e('span', { key: 'n', className: 'n' }, n)]);
-
-        return e('main', { className: 'ini-tela' }, [
-          e('header', { key: 'cab', className: 'ini-cab' }, [
-            e('div', { key: 't' }, [
-              e('h1', { key: 'h' }, 'Painel'),
-              e('p', { key: 'p' }, lista ? plural(todas.length, 'automação', 'automações') + ' · atualizado às ' + hora(atualizado) : 'Carregando automações'),
-            ]),
-            e('div', { key: 'a', className: 'ini-acoes' }, [
-              e('button', { key: 'tema', type: 'button', className: 'ini-btn', onClick: tema, title: 'Trocar tema' }, [Icon('Eye', 15, 'currentColor'), 'Tema']),
+        const lado = e('aside', { key: 'lado', className: 'ex-lado', 'aria-label': 'Menu' }, [
+          e('div', { key: 'm', className: 'ex-marca' }, [e('div', { key: 'l', className: 'ex-logo' }, 'ARX'), e('b', { key: 'b' }, 'ARX Hub'), e('span', { key: 't', className: 'ex-tag' }, 'Exemplo')]),
+          e('nav', { key: 'n', className: 'ex-nav' }, [
+            e('div', { key: 'g1', className: 'ex-grupo' }, [e('div', { key: 't', className: 'ex-grupo-titulo' }, 'Geral'), ...Object.keys(PAGINAS).map(itemNav)]),
+            e('div', { key: 'g2', className: 'ex-grupo' }, [
+              e('div', { key: 't', className: 'ex-grupo-titulo' }, 'Abertas'),
+              abertas.length ? null : e('div', { key: 'v', className: 'ex-vazio-lado' }, 'As automações que você abrir ficam aqui.'),
+              ...abertas.map((x) => porId(x.id)).filter(Boolean).map((a) => e('div', {
+                key: a.id, role: 'button', tabIndex: 0, className: 'ex-item' + (ativa === a.id ? ' ativo' : ''), title: a.name,
+                onClick: () => { setAtiva(a.id); setGaveta(false); }, onKeyDown: (ev) => { if (ev.key === 'Enter') setAtiva(a.id); },
+                onAuxClick: (ev) => { if (ev.button === 1) fechar(a.id); },
+              }, [
+                Icon(a.icon, 16, a.color),
+                e('span', { key: 'r', className: 'rot' }, a.name),
+                e('span', { key: 'p', className: 'ponto', style: { background: COR_STATUS[a.status] || COR_STATUS.checking } }),
+                e('span', { key: 'x', className: 'fechar', role: 'button', 'aria-label': 'Fechar ' + a.name, onClick: (ev) => { ev.stopPropagation(); fechar(a.id); } }, Icon('X', 12, 'currentColor')),
+              ])),
             ]),
           ]),
-
-          e('section', { key: 'kpis', className: 'admin-kpis', 'aria-label': 'Resumo' }, [
-            ['t', 'Automações', lista ? todas.length : '…', 'cadastradas para você', ''],
-            ['on', 'No ar', lista ? no : '…', todas.length ? Math.round((no / todas.length) * 100) + '% respondendo' : 'Sem dados', no ? 'ok' : ''],
-            ['off', 'Fora do ar', lista ? fora.length : '…', fora.length ? 'veja o aviso abaixo' : 'nenhuma caída', fora.length ? 'alerta' : 'apagado'],
-            ['fav', 'Favoritas', favoritas.length, 'marque com a estrela', ''],
-          ].map(([k, r, v, d, tom]) => e('div', { key: k, className: 'admin-kpi ' + tom }, [
-            e('div', { key: 'r', className: 'admin-kpi-rotulo' }, r),
-            e('div', { key: 'v', className: 'admin-kpi-valor' }, String(v)),
-            e('div', { key: 'd', className: 'admin-kpi-detalhe' }, d),
-          ]))),
-
-          fora.length ? e('div', { key: 'alerta', className: 'ini-alerta', role: 'status' }, [
-            Icon('AlertCircle', 18, 'var(--error)'),
-            e('div', { key: 't' }, [e('b', { key: 'b' }, plural(fora.length, 'automação fora do ar', 'automações fora do ar') + ': '), fora.map((a) => a.name).join(', '), '. As demais seguem normais.']),
-          ]) : null,
-
-          e('div', { key: 'barra', className: 'ini-barra' }, [
-            e('label', { key: 'b', className: 'ini-busca' }, [
-              Icon('Search', 15, 'var(--muted-soft)'),
-              e('input', { key: 'i', ref: buscaRef, value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar por nome ou descrição', 'aria-label': 'Buscar automação' }),
-              e('kbd', { key: 'k' }, '/'),
-            ]),
-            e('div', { key: 's', className: 'ini-seg', role: 'group', 'aria-label': 'Filtrar por situação' }, [
-              seg('todas', 'Todas', todas.length), seg('online', 'No ar', no), seg('offline', 'Fora do ar', fora.length),
-            ]),
-            e('div', { key: 'v', className: 'ini-seg', role: 'group', 'aria-label': 'Modo de exibição' }, [
-              e('button', { key: 'g', type: 'button', 'aria-pressed': visao === 'grade' ? 'true' : 'false', onClick: () => trocarVisao('grade'), title: 'Cartões' }, [Icon('LayoutDashboard', 14, 'currentColor'), 'Cartões']),
-              e('button', { key: 'l', type: 'button', 'aria-pressed': visao === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista'), title: 'Lista' }, [Icon('FileText', 14, 'currentColor'), 'Lista']),
-            ]),
+          e('div', { key: 'p', className: 'ex-pe' }, [
+            e('button', { key: 't', type: 'button', className: 'ex-item', onClick: tema, title: 'Trocar tema' }, [Icon('Eye', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Trocar tema')]),
+            e('a', { key: 'v', className: 'ex-item', href: '/', title: 'Voltar ao Hub atual', style: { textDecoration: 'none' } }, [Icon('ArrowLeft', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Hub atual')]),
+            e('button', { key: 'c', type: 'button', className: 'ex-item ex-recolher', onClick: recolher, title: recolhido ? 'Expandir menu' : 'Recolher menu' }, [Icon('Maximize2', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Recolher menu')]),
           ]),
+        ]);
 
-          cats.length > 1 ? e('div', { key: 'cats', className: 'ini-chips', role: 'group', 'aria-label': 'Filtrar por categoria' }, [
-            e('button', { key: '', type: 'button', className: 'ini-chip', 'aria-pressed': !categoria ? 'true' : 'false', onClick: () => setCategoria('') }, 'Todas as categorias'),
-            ...cats.map((k) => e('button', { key: k, type: 'button', className: 'ini-chip', 'aria-pressed': categoria === k ? 'true' : 'false', onClick: () => setCategoria(categoria === k ? '' : k) }, CATEGORIAS[k].label)),
-          ]) : null,
+        const topo = e('header', { key: 'topo', className: 'ex-topo' }, [
+          e('button', { key: 'm', type: 'button', className: 'ex-icone-btn ex-menu-movel', onClick: () => setGaveta(true), 'aria-label': 'Abrir menu' }, Icon('LayoutDashboard', 16, 'currentColor')),
+          e('h1', { key: 't' }, titulo),
+          e('div', { key: 'e', className: 'ex-espaco' }),
+          e('button', { key: 'b', type: 'button', className: 'ex-busca-btn', onClick: () => setPaleta(true), 'aria-label': 'Buscar no Hub' }, [Icon('Search', 15, 'currentColor'), e('span', { key: 's' }, 'Buscar'), e('kbd', { key: 'k' }, 'Ctrl K')]),
+          window.AjudaBotao ? e(window.AjudaBotao, { key: 'aj', aba: aAtiva ? null : pagina }) : null,
+          window.AlertasSino ? e(window.AlertasSino, { key: 'al' }) : null,
+          window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'ac' }) : null,
+          e('span', { key: 's', className: 'ex-saude', title: lista ? no + ' de ' + todas.length + ' no ar' : '' }, [
+            e('i', { key: 'i', className: 'pulse-dot', style: { position: 'relative', background: fora > 0 ? 'var(--warn)' : 'var(--accent)', color: fora > 0 ? 'var(--warn)' : 'var(--accent)' } }),
+            e('span', { key: 't' }, lista ? no + '/' + todas.length + ' no ar' : '…'),
+          ]),
+        ]);
 
-          !lista
-            ? e('div', { key: 'esq', className: 'ini-grade', 'aria-busy': 'true' }, [0, 1, 2, 3, 4, 5].map((i) => e('div', { key: i, className: 'ini-esqueleto' })))
-            : grupos.length
-              ? grupos.map(([k, titulo, itens]) => e('section', { key: k, 'aria-labelledby': 'sec-' + k }, [
-                  e('div', { key: 'c', className: 'ini-secao-cab' }, [e('h2', { key: 'h', id: 'sec-' + k }, titulo), e('span', { key: 'n' }, plural(itens.length, 'automação', 'automações'))]),
-                  visao === 'lista' ? e('div', { key: 'l', className: 'ini-lista' }, itens.map(linha)) : e('div', { key: 'g', className: 'ini-grade' }, itens.map(cartao)),
-                ]))
-              : e('div', { key: 'vazio', className: 'admin-vazio' }, [
-                  todas.length ? 'Nenhuma automação com esses filtros. ' : 'Nenhuma automação cadastrada.',
-                  todas.length ? e('button', { key: 'l', type: 'button', className: 'ini-btn', style: { marginLeft: 8 }, onClick: () => { setBusca(''); setFiltro('todas'); setCategoria(''); } }, 'Limpar filtros') : null,
-                ]),
+        const legado = (k, View) => (montadas[k] && View ? e('div', { key: k, className: 'ex-pagina ex-legado', hidden: !!ativa || pagina !== k }, e(View)) : null);
+        const conteudo = e('main', { key: 'c', className: 'ex-conteudo' }, [
+          e('div', { key: 'painel', ref: areaRef, className: 'ex-pagina', hidden: !!ativa || pagina !== 'painel' },
+            e(Painel, { lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef })),
+          legado('chamados', window.ChamadosView),
+          legado('resultados', window.ResultadosView),
+          // cada tela aberta fica montada (escondida) para não perder o que está rodando nela
+          ...abertas.map((x) => { const a = porId(x.id); return a ? e(Visor, { key: 'v' + x.id, a, passe: x.passe, recarga: x.recarga, ativo: ativa === x.id, fechar: () => fechar(x.id), recarregar: () => recarregar(x.id) }) : null; }),
+        ]);
+
+        return e('div', { className: 'ex-app' + (recolhido ? ' recolhido' : '') + (gaveta ? ' gaveta' : '') }, [
+          lado,
+          gaveta ? e('div', { key: 'sombra', className: 'ex-sombra', onClick: () => setGaveta(false) }) : null,
+          e('div', { key: 'p', className: 'ex-principal' }, [topo, conteudo]),
+          paleta ? e(Paleta, { key: 'k', lista, irPara, abrir, fechar: () => setPaleta(false) }) : null,
         ]);
       }
 
       const raiz = document.getElementById('root');
-      if (ReactDOM.createRoot) ReactDOM.createRoot(raiz).render(e(Inicio)); else ReactDOM.render(e(Inicio), raiz);
+      if (ReactDOM.createRoot) ReactDOM.createRoot(raiz).render(e(Hub)); else ReactDOM.render(e(Hub), raiz);
     });
   </script>
 </body>
