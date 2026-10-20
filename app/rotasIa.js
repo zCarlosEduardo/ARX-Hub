@@ -105,7 +105,7 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
     const numeros = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => typeof v === 'number' || typeof v === 'string' && v.length < 80));
     return {
       estado: d.estado ? { treinado: d.estado.treinado, exemplos: d.estado.exemplos, treinadoEm: d.estado.treinadoEm, modelos: d.estado.modelos, tipos: d.estado.tipos, treino: d.estado.treino && { etapa: d.estado.treino.etapa, rodando: d.estado.treino.rodando, iniciouEm: d.estado.treino.iniciouEm, terminouEm: d.estado.treino.terminouEm } } : null,
-      metricas: d.metricas ? { total: d.metricas.total, acertoIa: d.metricas.acertoIa, acertoRegras: d.metricas.acertoRegras, porTipo: d.metricas.porTipo, distribuicao: d.metricas.distribuicao, treinadoEm: d.metricas.treinadoEm, modeloEmbed: d.metricas.modeloEmbed, modeloTexto: d.metricas.modeloTexto } : null,
+      metricas: d.metricas ? { total: d.metricas.total, acertoIa: d.metricas.acertoIa, acertoRegras: d.metricas.acertoRegras, porTipo: d.metricas.porTipo, distribuicao: d.metricas.distribuicao, treinadoEm: d.metricas.treinadoEm, modeloEmbed: d.metricas.modeloEmbed, modeloTexto: d.metricas.modeloTexto, confirmados: d.metricas.confirmados ? { total: d.metricas.confirmados.total, acertoIa: d.metricas.confirmados.acertoIa, acertoRegras: d.metricas.confirmados.acertoRegras } : null } : null,
       modelos: (d.modelos || []).map((m) => ({ nome: m.nome, tamanhoMb: m.tamanhoMb })),
       eventos: (d.eventos || []).slice(-100).map((ev) => ({ quando: ev.quando, tipo: ev.tipo, ...numeros(ev) })),
       decisoes: { total: dec.length, concorda, discorda: dec.length - concorda, porOrigem },

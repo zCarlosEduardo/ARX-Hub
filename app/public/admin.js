@@ -718,6 +718,7 @@
           ...((estado.controle && estado.controle.containers) || []).map((x) => linha('Container ' + x.nome, x.estado === 'running' ? 'rodando' : x.estado === 'nao_criado' ? 'não criado (rode scripts/deploy.sh ia-local)' : 'parado')),
           linha('Modelo treinado', ia ? (ia.treinado ? `${ia.exemplos} chamados, em ${new Date(ia.treinadoEm).toLocaleString('pt-BR')}` : 'Ainda não treinado') : 'Sem dados (IA desligada)'),
           ia && ia.metricas ? linha('Acerto medido', `IA ${pctTxt(ia.metricas.acertoIa)} x regras de hoje ${pctTxt(ia.metricas.acertoRegras)} (${ia.metricas.total} chamados, validação cruzada)`) : null,
+          ia && ia.metricas && ia.metricas.confirmados ? linha('Nos chamados com resultado real', `IA ${pctTxt(ia.metricas.confirmados.acertoIa)} x regras ${pctTxt(ia.metricas.confirmados.acertoRegras)} (${ia.metricas.confirmados.total} chamados que rodaram numa automação)`) : null,
           ia && ia.modelos ? linha('Modelos', `${ia.modelos.texto} (texto) e ${ia.modelos.embed} (vetores)`) : null,
           exp && exp.etapa && exp.etapa !== 'pronto' && exp.rodando !== undefined ? linha('Exportação', exp.rodando ? `${exp.etapa}${exp.total ? ` (${exp.feito} de ${exp.total})` : ''}` : exp.erro ? 'Erro: ' + exp.erro : exp.etapa) : null,
           exp && exp.resumo ? linha('Última exportação', `${exp.resumo.chamados} chamados (${exp.resumo.comHistorico} com resultado real de automação, ${exp.resumo.reabertos} reabertos)`) : null,
