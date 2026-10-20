@@ -125,8 +125,69 @@
   const cabecalhoCard = (titulo, sub) => e('div', { key: 'h' }, [e('div', { key: 'a', style: S.titulo }, titulo), e('div', { key: 'b', style: S.sub }, sub)]);
 
   // ---------- tela ----------
+  // Origem das execuções: pelos chamados do GLPI (100% automáticas, banco-central) ou manuais (alguém colocou os dados
+  // na tela da automação; registradas pelo proxy do Hub em hub_execucoes).
+  const KEY_ORIGEM = 'arxhub_resultados_origem';
+  const ORIGENS = [['todas', 'Todas'], ['chamados', 'Pelos chamados (automáticas)'], ['manuais', 'Manuais (dados colocados por nós)']];
+  const SITUACAO_EXEC = { rodando: 'Rodando', concluido: 'Concluída', erro: 'Com erro', parado: 'Parada', desconhecido: 'Sem retorno' };
+
+  function PainelManuais({ m, setOrigem }) {
+    const t = m.totais;
+    if (!t.execucoes) {
+      return e('div', { key: 'man-vazio', style: { ...S.card, color: 'var(--muted-soft)', fontSize: 13 } }, [
+        cabecalhoCard('Execuções manuais', 'Rodadas pela tela da automação, com os dados colocados por alguém.'),
+        e('div', { key: 't' }, 'Nenhuma execução manual neste período. Elas aparecem aqui quando alguém roda uma automação pela tela dela, aberta pelo Hub.'),
+      ]);
+    }
+    const semTempo = m.porAutomacao.filter((a) => !a.minutosPorItem).map((a) => a.nome);
+    return e('div', { key: 'manuais', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, [
+      e('div', { key: 'kpis', className: 'res-kpis' }, [
+        e(Numero, { key: 'x', rotulo: 'Execuções manuais', icone: 'Activity', valor: num(t.execucoes), sub: t.rodando ? `${plural(t.rodando, 'em andamento', 'em andamento')}` : `${plural(t.itens, 'item', 'itens')} processados` }),
+        e(Numero, { key: 'c', rotulo: 'Itens concluídos', icone: 'Activity', valor: num(t.concluidos), sub: plural(t.erros, 'item com erro', 'itens com erro') }),
+        e(Numero, { key: 't', rotulo: 'Tempo economizado', selo: 'estimativa', valor: horasMin(m.tempoEconomizado.minutos), sub: 'Itens concluídos × minutos à mão (definidos por automação na administração)' }),
+        e(Numero, { key: 'd', rotulo: 'Duração média', icone: 'RefreshCw', valor: duracao(t.duracaoMediaSeg), sub: 'do início ao fim de cada execução' }),
+      ]),
+      semTempo.length ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12.5 } }, `Sem minutos por item definidos (não contam no tempo economizado): ${semTempo.join(', ')}. Ajuste em Administração > Automações > Editar.`) : null,
+      e('div', { key: 'pa', style: S.card }, [
+        cabecalhoCard('Por automação', 'Execuções manuais e itens de cada automação no período.'),
+        tabela(['Automação', 'Execuções', 'Itens', 'Concluídos', 'Erros', 'Min. por item', 'Economizado (estim.)'],
+          m.porAutomacao.map((a) => e('tr', { key: a.automacaoId }, [
+            e('td', { key: 'n' }, a.nome),
+            e('td', { key: 'x' }, num(a.execucoes)),
+            e('td', { key: 'i' }, num(a.itens)),
+            e('td', { key: 'c' }, num(a.concluidos)),
+            e('td', { key: 'e' }, num(a.erros)),
+            e('td', { key: 'm' }, a.minutosPorItem ? a.minutosPorItem.toLocaleString('pt-BR') : 'Não informado'),
+            e('td', { key: 'ec' }, horasMin(a.minutosEconomizados)),
+          ]))),
+      ]),
+      e('div', { key: 'dois', className: 'page-grid' }, [
+        e('div', { key: 'pp', style: S.card }, [
+          cabecalhoCard('Quem rodou', 'Pessoa identificada pelo token do GLPI ao abrir a automação no Hub.'),
+          tabela(['Pessoa', 'Execuções', 'Concluídos', 'Erros'],
+            m.porPessoa.map((p) => e('tr', { key: p.nome }, [e('td', { key: 'n' }, p.nome), e('td', { key: 'x' }, num(p.execucoes)), e('td', { key: 'c' }, num(p.concluidos)), e('td', { key: 'e' }, num(p.erros))]))),
+        ]),
+        e('div', { key: 'rc', style: S.card }, [
+          cabecalhoCard('Últimas execuções', 'As 30 mais recentes do período.'),
+          tabela(['Quando', 'Automação', 'Pessoa', 'Situação', 'Itens'],
+            m.recentes.map((r) => e('tr', { key: r.id }, [
+              e('td', { key: 'q', style: { whiteSpace: 'nowrap' } }, new Date(r.inicio).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })),
+              e('td', { key: 'a' }, r.automacaoNome),
+              e('td', { key: 'p' }, r.quem || 'Sem identificação'),
+              e('td', { key: 's' }, (SITUACAO_EXEC[r.situacao] || r.situacao) + (r.modoTeste ? ' (teste)' : '')),
+              e('td', { key: 'i' }, r.itens ? `${num(r.concluidos)} de ${num(r.itens)}` : 'Não informado'),
+            ]))),
+        ]),
+      ]),
+      setOrigem ? null : null,
+    ]);
+  }
+
   function ResultadosView() {
     const [salvo] = useState(() => ler(KEY_PERIODO, null) || {});
+    const [origem, setOrigemEstado] = useState(() => (ORIGENS.some(([k]) => k === ler(KEY_ORIGEM, 'todas')) ? ler(KEY_ORIGEM, 'todas') : 'todas'));
+    const setOrigem = (o) => { setOrigemEstado(o); gravar(KEY_ORIGEM, o); };
+    const [manual, setManual] = useState({ dados: null, erro: null });
     const [periodo, setPeriodo] = useState(PERIODOS.some((p) => p.id === salvo.periodo) ? salvo.periodo : '12');
     const [datas, setDatas] = useState({ desde: salvo.desde || inicioSemanas(12), ate: salvo.ate || hoje() });
     const [incluirTeste, setIncluirTeste] = useState(false); // sempre começa desligado
@@ -169,6 +230,23 @@
     useEffect(() => {
       buscar();
     }, [buscar]);
+
+    // execuções manuais vêm do próprio Hub (não dependem do filtro de associação nem de tipo de chamado)
+    const buscarManuais = useCallback(async () => {
+      if (!datasOk) return;
+      try {
+        const q = new URLSearchParams({ desde: filtro.desde, ate: filtro.ate, incluirTeste: incluirTeste ? '1' : '0' });
+        const resp = await fetch(`/api/execucoes/resumo?${q}`);
+        const dados = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(dados.error || `HTTP ${resp.status}`);
+        setManual({ dados, erro: null });
+      } catch (err) {
+        setManual((x) => ({ ...x, erro: err.message }));
+      }
+    }, [filtro.desde, filtro.ate, incluirTeste, datasOk]);
+    useEffect(() => {
+      buscarManuais();
+    }, [buscarManuais]);
     useEffect(() => {
       gravar(KEY_PERIODO, { periodo, desde: datas.desde, ate: datas.ate });
     }, [periodo, datas.desde, datas.ate]);
@@ -202,7 +280,9 @@
           e('input', { key: 'c', type: 'checkbox', checked: incluirTeste, onChange: (ev) => setIncluirTeste(ev.target.checked) }),
           e('span', { key: 't' }, 'Incluir modo teste'),
         ]),
-        e('button', { key: 'rf', style: S.btnSec, disabled: carregando, onClick: buscar }, [
+        e('select', { key: 'fo', className: 'field-input', value: origem, onChange: (ev) => setOrigem(ev.target.value), style: { ...S.input, maxWidth: '100%' }, 'aria-label': 'Origem das execuções' },
+          ORIGENS.map(([k, v]) => e('option', { key: k, value: k }, v))),
+        e('button', { key: 'rf', style: S.btnSec, disabled: carregando, onClick: () => { buscar(); buscarManuais(); } }, [
           e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
           e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
         ]),
@@ -379,8 +459,26 @@
       ]);
     }
 
+    const m = manual.dados;
+    const painelManual = m
+      ? e(PainelManuais, { key: 'pm', m })
+      : manual.erro
+        ? e('div', { key: 'pm-erro', style: { color: 'var(--error)', fontSize: 13 } }, 'Falha ao buscar as execuções manuais: ' + manual.erro)
+        : null;
+    // "Todas": o tempo economizado soma as duas origens
+    const totalTodas = m && dados && dados.tempoEconomizado
+      ? e('div', { key: 'tot', style: { ...S.card, flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' } }, [
+          e('span', { key: 'r', style: { fontWeight: 600, fontSize: 14 } }, 'Tempo economizado no período, todas as origens:'),
+          e('span', { key: 'v', style: { fontWeight: 600, fontSize: 18 } }, horasMin(dados.tempoEconomizado.minutos + m.tempoEconomizado.minutos)),
+          e('span', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12 } }, `estimativa: ${horasMin(dados.tempoEconomizado.minutos)} pelos chamados + ${horasMin(m.tempoEconomizado.minutos)} manuais`),
+        ])
+      : null;
+
     let corpo;
-    if (!datasOk) {
+    if (origem === 'manuais') {
+      corpo = datasOk ? painelManual || e('div', { key: 'load-m', style: { color: 'var(--muted-soft)', padding: '30px 0' } }, 'Buscando execuções manuais…') : null;
+      if (!datasOk) corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Informe as duas datas. A data inicial deve ser anterior à final.');
+    } else if (!datasOk) {
       corpo = e('div', { key: 'datas', style: { color: 'var(--warn)', fontSize: 13.5, padding: '20px 0' } }, 'Informe as duas datas. A data inicial deve ser anterior à final.');
     } else if (erro && !dados) {
       corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os resultados: ' + erro);
@@ -398,6 +496,15 @@
       ]);
     } else {
       corpo = painel(dados);
+    }
+    if (origem === 'todas' && datasOk) {
+      corpo = e('div', { key: 'todas', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, [
+        totalTodas,
+        e('div', { key: 'tc', style: { fontWeight: 600, fontSize: 15 } }, 'Pelos chamados (automáticas)'),
+        corpo,
+        e('div', { key: 'tm', style: { fontWeight: 600, fontSize: 15, marginTop: 8 } }, 'Manuais (dados colocados por nós)'),
+        painelManual,
+      ]);
     }
 
     return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, verRes && window.VerChamado ? e(window.VerChamado, { key: 'ver', item: verRes, userToken: (ler('arxhub_chamados_acessos_v2', null) || {}).userToken, onFechar: () => setVerRes(null) }) : null]);

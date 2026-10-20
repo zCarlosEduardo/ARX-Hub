@@ -87,6 +87,28 @@ async function init() {
   await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS vnc_porta INTEGER;');
   // grupos do GLPI que veem a automação (vazio = todo mundo); quem está fora nem vê o card nem abre pelo proxy
   await pool.query("ALTER TABLE automations ADD COLUMN IF NOT EXISTS grupos INTEGER[] NOT NULL DEFAULT '{}';");
+  // minutos que um item levaria à mão (tempo economizado das execuções manuais na aba Resultados); null = sem tempo
+  await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS minutos_por_item NUMERIC(6,1);');
+  // execuções manuais (rodadas pela tela da automação, registradas pelo proxy): execucoes.js e aba Resultados
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hub_execucoes (
+      id BIGSERIAL PRIMARY KEY,
+      automacao_id BIGINT NOT NULL,
+      automacao_nome TEXT NOT NULL DEFAULT '',
+      quem TEXT NOT NULL DEFAULT '',
+      quem_glpi_id INTEGER,
+      job_id TEXT NOT NULL DEFAULT '',
+      inicio TIMESTAMPTZ NOT NULL DEFAULT now(),
+      fim TIMESTAMPTZ,
+      situacao TEXT NOT NULL DEFAULT 'rodando',
+      itens INTEGER NOT NULL DEFAULT 0,
+      concluidos INTEGER NOT NULL DEFAULT 0,
+      erros INTEGER NOT NULL DEFAULT 0,
+      modo_teste BOOLEAN NOT NULL DEFAULT false,
+      detalhe TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS hub_execucoes_inicio_idx ON hub_execucoes (inicio);');
   // robô do WhatsApp: quem é quem (telefone -> usuário do GLPI) e os pedidos que chegam pelos grupos
   await pool.query(`
     CREATE TABLE IF NOT EXISTS whatsapp_vinculos (
@@ -167,6 +189,7 @@ function rowToAutomation(row) {
     ordem: row.ordem == null ? null : row.ordem,
     vncPorta: row.vnc_porta == null ? null : row.vnc_porta,
     grupos: row.grupos || [],
+    minutosPorItem: row.minutos_por_item == null ? null : Number(row.minutos_por_item),
     status: row.status,
     lastCheckedAt: row.last_checked_at,
     createdAt: row.created_at,

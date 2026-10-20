@@ -11,6 +11,7 @@
 // Referer completo para a mesma origem; nenhuma automação muda a Referrer-Policy.
 const http = require('http');
 const https = require('https');
+const { rotaDeInicio } = require('./execucoes');
 
 // cabeçalhos de uma conexão só (RFC 9110 7.6.1): não passam adiante
 const SALTO_A_SALTO = ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade', 'te', 'trailer'];
@@ -159,7 +160,7 @@ function semPasse(url) {
  * num cookie por automação (`arx_passe_<id>`), que acompanha os pedidos seguintes, inclusive WebSocket.
  * Devolve `atender` (pedidos HTTP) e `atenderUpgrade` (WebSocket, evento 'upgrade' do servidor).
  */
-function criarProxyAutomacoes({ buscarDestino, passes = null }) {
+function criarProxyAutomacoes({ buscarDestino, passes = null, observador = null }) {
   async function resolver(req) {
     const achado = idDoPedido(req);
     if (!achado) return { status: 404, texto: 'Não encontrado.' };
@@ -188,7 +189,36 @@ function criarProxyAutomacoes({ buscarDestino, passes = null }) {
 
     const a = alvo(destino, achado, semPasse(req.url));
     if (!a) return { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
-    return { achado, alvo: a, setCookie, quem: acesso ? acesso.usuario : null };
+    return { achado, destino, alvo: a, setCookie, quem: acesso ? acesso.usuario : null };
+  }
+
+  /**
+   * Para o registro de execuções manuais (execucoesRegistro.js): no POST de início, guarda os corpos (com teto) e
+   * avisa quando a resposta termina; no GET de logs (SSE), passa os pedaços adiante. Não altera o que trafega.
+   */
+  function observar(req, r) {
+    if (!observador || r.alvo.prefixo.endsWith('/vnc')) return undefined;
+    if (req.method === 'POST' && rotaDeInicio('POST', r.alvo.caminho)) {
+      const pedido = [];
+      let tamPedido = 0;
+      req.on('data', (c) => { if (tamPedido < 262144) { pedido.push(c); tamPedido += c.length; } });
+      return (resposta) => {
+        const corpo = [];
+        let tam = 0;
+        resposta.on('data', (c) => { if (tam < 65536) { corpo.push(c); tam += c.length; } });
+        resposta.on('end', () => observador.aoIniciar({
+          automacao: r.destino, quem: r.quem, caminho: r.alvo.caminho, status: resposta.statusCode, cabecalhos: resposta.headers,
+          corpoPedido: Buffer.concat(pedido), corpoResposta: Buffer.concat(corpo),
+        }));
+      };
+    }
+    if (req.method === 'GET') {
+      return (resposta) => {
+        const leitor = observador.abrirSse({ automacao: r.destino, caminho: r.alvo.caminho });
+        if (leitor) resposta.on('data', leitor);
+      };
+    }
+    return undefined;
   }
 
   async function atender(req, res) {
@@ -203,7 +233,7 @@ function criarProxyAutomacoes({ buscarDestino, passes = null }) {
       res.writeHead(301, { Location: prefixo + '/' + req.url.slice(prefixo.length) });
       return res.end();
     }
-    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo, { setCookie: r.setCookie });
+    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo, { setCookie: r.setCookie, aoResponder: observar(req, r) });
   }
 
   async function atenderUpgrade(req, socket, cabeca) {
