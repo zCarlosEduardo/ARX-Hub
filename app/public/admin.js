@@ -600,6 +600,8 @@
     'ia.desligar': 'Desligou a IA local',
     'ia.exportar': 'Exportou os chamados para a IA',
     'ia.treinar': 'Treinou a IA',
+    'ia.revisao.iniciar': 'Começou a revisão da IA',
+    'ia.revisao.parar': 'Parou a revisão da IA',
     'config.alterar': 'Alterou a configuração',
     'admin.adicionar': 'Adicionou administrador',
     'admin.remover': 'Removeu administrador',
@@ -759,7 +761,76 @@
     ]);
   }
 
-  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['ia', 'IA local', 'Bot'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
+  // ---------- aba: Revisão da IA (a IA local lê todos os chamados; as divergências são decididas aqui) ----------
+  function AbaRevisao() {
+    const [estado, setEstado] = useState(null);
+    const [pagina, setPagina] = useState(null); // { total, itens, tipos }
+    const [i, setI] = useState(0);
+    const [escolha, setEscolha] = useState('');
+    const [erro, setErro] = useState(null);
+    const [ocupado, setOcupado] = useState(false);
+    const lerEstado = () => api('GET', '/api/admin/ia/revisao').then(setEstado).catch((err) => setErro(err.message));
+    const lerPagina = () => api('GET', '/api/admin/ia/revisao/divergencias?limite=20').then((p) => { setPagina(p); setI(0); setEscolha(''); }).catch((err) => setErro(err.message));
+    useEffect(() => {
+      lerEstado();
+      lerPagina();
+      const t = setInterval(lerEstado, 10000);
+      return () => clearInterval(t);
+    }, []);
+    const acao = (nome) => async () => {
+      setErro(null);
+      try { await api('POST', `/api/admin/ia/revisao/${nome}`); } catch (err) { setErro(err.message); }
+      lerEstado();
+    };
+    const tipos = (pagina && pagina.tipos) || {};
+    const nome = (t) => (t === 'sem_automacao' ? 'Sem automação' : tipos[t] || t);
+    const item = pagina && pagina.itens[i];
+    const decidir = async (tipo) => {
+      if (!item || !tipo) return;
+      setOcupado(true);
+      setErro(null);
+      try {
+        await api('POST', '/api/admin/ia/revisao/decidir', { id: item.id, tipo });
+        if (i + 1 < pagina.itens.length) { setI(i + 1); setEscolha(''); } else await lerPagina();
+        lerEstado();
+      } catch (err) {
+        setErro(err.message);
+      }
+      setOcupado(false);
+    };
+    const pular = () => { if (pagina && i + 1 < pagina.itens.length) { setI(i + 1); setEscolha(''); } };
+    const e2 = estado && !estado.indisponivel ? estado : null;
+    const ritmo = e2 && e2.rodando && e2.iniciouEm ? (Date.now() - Date.parse(e2.iniciouEm)) / Math.max(1, e2.feito - (e2.feitoNoInicio || 0)) : null;
+    const opinioes = item ? [['Regras de hoje', item.regra, null], ['Classificador (chamados parecidos)', item.classificador && item.classificador.tipo, item.classificador && item.classificador.confianca], ['IA lendo o chamado', item.llm && item.llm.tipo, item.llm && item.llm.confianca], ['Resultado real da automação', item.real, null]].filter((o) => o[1]) : [];
+    const sugeridos = [...new Set(opinioes.map((o) => o[1]))];
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+      dica('A IA local lê TODOS os chamados exportados, um por um, e compara quatro opiniões: as regras de hoje, os chamados mais parecidos do histórico, a leitura do chamado pelo modelo de texto e o resultado real (quando a automação já rodou). Quando todas concordam é consenso; quando não, o chamado aparece aqui para uma pessoa decidir. Cada decisão vira gabarito com peso máximo no próximo treino. Nada sai desta rede.'),
+      erro ? e('div', { key: 'er', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
+      !estado ? dica('Carregando…') : estado.indisponivel ? dica('IA desligada ou fora do ar: ligue na aba IA local.') : e('div', { key: 'est', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+        e('div', { key: 'n', style: { fontSize: 13 } }, `Revisados ${e2.feito} de ${e2.total || 'todos'} · consenso ${e2.consenso} · divergências ${e2.divergencias} · decididos por pessoas ${e2.decididasPorPessoas}`),
+        e2.rodando ? dica(e2.parando ? 'Parando depois do chamado atual…' : `Revisando agora${ritmo ? `; cerca de ${Math.ceil(((e2.total - e2.feito) * ritmo) / 3600000)} h para terminar` : ''}.`) : e2.erro ? e('div', { style: { color: 'var(--error)', fontSize: 12.5 } }, 'Erro: ' + e2.erro) : null,
+        e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
+          e2.rodando ? botao('Parar', acao('parar'), 'sec', { key: 'p' }) : botao(e2.feito ? 'Continuar a revisão' : 'Começar a revisão', acao('iniciar'), 'prim', { key: 'i' }),
+          botao('Atualizar divergências', lerPagina, 'sec', { key: 'a' }),
+        ]),
+      ]),
+      e('div', { key: 'item', style: { borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 } }, !pagina ? [dica('Carregando…')] : !item ? [dica(pagina.total ? 'Fim desta página: atualize para ver mais.' : 'Nenhuma divergência esperando decisão.')] : [
+        e('div', { key: 'c', style: { fontSize: 12, color: 'var(--muted)' } }, `Divergência ${i + 1} de ${pagina.itens.length} nesta página (${pagina.total} esperando decisão) · chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
+        e('div', { key: 't', style: { fontWeight: 600, fontSize: 14 } }, item.titulo || 'Sem título'),
+        e('pre', { key: 'x', className: 'revisao-texto', style: { whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12.5, maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, margin: 0 } }, item.texto || 'Sem descrição'),
+        e('div', { key: 'o', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, opinioes.map(([quem, tipo, conf]) =>
+          e('div', { key: quem, style: { fontSize: 12.5 } }, [e('span', { key: 'q', style: { color: 'var(--muted)' } }, quem + ': '), e('strong', { key: 't' }, nome(tipo)), conf !== null && conf !== undefined ? ` (${Math.round(conf * 100)}%)` : ''])).concat(item.llm && item.llm.motivo ? [e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, 'Motivo da IA: ' + item.llm.motivo)] : [])),
+        e('div', { key: 'd', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, sugeridos.map((t) => botao(`É ${nome(t)}`, () => decidir(t), 'sec', { key: t, disabled: ocupado }))),
+        e('div', { key: 's', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, [
+          selecao(escolha, setEscolha, [['', 'Outro tipo…'], ['sem_automacao', 'Sem automação'], ...Object.entries(tipos).map(([k, v]) => [k, v])], { key: 'sel', maxWidth: 280 }),
+          botao('Salvar este', () => decidir(escolha), 'prim', { key: 'sv', disabled: !escolha || ocupado }),
+          botao('Pular', pular, 'sec', { key: 'pl', disabled: ocupado }),
+        ]),
+      ]),
+    ]);
+  }
+
+  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['ia', 'IA local', 'Bot'], ['revisao', 'Revisão da IA', 'Eye'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
 
   function AdminView() {
     const [aba, setAba] = useState('cofre');
@@ -777,6 +848,7 @@
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
+    else if (aba === 'revisao') corpo = e(AbaRevisao, { key: 'revisao' });
     else if (aba === 'ia') corpo = e(AbaIa, { key: 'ia', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
