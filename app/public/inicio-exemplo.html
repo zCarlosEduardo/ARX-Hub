@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARX Exemplo do painel</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('arx-tema'); } catch (e) { /* sem armazenamento: tema claro */ }
+      document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    })();
+  </script>
+  <style>
+    /* Exemplo de tela inicial: só tokens do styles.css (mesmas cores do Hub e da Administração). */
+    .ini-faixa { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12.5px; background: var(--warn-tint); color: var(--text); text-align: center; }
+    .ini-faixa a { color: inherit; font-weight: 600; }
+    .ini-tela { max-width: 1120px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 20px; }
+    .ini-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .ini-cab h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .ini-cab p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .ini-acoes { display: flex; align-items: center; gap: 8px; }
+    .ini-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .ini-btn:hover { background: var(--hover-bg); }
+    .ini-btn:focus-visible, .ini-card:focus-visible, .ini-seg button:focus-visible, .ini-chip:focus-visible, .ini-estrela:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
+    .ini-alerta { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--error-tint); border: 1px solid var(--error-border); font-size: 13px; line-height: 1.5; }
+    .ini-alerta b { color: var(--error); }
+    .ini-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ini-busca { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); }
+    .ini-busca:focus-within { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
+    .ini-busca input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13.5px; }
+    .ini-busca kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--secondary); color: var(--muted-soft); }
+    .ini-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--secondary); }
+    .ini-seg button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+    .ini-seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow-card); }
+    .ini-seg .n { font-variant-numeric: tabular-nums; color: var(--muted-soft); }
+    .ini-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ini-chip { height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+    .ini-chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+    .ini-secao-cab { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+    .ini-secao-cab h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    .ini-secao-cab span { font-size: 12px; color: var(--muted); }
+    .ini-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+    .ini-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px; min-width: 0; text-align: left; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); cursor: pointer; text-decoration: none; transition: box-shadow 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.15s var(--ease); }
+    .ini-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+    .ini-card.fora { border-color: var(--error-border); }
+    .ini-card-topo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .ini-icone { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ini-nome { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .ini-desc { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
+    .ini-rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
+    .ini-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+    .ini-status i { width: 7px; height: 7px; border-radius: 50%; }
+    .ini-status.online { color: var(--accent-fg); } .ini-status.online i { background: var(--accent); }
+    .ini-status.offline { color: var(--error); } .ini-status.offline i { background: var(--error); }
+    .ini-status.checking { color: var(--warn); } .ini-status.checking i { background: var(--warn); }
+    .ini-abrir { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+    .ini-card:hover .ini-abrir { color: var(--text); }
+    .ini-estrela { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; background: transparent; color: var(--muted-soft); cursor: pointer; font-size: 16px; line-height: 1; opacity: 0; }
+    .ini-card:hover .ini-estrela, .ini-estrela:focus-visible, .ini-estrela[aria-pressed="true"] { opacity: 1; }
+    .ini-estrela[aria-pressed="true"] { color: var(--warn); }
+    .ini-estrela:hover { background: var(--hover-bg); }
+    .ini-lista { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+    .ini-linha { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 2fr) 110px 28px; align-items: center; gap: 12px; padding: 10px 14px; text-decoration: none; color: var(--text); font-size: 13px; }
+    .ini-linha + .ini-linha { border-top: 1px solid var(--border); }
+    .ini-linha:hover { background: var(--hover-bg-soft); }
+    .ini-linha .ini-desc { min-height: 0; -webkit-line-clamp: 1; }
+    .ini-esqueleto { height: 150px; border-radius: 12px; background: linear-gradient(90deg, var(--secondary) 25%, var(--hover-bg-soft) 50%, var(--secondary) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+    @media (max-width: 640px) {
+      .ini-linha { grid-template-columns: 36px minmax(0, 1fr) 90px; }
+      .ini-linha .ini-desc, .ini-linha .ini-estrela-lin { display: none; }
+      .ini-estrela { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) { .ini-card, .ini-esqueleto { transition: none; animation: none; transform: none; } }
+  </style>
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
+  <script src="icons.js" defer></script>
+</head>
+<body>
+  <div class="ini-faixa">Exemplo de nova tela inicial com as automações reais (só leitura). A tela atual não mudou. <a href="/">Voltar ao Hub</a></div>
+  <div id="root"></div>
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      const e = React.createElement;
+      const { useState, useEffect, useRef } = React;
+      const { Icon, CATEGORY_CHOICES } = window.Icons;
+      const CATEGORIAS = CATEGORY_CHOICES.reduce((acc, c) => { acc[c.key] = c; return acc; }, {});
+      const STATUS = { online: 'No ar', offline: 'Fora do ar', checking: 'Verificando' };
+      const CHAVE_FAV = 'arxhub_exemplo_favoritas';
+      const CHAVE_VISAO = 'arxhub_exemplo_visao';
+
+      function ler(chave, padrao) {
+        try { const v = localStorage.getItem(chave); return v ? JSON.parse(v) : padrao; } catch (err) { return padrao; }
+      }
+      function gravar(chave, valor) {
+        try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (err) { /* sem armazenamento: vale só nesta aba */ }
+      }
+      const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+      const hora = (d) => d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+      function Status({ s }) {
+        return e('span', { className: 'ini-status ' + (s || 'checking') }, [e('i', { key: 'i' }), STATUS[s] || STATUS.checking]);
+      }
+
+      function Inicio() {
+        const [lista, setLista] = useState(null);
+        const [atualizado, setAtualizado] = useState(null);
+        const [busca, setBusca] = useState('');
+        const [filtro, setFiltro] = useState('todas');
+        const [categoria, setCategoria] = useState('');
+        const [visao, setVisao] = useState(() => ler(CHAVE_VISAO, 'grade'));
+        const [favoritas, setFavoritas] = useState(() => ler(CHAVE_FAV, []));
+        const buscaRef = useRef(null);
+
+        useEffect(() => {
+          let vivo = true;
+          const carregar = () => fetch('/api/automations').then((r) => (r.ok ? r.json() : null)).then((d) => {
+            if (vivo && Array.isArray(d)) { setLista(d); setAtualizado(new Date()); }
+          }).catch(() => { /* rede oscilou: a próxima volta tenta de novo */ });
+          carregar();
+          const t = setInterval(carregar, 15000);
+          return () => { vivo = false; clearInterval(t); };
+        }, []);
+
+        // "/" ou Ctrl+K levam à busca, Esc limpa
+        useEffect(() => {
+          const tecla = (ev) => {
+            const digitando = /INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName);
+            if ((ev.key === '/' && !digitando) || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k')) { ev.preventDefault(); buscaRef.current.focus(); }
+            if (ev.key === 'Escape' && document.activeElement === buscaRef.current) setBusca('');
+          };
+          window.addEventListener('keydown', tecla);
+          return () => window.removeEventListener('keydown', tecla);
+        }, []);
+
+        const trocarVisao = (v) => { setVisao(v); gravar(CHAVE_VISAO, v); };
+        const alternarFav = (id) => setFavoritas((f) => { const n = f.includes(id) ? f.filter((x) => x !== id) : [...f, id]; gravar(CHAVE_FAV, n); return n; });
+        const tema = () => {
+          const d = document.documentElement;
+          const t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          d.setAttribute('data-theme', t);
+          gravar('arx-tema-exemplo', t);
+        };
+
+        const todas = lista || [];
+        const no = todas.filter((a) => a.status === 'online').length;
+        const fora = todas.filter((a) => a.status === 'offline');
+        const cats = [...new Set(todas.flatMap((a) => a.categories || []))].filter((k) => CATEGORIAS[k]);
+        const q = busca.trim().toLowerCase();
+        const visiveis = todas.filter((a) =>
+          (!q || (a.name + ' ' + (a.description || '')).toLowerCase().includes(q)) &&
+          (filtro === 'todas' || a.status === filtro) &&
+          (!categoria || (a.categories || []).includes(categoria)));
+        const isDb = (a) => (a.categories || []).includes('db');
+        const favs = visiveis.filter((a) => favoritas.includes(a.id));
+        const grupos = [
+          favs.length && !q ? ['fav', 'Favoritas', favs] : null,
+          ['main', 'Automações', visiveis.filter((a) => !isDb(a))],
+          ['db', 'Banco de Dados', visiveis.filter(isDb)],
+        ].filter((g) => g && g[2].length);
+
+        const estrela = (a, cls) => e('button', {
+          key: 'fav', type: 'button', className: 'ini-estrela ' + (cls || ''), 'aria-pressed': favoritas.includes(a.id) ? 'true' : 'false',
+          'aria-label': (favoritas.includes(a.id) ? 'Tirar ' : 'Marcar ') + a.name + ' como favorita', title: 'Favorita',
+          onClick: (ev) => { ev.preventDefault(); ev.stopPropagation(); alternarFav(a.id); },
+        }, favoritas.includes(a.id) ? '★' : '☆');
+        const icone = (a) => e('span', { key: 'ic', className: 'ini-icone', style: { background: a.color + '22' } }, Icon(a.icon, 18, a.color));
+        // no exemplo, abrir leva ao Hub atual (as abas e o login das automações vivem lá)
+        const cartao = (a) => e('a', { key: a.id, href: '/', className: 'ini-card' + (a.status === 'offline' ? ' fora' : ''), 'aria-label': 'Abrir ' + a.name }, [
+          estrela(a),
+          e('div', { key: 't', className: 'ini-card-topo' }, [icone(a), e('span', { key: 'n', className: 'ini-nome', title: a.name }, a.name)]),
+          e('p', { key: 'd', className: 'ini-desc' }, a.description || 'Sem descrição'),
+          e('div', { key: 'r', className: 'ini-rodape' }, [e(Status, { key: 's', s: a.status }), e('span', { key: 'a', className: 'ini-abrir' }, ['Abrir ', Icon('ExternalLink', 13, 'currentColor')])]),
+        ]);
+        const linha = (a) => e('a', { key: a.id, href: '/', className: 'ini-linha', 'aria-label': 'Abrir ' + a.name }, [
+          icone(a),
+          e('span', { key: 'n', className: 'ini-nome' }, a.name),
+          e('p', { key: 'd', className: 'ini-desc' }, a.description || 'Sem descrição'),
+          e(Status, { key: 's', s: a.status }),
+          e('span', { key: 'f', className: 'ini-estrela-lin', style: { position: 'relative', width: 28, height: 28 } }, estrela(a)),
+        ]);
+
+        const seg = (valor, rotulo, n) => e('button', { key: valor, type: 'button', 'aria-pressed': filtro === valor ? 'true' : 'false', onClick: () => setFiltro(valor) }, [rotulo, ' ', e('span', { key: 'n', className: 'n' }, n)]);
+
+        return e('main', { className: 'ini-tela' }, [
+          e('header', { key: 'cab', className: 'ini-cab' }, [
+            e('div', { key: 't' }, [
+              e('h1', { key: 'h' }, 'Painel'),
+              e('p', { key: 'p' }, lista ? plural(todas.length, 'automação', 'automações') + ' · atualizado às ' + hora(atualizado) : 'Carregando automações'),
+            ]),
+            e('div', { key: 'a', className: 'ini-acoes' }, [
+              e('button', { key: 'tema', type: 'button', className: 'ini-btn', onClick: tema, title: 'Trocar tema' }, [Icon('Eye', 15, 'currentColor'), 'Tema']),
+            ]),
+          ]),
+
+          e('section', { key: 'kpis', className: 'admin-kpis', 'aria-label': 'Resumo' }, [
+            ['t', 'Automações', lista ? todas.length : '…', 'cadastradas para você', ''],
+            ['on', 'No ar', lista ? no : '…', todas.length ? Math.round((no / todas.length) * 100) + '% respondendo' : 'Sem dados', no ? 'ok' : ''],
+            ['off', 'Fora do ar', lista ? fora.length : '…', fora.length ? 'veja o aviso abaixo' : 'nenhuma caída', fora.length ? 'alerta' : 'apagado'],
+            ['fav', 'Favoritas', favoritas.length, 'marque com a estrela', ''],
+          ].map(([k, r, v, d, tom]) => e('div', { key: k, className: 'admin-kpi ' + tom }, [
+            e('div', { key: 'r', className: 'admin-kpi-rotulo' }, r),
+            e('div', { key: 'v', className: 'admin-kpi-valor' }, String(v)),
+            e('div', { key: 'd', className: 'admin-kpi-detalhe' }, d),
+          ]))),
+
+          fora.length ? e('div', { key: 'alerta', className: 'ini-alerta', role: 'status' }, [
+            Icon('AlertCircle', 18, 'var(--error)'),
+            e('div', { key: 't' }, [e('b', { key: 'b' }, plural(fora.length, 'automação fora do ar', 'automações fora do ar') + ': '), fora.map((a) => a.name).join(', '), '. As demais seguem normais.']),
+          ]) : null,
+
+          e('div', { key: 'barra', className: 'ini-barra' }, [
+            e('label', { key: 'b', className: 'ini-busca' }, [
+              Icon('Search', 15, 'var(--muted-soft)'),
+              e('input', { key: 'i', ref: buscaRef, value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar por nome ou descrição', 'aria-label': 'Buscar automação' }),
+              e('kbd', { key: 'k' }, '/'),
+            ]),
+            e('div', { key: 's', className: 'ini-seg', role: 'group', 'aria-label': 'Filtrar por situação' }, [
+              seg('todas', 'Todas', todas.length), seg('online', 'No ar', no), seg('offline', 'Fora do ar', fora.length),
+            ]),
+            e('div', { key: 'v', className: 'ini-seg', role: 'group', 'aria-label': 'Modo de exibição' }, [
+              e('button', { key: 'g', type: 'button', 'aria-pressed': visao === 'grade' ? 'true' : 'false', onClick: () => trocarVisao('grade'), title: 'Cartões' }, [Icon('LayoutDashboard', 14, 'currentColor'), 'Cartões']),
+              e('button', { key: 'l', type: 'button', 'aria-pressed': visao === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista'), title: 'Lista' }, [Icon('FileText', 14, 'currentColor'), 'Lista']),
+            ]),
+          ]),
+
+          cats.length > 1 ? e('div', { key: 'cats', className: 'ini-chips', role: 'group', 'aria-label': 'Filtrar por categoria' }, [
+            e('button', { key: '', type: 'button', className: 'ini-chip', 'aria-pressed': !categoria ? 'true' : 'false', onClick: () => setCategoria('') }, 'Todas as categorias'),
+            ...cats.map((k) => e('button', { key: k, type: 'button', className: 'ini-chip', 'aria-pressed': categoria === k ? 'true' : 'false', onClick: () => setCategoria(categoria === k ? '' : k) }, CATEGORIAS[k].label)),
+          ]) : null,
+
+          !lista
+            ? e('div', { key: 'esq', className: 'ini-grade', 'aria-busy': 'true' }, [0, 1, 2, 3, 4, 5].map((i) => e('div', { key: i, className: 'ini-esqueleto' })))
+            : grupos.length
+              ? grupos.map(([k, titulo, itens]) => e('section', { key: k, 'aria-labelledby': 'sec-' + k }, [
+                  e('div', { key: 'c', className: 'ini-secao-cab' }, [e('h2', { key: 'h', id: 'sec-' + k }, titulo), e('span', { key: 'n' }, plural(itens.length, 'automação', 'automações'))]),
+                  visao === 'lista' ? e('div', { key: 'l', className: 'ini-lista' }, itens.map(linha)) : e('div', { key: 'g', className: 'ini-grade' }, itens.map(cartao)),
+                ]))
+              : e('div', { key: 'vazio', className: 'admin-vazio' }, [
+                  todas.length ? 'Nenhuma automação com esses filtros. ' : 'Nenhuma automação cadastrada.',
+                  todas.length ? e('button', { key: 'l', type: 'button', className: 'ini-btn', style: { marginLeft: 8 }, onClick: () => { setBusca(''); setFiltro('todas'); setCategoria(''); } }, 'Limpar filtros') : null,
+                ]),
+        ]);
+      }
+
+      const raiz = document.getElementById('root');
+      if (ReactDOM.createRoot) ReactDOM.createRoot(raiz).render(e(Inicio)); else ReactDOM.render(e(Inicio), raiz);
+    });
+  </script>
+</body>
+</html>
