@@ -25,50 +25,40 @@
   <style>
     /* Hub de exemplo: só tokens do styles.css (mesmas cores do Hub e da Administração). */
     body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); overflow: hidden; }
-    .ex-app { --lado: 232px; display: grid; grid-template-columns: var(--lado) minmax(0, 1fr); height: 100vh; transition: grid-template-columns 0.2s var(--ease); }
-    .ex-app.recolhido { --lado: 64px; }
+    .ex-app { display: flex; flex-direction: column; height: 100vh; }
 
-    /* menu lateral */
-    .ex-lado { display: flex; flex-direction: column; min-width: 0; background: var(--card); border-right: 1px solid var(--border); overflow: hidden; }
-    .ex-marca { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    .ex-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
-    .ex-marca b { font-size: 14px; white-space: nowrap; }
+    /* barra do topo: marca, páginas, telas abertas e ações (como o Hub atual) */
+    .ex-topo { display: flex; align-items: stretch; gap: 4px; height: 56px; padding: 0 16px 0 20px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; position: relative; z-index: 10; }
+    .ex-marca { display: flex; align-items: center; gap: 8px; padding-right: 14px; margin-right: 6px; flex-shrink: 0; }
+    .ex-logo { width: 28px; height: 28px; border-radius: 7px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
     .ex-tag { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); }
-    .ex-nav { flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 18px; }
-    .ex-grupo { display: flex; flex-direction: column; gap: 2px; }
-    .ex-grupo-titulo { font-size: 11px; font-weight: 600; color: var(--muted-soft); padding: 0 10px 6px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
-    .ex-item { position: relative; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: none; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; text-align: left; white-space: nowrap; min-width: 0; }
-    .ex-item:hover { background: var(--hover-bg); color: var(--text); }
-    .ex-item.ativo { background: var(--secondary); color: var(--text); font-weight: 600; }
-    .ex-item.ativo::before { content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
-    .ex-item svg { flex-shrink: 0; }
-    .ex-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .ex-item .ponto { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .ex-item .fechar { display: none; width: 20px; height: 20px; border-radius: 5px; align-items: center; justify-content: center; color: var(--muted-soft); flex-shrink: 0; }
-    .ex-item:hover .fechar, .ex-item:focus-within .fechar { display: flex; }
-    .ex-item .fechar:hover { background: var(--border); color: var(--text); }
-    .ex-vazio-lado { font-size: 12px; color: var(--muted-soft); padding: 2px 10px; line-height: 1.5; }
-    .ex-pe { border-top: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
-    .ex-app.recolhido .rot, .ex-app.recolhido .ex-grupo-titulo, .ex-app.recolhido .ex-marca b, .ex-app.recolhido .ex-tag, .ex-app.recolhido .ex-vazio-lado, .ex-app.recolhido .fechar { display: none !important; }
-    .ex-app.recolhido .ex-item { justify-content: center; padding: 0; }
-    .ex-app.recolhido .ex-item .ponto { position: absolute; top: 6px; right: 8px; width: 6px; height: 6px; }
-    .ex-app.recolhido .ex-marca { justify-content: center; padding: 0; }
-
-    /* área principal */
-    .ex-principal { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    .ex-topo { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    .ex-topo h1 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .ex-topo .migalha { color: var(--muted); font-weight: 400; }
-    .ex-espaco { flex: 1; }
-    .ex-busca-btn { display: flex; align-items: center; gap: 8px; width: 260px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--muted-soft); font: inherit; font-size: 13px; cursor: pointer; }
+    .ex-nav { display: flex; align-items: stretch; gap: 2px; flex-shrink: 0; }
+    .ex-aba { position: relative; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: none; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; min-width: 0; }
+    .ex-aba::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; background: transparent; }
+    .ex-aba:hover { color: var(--text); }
+    .ex-aba:hover::after { background: var(--border-hover); }
+    .ex-aba.ativo { color: var(--text); font-weight: 600; }
+    .ex-aba.ativo::after { background: var(--accent); }
+    .ex-aba svg { flex-shrink: 0; }
+    .ex-sep { width: 1px; background: var(--border); margin: 14px 6px; flex-shrink: 0; }
+    .ex-abertas { display: flex; align-items: stretch; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+    .ex-abertas::-webkit-scrollbar { display: none; }
+    .ex-abertas .ex-aba { max-width: 220px; flex-shrink: 0; }
+    .ex-aba .rot { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .ex-aba .ponto { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .ex-aba .fechar { width: 20px; height: 20px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--muted-soft); flex-shrink: 0; opacity: 0; }
+    .ex-aba:hover .fechar, .ex-aba.ativo .fechar, .ex-aba:focus-visible .fechar { opacity: 1; }
+    .ex-aba .fechar:hover { background: var(--hover-bg); color: var(--text); }
+    .ex-acoes { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .ex-espaco { flex: 1; min-width: 12px; }
+    .ex-busca-btn { display: flex; align-items: center; gap: 8px; width: 220px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--muted-soft); font: inherit; font-size: 13px; cursor: pointer; }
     .ex-busca-btn span { flex: 1; text-align: left; }
     .ex-busca-btn:hover { border-color: var(--border-hover); }
     kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--secondary); color: var(--muted-soft); }
     .ex-saude { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
     .ex-saude i { width: 7px; height: 7px; border-radius: 50%; }
-    .ex-icone-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; flex-shrink: 0; }
+    .ex-icone-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; flex-shrink: 0; text-decoration: none; }
     .ex-icone-btn:hover { background: var(--hover-bg); }
-    .ex-menu-movel { display: none; }
     .ex-conteudo { flex: 1; min-height: 0; position: relative; }
     .ex-pagina { position: absolute; inset: 0; overflow-y: auto; }
     .ex-pagina[hidden] { display: none; }
@@ -161,22 +151,23 @@
     .ex-paleta li.opcao .dir { margin-left: auto; font-size: 11.5px; color: var(--muted-soft); }
     .ex-paleta-pe { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted-soft); }
 
-    @media (max-width: 860px) {
-      .ex-app, .ex-app.recolhido { grid-template-columns: minmax(0, 1fr); --lado: 260px; }
-      .ex-lado { position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 40; transform: translateX(-100%); transition: transform 0.2s var(--ease); box-shadow: var(--shadow-pop); }
-      .ex-app.gaveta .ex-lado { transform: none; }
-      .ex-app.gaveta .ex-sombra { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 39; }
-      .ex-menu-movel { display: inline-flex; }
-      .ex-recolher { display: none !important; }
+    /* telas médias: as abas mostram só o ícone (o nome fica no title) */
+    @media (max-width: 1100px) {
+      .ex-nav .ex-aba .rot, .ex-marca b, .ex-saude span { display: none; }
       .ex-busca-btn { width: 34px; padding: 0; justify-content: center; }
-      .ex-busca-btn span, .ex-busca-btn kbd, .ex-saude span { display: none; }
-      .ex-topo { padding: 0 12px; gap: 8px; }
+      .ex-busca-btn span, .ex-busca-btn kbd { display: none; }
+    }
+    @media (max-width: 640px) {
+      .ex-topo { padding: 0 10px; }
+      .ex-marca { padding-right: 6px; margin-right: 0; }
+      .ex-tag, .ex-acoes .ex-tema, .ex-acoes .ex-voltar { display: none; }
+      .ex-abertas .ex-aba .rot { display: none; }
       .ex-tela { padding: 16px 16px 24px; }
       .ex-linha { grid-template-columns: 34px minmax(0, 1fr) 90px; }
       .ex-linha .ex-desc, .ex-linha .ex-estrela { display: none; }
       .ex-estrela { opacity: 1; }
     }
-    @media (prefers-reduced-motion: reduce) { .ex-card, .ex-esqueleto, .ex-app, .ex-lado { transition: none; animation: none; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .ex-card, .ex-esqueleto { transition: none; animation: none; transform: none; } }
   </style>
   <script src="vendor/react.production.min.js"></script>
   <script src="vendor/react-dom.production.min.js"></script>
@@ -442,8 +433,6 @@
         const [montadas, setMontadas] = useState({ painel: true });
         const [abertas, setAbertas] = useState([]); // [{ id, passe, recarga }]
         const [ativa, setAtiva] = useState(null);
-        const [recolhido, setRecolhido] = useState(() => ler('arxhub_exemplo_recolhido', false));
-        const [gaveta, setGaveta] = useState(false);
         const [paleta, setPaleta] = useState(false);
         const [favoritas, setFavoritas] = useState(() => ler('arxhub_exemplo_favoritas', []));
         const [recentes, setRecentes] = useState(() => ler('arxhub_exemplo_recentes', []));
@@ -470,9 +459,8 @@
           return () => window.removeEventListener('keydown', tecla);
         }, []);
 
-        const irPara = (p) => { setAtiva(null); setPagina(p); setMontadas((m) => (m[p] ? m : Object.assign({}, m, { [p]: true }))); setGaveta(false); };
+        const irPara = (p) => { setAtiva(null); setPagina(p); setMontadas((m) => (m[p] ? m : Object.assign({}, m, { [p]: true }))); };
         const abrir = (a) => {
-          setGaveta(false);
           setAtiva(a.id);
           setRecentes((r) => { const n = [a.id, ...r.filter((x) => x !== a.id)].slice(0, 6); gravar('arxhub_exemplo_recentes', n); return n; });
           if (abertas.some((x) => x.id === a.id)) return;
@@ -486,7 +474,6 @@
         };
         const recarregar = (id) => setAbertas((l) => l.map((x) => (x.id === id ? Object.assign({}, x, { recarga: x.recarga + 1 }) : x)));
         const alternarFav = (id) => setFavoritas((f) => { const n = f.includes(id) ? f.filter((x) => x !== id) : [...f, id]; gravar('arxhub_exemplo_favoritas', n); return n; });
-        const recolher = () => setRecolhido((r) => { gravar('arxhub_exemplo_recolhido', !r); return !r; });
         const tema = () => {
           const d = document.documentElement;
           const t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -499,50 +486,47 @@
         const no = todas.filter((a) => a.status === 'online').length;
         const fora = todas.length - no - todas.filter((a) => a.status === 'checking').length;
         const aAtiva = ativa ? porId(ativa) : null;
-        const titulo = aAtiva ? [e('span', { key: 'm', className: 'migalha' }, 'Automações / '), aAtiva.name] : PAGINAS[pagina][0];
 
-        const itemNav = (k) => e('button', {
-          key: k, type: 'button', className: 'ex-item' + (!ativa && pagina === k ? ' ativo' : ''), onClick: () => irPara(k),
+        const abaPagina = (k) => e('button', {
+          key: k, type: 'button', className: 'ex-aba' + (!ativa && pagina === k ? ' ativo' : ''), onClick: () => irPara(k),
           title: PAGINAS[k][0], 'aria-current': !ativa && pagina === k ? 'page' : undefined,
-        }, [Icon(PAGINAS[k][1], 17, 'currentColor'), e('span', { key: 'r', className: 'rot' }, PAGINAS[k][0])]);
-
-        const lado = e('aside', { key: 'lado', className: 'ex-lado', 'aria-label': 'Menu' }, [
-          e('div', { key: 'm', className: 'ex-marca' }, [e('div', { key: 'l', className: 'ex-logo' }, 'ARX'), e('b', { key: 'b' }, 'ARX Hub'), e('span', { key: 't', className: 'ex-tag' }, 'Exemplo')]),
-          e('nav', { key: 'n', className: 'ex-nav' }, [
-            e('div', { key: 'g1', className: 'ex-grupo' }, [e('div', { key: 't', className: 'ex-grupo-titulo' }, 'Geral'), ...Object.keys(PAGINAS).map(itemNav)]),
-            e('div', { key: 'g2', className: 'ex-grupo' }, [
-              e('div', { key: 't', className: 'ex-grupo-titulo' }, 'Abertas'),
-              abertas.length ? null : e('div', { key: 'v', className: 'ex-vazio-lado' }, 'As automações que você abrir ficam aqui.'),
-              ...abertas.map((x) => porId(x.id)).filter(Boolean).map((a) => e('div', {
-                key: a.id, role: 'button', tabIndex: 0, className: 'ex-item' + (ativa === a.id ? ' ativo' : ''), title: a.name,
-                onClick: () => { setAtiva(a.id); setGaveta(false); }, onKeyDown: (ev) => { if (ev.key === 'Enter') setAtiva(a.id); },
-                onAuxClick: (ev) => { if (ev.button === 1) fechar(a.id); },
-              }, [
-                Icon(a.icon, 16, a.color),
-                e('span', { key: 'r', className: 'rot' }, a.name),
-                e('span', { key: 'p', className: 'ponto', style: { background: COR_STATUS[a.status] || COR_STATUS.checking } }),
-                e('span', { key: 'x', className: 'fechar', role: 'button', 'aria-label': 'Fechar ' + a.name, onClick: (ev) => { ev.stopPropagation(); fechar(a.id); } }, Icon('X', 12, 'currentColor')),
-              ])),
-            ]),
-          ]),
-          e('div', { key: 'p', className: 'ex-pe' }, [
-            e('button', { key: 't', type: 'button', className: 'ex-item', onClick: tema, title: 'Trocar tema' }, [Icon('Eye', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Trocar tema')]),
-            e('a', { key: 'v', className: 'ex-item', href: '/', title: 'Voltar ao Hub atual', style: { textDecoration: 'none' } }, [Icon('ArrowLeft', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Hub atual')]),
-            e('button', { key: 'c', type: 'button', className: 'ex-item ex-recolher', onClick: recolher, title: recolhido ? 'Expandir menu' : 'Recolher menu' }, [Icon('Maximize2', 16, 'currentColor'), e('span', { key: 'r', className: 'rot' }, 'Recolher menu')]),
-          ]),
-        ]);
+        }, [Icon(PAGINAS[k][1], 15, 'currentColor'), e('span', { key: 'r', className: 'rot' }, PAGINAS[k][0])]);
+        const telasAbertas = abertas.map((x) => porId(x.id)).filter(Boolean);
+        const abaRef = useRef(null);
+        // a aba ativa sempre à vista quando a faixa rola
+        useEffect(() => { const el = abaRef.current; if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [ativa]);
 
         const topo = e('header', { key: 'topo', className: 'ex-topo' }, [
-          e('button', { key: 'm', type: 'button', className: 'ex-icone-btn ex-menu-movel', onClick: () => setGaveta(true), 'aria-label': 'Abrir menu' }, Icon('LayoutDashboard', 16, 'currentColor')),
-          e('h1', { key: 't' }, titulo),
+          e('div', { key: 'm', className: 'ex-marca' }, [e('div', { key: 'l', className: 'ex-logo' }, 'ARX'), e('b', { key: 'b', style: { fontSize: 14, whiteSpace: 'nowrap' } }, 'ARX Hub'), e('span', { key: 't', className: 'ex-tag' }, 'Exemplo')]),
+          e('nav', { key: 'n', className: 'ex-nav', 'aria-label': 'Páginas' }, Object.keys(PAGINAS).map(abaPagina)),
+          telasAbertas.length ? e('span', { key: 'sep', className: 'ex-sep' }) : null,
+          // telas abertas viram abas: clique do meio fecha, como no navegador; a faixa rola com a roda do mouse
+          e('div', {
+            key: 'ab', className: 'ex-abertas', role: 'tablist', 'aria-label': 'Automações abertas',
+            onWheel: (ev) => { if (ev.deltaY) ev.currentTarget.scrollLeft += ev.deltaY; },
+          }, telasAbertas.map((a) => e('div', {
+            key: a.id, ref: ativa === a.id ? abaRef : null, role: 'tab', tabIndex: 0, 'aria-selected': ativa === a.id ? 'true' : 'false',
+            className: 'ex-aba' + (ativa === a.id ? ' ativo' : ''), title: a.name,
+            onClick: () => setAtiva(a.id), onKeyDown: (ev) => { if (ev.key === 'Enter') setAtiva(a.id); },
+            onAuxClick: (ev) => { if (ev.button === 1) { ev.preventDefault(); fechar(a.id); } },
+          }, [
+            e('span', { key: 'p', className: 'ponto', style: { background: COR_STATUS[a.status] || COR_STATUS.checking } }),
+            Icon(a.icon, 14, a.color),
+            e('span', { key: 'r', className: 'rot' }, a.name),
+            e('span', { key: 'x', className: 'fechar', role: 'button', 'aria-label': 'Fechar ' + a.name, onClick: (ev) => { ev.stopPropagation(); fechar(a.id); } }, Icon('X', 12, 'currentColor')),
+          ]))),
           e('div', { key: 'e', className: 'ex-espaco' }),
-          e('button', { key: 'b', type: 'button', className: 'ex-busca-btn', onClick: () => setPaleta(true), 'aria-label': 'Buscar no Hub' }, [Icon('Search', 15, 'currentColor'), e('span', { key: 's' }, 'Buscar'), e('kbd', { key: 'k' }, 'Ctrl K')]),
-          window.AjudaBotao ? e(window.AjudaBotao, { key: 'aj', aba: aAtiva ? null : pagina }) : null,
-          window.AlertasSino ? e(window.AlertasSino, { key: 'al' }) : null,
-          window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'ac' }) : null,
-          e('span', { key: 's', className: 'ex-saude', title: lista ? no + ' de ' + todas.length + ' no ar' : '' }, [
-            e('i', { key: 'i', className: 'pulse-dot', style: { position: 'relative', background: fora > 0 ? 'var(--warn)' : 'var(--accent)', color: fora > 0 ? 'var(--warn)' : 'var(--accent)' } }),
-            e('span', { key: 't' }, lista ? no + '/' + todas.length + ' no ar' : '…'),
+          e('div', { key: 'ac', className: 'ex-acoes' }, [
+            e('button', { key: 'b', type: 'button', className: 'ex-busca-btn', onClick: () => setPaleta(true), 'aria-label': 'Buscar no Hub' }, [Icon('Search', 15, 'currentColor'), e('span', { key: 's' }, 'Buscar'), e('kbd', { key: 'k' }, 'Ctrl K')]),
+            window.AjudaBotao ? e(window.AjudaBotao, { key: 'aj', aba: aAtiva ? null : pagina }) : null,
+            window.AlertasSino ? e(window.AlertasSino, { key: 'al' }) : null,
+            window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'mac' }) : null,
+            e('button', { key: 't', type: 'button', className: 'ex-icone-btn ex-tema', onClick: tema, title: 'Trocar tema', 'aria-label': 'Trocar tema' }, Icon('Eye', 15, 'currentColor')),
+            e('a', { key: 'v', className: 'ex-icone-btn ex-voltar', href: '/', title: 'Voltar ao Hub atual', 'aria-label': 'Voltar ao Hub atual' }, Icon('ArrowLeft', 15, 'currentColor')),
+            e('span', { key: 's', className: 'ex-saude', title: lista ? no + ' de ' + todas.length + ' no ar' : '' }, [
+              e('i', { key: 'i', className: 'pulse-dot', style: { position: 'relative', background: fora > 0 ? 'var(--warn)' : 'var(--accent)', color: fora > 0 ? 'var(--warn)' : 'var(--accent)' } }),
+              e('span', { key: 't' }, lista ? no + '/' + todas.length + ' no ar' : '…'),
+            ]),
           ]),
         ]);
 
@@ -556,10 +540,9 @@
           ...abertas.map((x) => { const a = porId(x.id); return a ? e(Visor, { key: 'v' + x.id, a, passe: x.passe, recarga: x.recarga, ativo: ativa === x.id, fechar: () => fechar(x.id), recarregar: () => recarregar(x.id) }) : null; }),
         ]);
 
-        return e('div', { className: 'ex-app' + (recolhido ? ' recolhido' : '') + (gaveta ? ' gaveta' : '') }, [
-          lado,
-          gaveta ? e('div', { key: 'sombra', className: 'ex-sombra', onClick: () => setGaveta(false) }) : null,
-          e('div', { key: 'p', className: 'ex-principal' }, [topo, conteudo]),
+        return e('div', { className: 'ex-app' }, [
+          topo,
+          conteudo,
           paleta ? e(Paleta, { key: 'k', lista, irPara, abrir, fechar: () => setPaleta(false) }) : null,
         ]);
       }
