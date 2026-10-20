@@ -102,6 +102,17 @@ async function fetchLookup(userToken) {
   });
 }
 
+/** Grupos do GLPI ({ id, label }) para escolher quem vê cada automação, lidos com o token de quem pede. */
+async function listarGrupos(userToken) {
+  return withSession(userToken, async (sessionToken) => {
+    const raw = await glpiFetch('/Group?range=0-500', { headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken } });
+    return (Array.isArray(raw) ? raw : [])
+      .map((g) => ({ id: g.id, label: g.completename || g.name }))
+      .filter((g) => g.id && g.label)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+}
+
 async function createTicket(userToken, { titulo, descricao, categoriaId, requerenteId, atribuidoId }) {
   if (!titulo || !titulo.trim()) throw new Error('Título é obrigatório.');
   return withSession(userToken, async (sessionToken) => {
@@ -144,4 +155,4 @@ async function identificarUsuario(userToken) {
   });
 }
 
-module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, ticketUrl, sanitizar, identificarUsuario };
+module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, ticketUrl, sanitizar, identificarUsuario, listarGrupos };

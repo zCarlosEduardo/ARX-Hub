@@ -31,7 +31,37 @@ function usuarioDaSessao(resposta) {
   const nome = completo || amigavel || login;
   if (!Number.isInteger(id) && !login && !nome) return null;
   const nomes = [...new Set([completo, [ultimo, primeiro].filter(Boolean).join(' '), amigavel, login].map(norm).filter(Boolean))];
-  return { id: Number.isInteger(id) && id > 0 ? id : null, login, nome, nomes };
+  // grupos do GLPI da pessoa (lista de ids; versões antigas mandam objeto { id: id })
+  const brutos = Array.isArray(s.glpigroups) ? s.glpigroups : s.glpigroups && typeof s.glpigroups === 'object' ? Object.values(s.glpigroups) : [];
+  const grupos = [...new Set(brutos.map(Number).filter((g) => Number.isInteger(g) && g > 0))];
+  return { id: Number.isInteger(id) && id > 0 ? id : null, login, nome, nomes, grupos };
+}
+
+/** Grupos do GLPI que veem uma automação: lista de ids sem repetir (vazia = todo mundo). */
+function validarGrupos(corpo) {
+  const lista = corpo && Array.isArray(corpo.grupos) ? corpo.grupos : null;
+  if (!lista || lista.length > 200) return { ok: false, error: 'grupos deve ser uma lista com até 200 ids de grupo do GLPI' };
+  const saida = [];
+  for (const g of lista) {
+    const n = Number(g);
+    if (!Number.isSafeInteger(n) || n < 1) return { ok: false, error: 'id de grupo inválido' };
+    if (!saida.includes(n)) saida.push(n);
+  }
+  return { ok: true, valor: saida };
+}
+
+/**
+ * A pessoa vê a automação? Sem grupos = todo mundo; admin vê tudo; senão precisa estar em um dos grupos.
+ * @param {{grupos?: number[]}} automacao
+ * @param {{admin: boolean, usuario: {grupos: number[]}}|null} quem  null = sem token do GLPI
+ */
+function podeVer(automacao, quem) {
+  const grupos = (automacao && automacao.grupos) || [];
+  if (!grupos.length) return true;
+  if (!quem) return false;
+  if (quem.admin) return true;
+  const meus = (quem.usuario && quem.usuario.grupos) || [];
+  return grupos.some((g) => meus.includes(Number(g)));
 }
 
 /**
@@ -281,6 +311,8 @@ module.exports = {
   validarSecao,
   validarNovoAdmin,
   validarOrdem,
+  validarGrupos,
+  podeVer,
   TIPOS_SOLICITACAO,
   SESSOES_COFRE,
   MODOS_WHATSAPP,

@@ -39,11 +39,12 @@ function reescreverLocation(location, base, prefixo) {
  * Repassa o pedido e devolve a resposta em fluxo (SSE, upload e download passam sem ficar em memória).
  * `caminho` começa com "/" e inclui a query; `prefixo` é o que o navegador vê no lugar do endereço real.
  */
-function repassar(req, res, destino, caminho, prefixo) {
+function repassar(req, res, destino, caminho, prefixo, extras = {}) {
   const base = new URL(destino);
   const cabecalhos = semSaltoASalto(req.headers);
   cabecalhos.host = base.host;
   delete cabecalhos.referer; // a automação não precisa saber o endereço do proxy
+  delete cabecalhos.cookie; // o passe do Hub fica no proxy; as automações não usam cookie
   const modulo = base.protocol === 'https:' ? https : http;
   const pedido = modulo.request(
     {
@@ -57,7 +58,9 @@ function repassar(req, res, destino, caminho, prefixo) {
     (resposta) => {
       const saida = semSaltoASalto(resposta.headers);
       if (saida.location) saida.location = reescreverLocation(saida.location, base, prefixo);
+      if (extras.setCookie) saida['set-cookie'] = [].concat(saida['set-cookie'] || [], extras.setCookie);
       res.writeHead(resposta.statusCode, saida);
+      if (extras.aoResponder) extras.aoResponder(resposta);
       resposta.pipe(res);
     }
   );
@@ -107,6 +110,7 @@ function repassarUpgrade(req, socket, cabeca, destino, caminho) {
   const base = new URL(destino);
   const cabecalhos = { ...req.headers, host: base.host };
   delete cabecalhos.referer;
+  delete cabecalhos.cookie;
   const pedido = http.request({ hostname: base.hostname, port: base.port, method: req.method, path: base.pathname.replace(/\/+$/, '') + caminho, headers: cabecalhos });
   pedido.on('upgrade', (resposta, socketAuto, cabecaAuto) => {
     const linhas = [`HTTP/1.1 ${resposta.statusCode} ${resposta.statusMessage}`];
@@ -133,11 +137,29 @@ function repassarUpgrade(req, socket, cabeca, destino, caminho) {
   pedido.end();
 }
 
+function lerCookie(cabecalho, nome) {
+  for (const parte of String(cabecalho || '').split(';')) {
+    const i = parte.indexOf('=');
+    if (i > 0 && parte.slice(0, i).trim() === nome) return parte.slice(i + 1).trim();
+  }
+  return null;
+}
+
+/** Tira `passe` da query: ele é do Hub e não vai para a automação. */
+function semPasse(url) {
+  if (!/[?&]passe=/.test(url)) return url;
+  const u = new URL(url, 'http://x');
+  u.searchParams.delete('passe');
+  return u.pathname + u.search;
+}
+
 /**
- * Servidor da porta das automações. `buscarDestino(id)` devolve { url, vncPorta } da automação cadastrada ou null.
+ * Servidor da porta das automações. `buscarDestino(id)` devolve { url, vncPorta, grupos } da automação cadastrada ou
+ * null. Automação com grupos exige o passe do Hub (passe.js): ele chega na query da primeira página (?passe=) e fica
+ * num cookie por automação (`arx_passe_<id>`), que acompanha os pedidos seguintes, inclusive WebSocket.
  * Devolve `atender` (pedidos HTTP) e `atenderUpgrade` (WebSocket, evento 'upgrade' do servidor).
  */
-function criarProxyAutomacoes({ buscarDestino }) {
+function criarProxyAutomacoes({ buscarDestino, passes = null }) {
   async function resolver(req) {
     const achado = idDoPedido(req);
     if (!achado) return { status: 404, texto: 'Não encontrado.' };
@@ -149,8 +171,24 @@ function criarProxyAutomacoes({ buscarDestino }) {
       return { status: 503, texto: 'Hub sem acesso ao cadastro das automações.' };
     }
     if (!destino) return { status: 404, texto: 'Automação não cadastrada.' };
-    const a = alvo(destino, achado, req.url);
-    return a ? { achado, alvo: a } : { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
+
+    const nomeCookie = `arx_passe_${achado.id}`;
+    const daUrl = achado.porCaminho ? new URL(req.url, 'http://x').searchParams.get('passe') : null;
+    let acesso = null;
+    let setCookie = null;
+    if (passes && daUrl) {
+      acesso = passes.ler(daUrl, achado.id);
+      if (acesso) setCookie = `${nomeCookie}=${daUrl}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(passes.VALIDADE_MS / 1000)}`;
+    }
+    if (passes && !acesso) {
+      const doCookie = lerCookie(req.headers.cookie, nomeCookie);
+      if (doCookie) acesso = passes.ler(doCookie, achado.id);
+    }
+    if ((destino.grupos || []).length && !acesso) return { status: 403, texto: 'Sem acesso a esta automação.' };
+
+    const a = alvo(destino, achado, semPasse(req.url));
+    if (!a) return { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
+    return { achado, alvo: a, setCookie, quem: acesso ? acesso.usuario : null };
   }
 
   async function atender(req, res) {
@@ -165,13 +203,13 @@ function criarProxyAutomacoes({ buscarDestino }) {
       res.writeHead(301, { Location: prefixo + '/' + req.url.slice(prefixo.length) });
       return res.end();
     }
-    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo);
+    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo, { setCookie: r.setCookie });
   }
 
   async function atenderUpgrade(req, socket, cabeca) {
     socket.on('error', () => socket.destroy()); // navegador caiu no meio do aperto de mão
     const r = await resolver(req);
-    if (!r.alvo) return socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+    if (!r.alvo) return socket.end(`HTTP/1.1 ${r.status === 403 ? '403 Forbidden' : '404 Not Found'}\r\nConnection: close\r\n\r\n`);
     repassarUpgrade(req, socket, cabeca, r.alvo.base, r.alvo.caminho);
   }
 

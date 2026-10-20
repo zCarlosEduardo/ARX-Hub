@@ -224,6 +224,29 @@
     ]);
   }
 
+  /** Escolha dos grupos do GLPI que veem uma automação (nenhum marcado = todos veem). */
+  function EditorGrupos({ automacao, grupos, aoSalvar }) {
+    const [marcados, setMarcados] = useState(() => new Set(automacao.grupos || []));
+    const [busca, setBusca] = useState('');
+    const { erro, salvando, salvar } = useSalvar(async () => {
+      const r = await api('PUT', `/api/admin/automations/${automacao.id}/grupos`, { grupos: [...marcados] });
+      aoSalvar(r.grupos);
+    });
+    if (!grupos) return dica('Carregando os grupos do GLPI…');
+    if (!grupos.length) return dica('Não consegui ler os grupos do GLPI com o seu token.');
+    const termo = busca.trim().toLowerCase();
+    const visiveis = grupos.filter((g) => !termo || g.label.toLowerCase().includes(termo));
+    const alternar = (id) => setMarcados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    return e('div', { className: 'admin-editor-grupos', style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' } }, [
+      e('input', { key: 'b', className: 'field-input', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar grupo', style: S().input }),
+      e('div', { key: 'l', style: { maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 } },
+        visiveis.map((g) => caixa(marcados.has(g.id), () => alternar(g.id), g.label, { key: g.id }))),
+      dica(marcados.size ? `${marcados.size === 1 ? '1 grupo marcado' : marcados.size + ' grupos marcados'}: só eles (e os administradores) veem.` : 'Nenhum grupo marcado: todos veem.'),
+      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
+      botao(salvando ? 'Salvando…' : 'Salvar grupos', salvar, 'prim', { alignSelf: 'flex-start', disabled: salvando, opacity: salvando ? 0.7 : 1 }),
+    ]);
+  }
+
   /** Cadastro (pelo formulário do painel, app.js) e ordem das automações. */
   function ListaAutomacoes() {
     const [lista, setLista] = useState(null);
@@ -231,8 +254,11 @@
     const { erro, ok, salvando, salvar } = useSalvar(async () => {
       await api('PUT', '/api/admin/automations/ordem', { ids: lista.map((a) => a.id) });
     });
+    const [gruposGlpi, setGruposGlpi] = useState(null); // [{ id, label }] do GLPI, para dar nome aos ids
+    const [editando, setEditando] = useState(null); // id da automação com o editor de grupos aberto
     useEffect(() => {
-      fetch('/api/automations').then((r) => r.json()).then(setLista).catch(() => setLista([]));
+      api('GET', '/api/automations').then(setLista).catch(() => setLista([]));
+      api('GET', '/api/admin/grupos-glpi').then(setGruposGlpi).catch(() => setGruposGlpi([]));
       // o painel avisa a cada mudança (cadastro, edição, remoção, status): a lista acompanha
       // mantém a ordem ainda não salva: as que já estavam ficam onde estão, as novas entram no fim
       const aoMudar = (ev) => setLista((atual) => {
@@ -257,23 +283,38 @@
       return n;
     });
     const enderecoDe = (a) => (urls[a.id] || '').replace(/^https?:\/\//, '') || a.endereco;
+    const nomeGrupo = (id) => ((gruposGlpi || []).find((g) => g.id === id) || { label: `Grupo ${id}` }).label;
+    const quemVe = (a) => ((a.grupos || []).length ? 'Grupos: ' + a.grupos.map(nomeGrupo).join(', ') : 'Todos veem');
     return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } }, [
       e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 } }, [
         rotulo('Automações cadastradas'),
         botao('Nova automação', () => painel().nova && painel().nova(), 'prim', { key: 'n', padding: '6px 12px' }),
       ]),
-      dica('Editar e Remover usam o mesmo formulário do painel. Use as setas para mudar a posição das automações no painel; a nova ordem aparece para todos assim que você salvar.'),
+      dica('Editar e Remover usam o mesmo formulário do painel. Em Grupos, escolha os grupos do GLPI que veem a automação (nenhum = todos veem; quem está fora nem vê o card nem abre a tela). Use as setas para mudar a posição; a nova ordem aparece para todos assim que você salvar.'),
       e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, !lista ? [dica('Carregando…')] : lista.map((a, i) =>
-        e('div', { key: a.id, className: 'admin-automacao', style: { display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', background: 'var(--bg)' } }, [
-          e('span', { key: 'p', style: { width: 22, color: 'var(--muted)', fontSize: 12 } }, i + 1),
-          e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
-            e('div', { key: 't', style: { fontSize: 13 } }, a.name),
-            e('div', { key: 'u', style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, enderecoDe(a)),
+        e('div', { key: a.id, className: 'admin-automacao', style: { border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', background: 'var(--bg)' } }, [
+          e('div', { key: 'linha', style: { display: 'flex', alignItems: 'center', gap: 10 } }, [
+            e('span', { key: 'p', style: { width: 22, color: 'var(--muted)', fontSize: 12 } }, i + 1),
+            e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
+              e('div', { key: 't', style: { fontSize: 13 } }, a.name),
+              e('div', { key: 'u', style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, enderecoDe(a)),
+              e('div', { key: 'g', className: 'admin-grupos-resumo', style: { fontSize: 11, color: 'var(--muted)' } }, quemVe(a)),
+            ]),
+            botao('Grupos', () => setEditando(editando === a.id ? null : a.id), 'sec', { key: 'gr', padding: '3px 9px' }),
+            botao('Editar', () => painel().editar && painel().editar(a.id), 'sec', { key: 'ed', padding: '3px 9px' }),
+            botao('Remover', () => painel().remover && painel().remover(a.id), 'sec', { key: 'rm', padding: '3px 9px', color: 'var(--error)' }),
+            botao('↑', () => mover(i, -1), 'sec', { key: 'up', padding: '3px 9px', disabled: i === 0, opacity: i === 0 ? 0.4 : 1 }),
+            botao('↓', () => mover(i, 1), 'sec', { key: 'dn', padding: '3px 9px', disabled: i === lista.length - 1, opacity: i === lista.length - 1 ? 0.4 : 1 }),
           ]),
-          botao('Editar', () => painel().editar && painel().editar(a.id), 'sec', { key: 'ed', padding: '3px 9px' }),
-          botao('Remover', () => painel().remover && painel().remover(a.id), 'sec', { key: 'rm', padding: '3px 9px', color: 'var(--error)' }),
-          botao('↑', () => mover(i, -1), 'sec', { key: 'up', padding: '3px 9px', disabled: i === 0, opacity: i === 0 ? 0.4 : 1 }),
-          botao('↓', () => mover(i, 1), 'sec', { key: 'dn', padding: '3px 9px', disabled: i === lista.length - 1, opacity: i === lista.length - 1 ? 0.4 : 1 }),
+          editando === a.id ? e(EditorGrupos, {
+            key: 'ed',
+            automacao: a,
+            grupos: gruposGlpi,
+            aoSalvar: (grupos) => {
+              setLista((l) => l.map((x) => (x.id === a.id ? { ...x, grupos } : x)));
+              setEditando(null);
+            },
+          }) : null,
         ]))),
       lista && lista.length ? rodape(salvar, salvando, erro, ok) : null,
     ]);
@@ -557,6 +598,7 @@
     'automacao.editar': 'Editou automação',
     'automacao.remover': 'Removeu automação',
     'automacao.ordem': 'Mudou a ordem das automações',
+    'automacao.grupos': 'Mudou os grupos que veem a automação',
   };
   const SECOES_HISTORICO = { cofre: 'Cofre', automacoes: 'Automações', whatsapp: 'WhatsApp' };
   const curto = (v) => {
