@@ -69,6 +69,19 @@ async function init() {
       atualizado_por TEXT NOT NULL DEFAULT ''
     );
   `);
+  // histórico do que mudou pela administração e pelo cadastro de automações (quem, quando, antes e depois)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hub_historico (
+      id BIGSERIAL PRIMARY KEY,
+      quando TIMESTAMPTZ NOT NULL DEFAULT now(),
+      quem TEXT NOT NULL DEFAULT '',
+      quem_glpi_id INTEGER,
+      acao TEXT NOT NULL,
+      alvo TEXT NOT NULL DEFAULT '',
+      antes JSONB,
+      depois JSONB
+    );
+  `);
   await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS ordem INTEGER;');
   // porta da tela ao vivo (noVNC) no mesmo host da automação; o proxy a serve em /a/<id>/vnc/
   await pool.query('ALTER TABLE automations ADD COLUMN IF NOT EXISTS vnc_porta INTEGER;');

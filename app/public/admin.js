@@ -548,7 +548,66 @@
   }
 
   // ---------- tela ----------
-  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
+  // ---------- aba: Histórico (quem mudou o quê pela administração e pelo cadastro de automações) ----------
+  const ACOES_HISTORICO = {
+    'config.alterar': 'Alterou a configuração',
+    'admin.adicionar': 'Adicionou administrador',
+    'admin.remover': 'Removeu administrador',
+    'automacao.criar': 'Cadastrou automação',
+    'automacao.editar': 'Editou automação',
+    'automacao.remover': 'Removeu automação',
+    'automacao.ordem': 'Mudou a ordem das automações',
+  };
+  const SECOES_HISTORICO = { cofre: 'Cofre', automacoes: 'Automações', whatsapp: 'WhatsApp' };
+  const curto = (v) => {
+    const t = v === undefined || v === null || v === '' ? 'Não informado' : typeof v === 'string' ? v : JSON.stringify(v);
+    return t.length > 120 ? t.slice(0, 117) + '...' : t;
+  };
+  /** Campos que mudaram entre antes e depois (um nível; o que for objeto aparece como JSON curto). */
+  function diferencas(antes, depois) {
+    const a = antes && typeof antes === 'object' ? antes : {};
+    const d = depois && typeof depois === 'object' ? depois : {};
+    return [...new Set([...Object.keys(a), ...Object.keys(d)])]
+      .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(d[k]))
+      .map((k) => ({ campo: k, antes: antes ? curto(a[k]) : null, depois: depois ? curto(d[k]) : null }));
+  }
+
+  function AbaHistorico() {
+    const [itens, setItens] = useState(null);
+    const [fim, setFim] = useState(false);
+    const [erro, setErro] = useState(null);
+    const carregar = async (antesDe) => {
+      setErro(null);
+      try {
+        const lote = await api('GET', '/api/admin/historico?limite=50' + (antesDe ? '&antesDe=' + antesDe : ''));
+        setItens((x) => (antesDe ? [...(x || []), ...lote] : lote));
+        setFim(lote.length < 50);
+      } catch (err) {
+        setErro(err.message);
+      }
+    };
+    useEffect(() => { carregar(); }, []);
+    const quando = (q) => new Date(q).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } }, [
+      dica('Tudo o que muda pela administração e pelo cadastro de automações: quem fez, quando e o que estava antes e depois.'),
+      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
+      !itens ? dica('Carregando…') : !itens.length ? dica('Sem alterações registradas.') : e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, itens.map((h) =>
+        e('div', { key: h.id, className: 'admin-historico', style: { border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 4 } }, [
+          e('div', { key: 'c', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline', fontSize: 13 } }, [
+            e('span', { key: 'q', style: { color: 'var(--muted)', fontSize: 12, fontFamily: 'var(--font-mono)' } }, quando(h.quando)),
+            e('strong', { key: 'p' }, h.quem || 'Sem identificação'),
+            e('span', { key: 'a' }, ACOES_HISTORICO[h.acao] || h.acao),
+            h.alvo ? e('span', { key: 'al', style: { color: 'var(--muted)' } }, SECOES_HISTORICO[h.alvo] || h.alvo) : null,
+          ]),
+          ...diferencas(h.antes, h.depois).slice(0, 12).map((d) =>
+            e('div', { key: d.campo, style: { fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflowWrap: 'anywhere' } },
+              d.campo + ': ' + (d.antes === null ? '' : d.antes + ' → ') + (d.depois === null ? 'removido' : d.depois))),
+        ]))),
+      itens && itens.length && !fim ? botao('Carregar mais', () => carregar(itens[itens.length - 1].id), 'sec', { alignSelf: 'flex-start' }) : null,
+    ]);
+  }
+
+  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
 
   function AdminView() {
     const [aba, setAba] = useState('cofre');
@@ -565,6 +624,7 @@
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
+    else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
     else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
