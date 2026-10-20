@@ -73,16 +73,26 @@
     const [testState, setTestState] = useState('idle');
     const [menuOpenId, setMenuOpenId] = useState(null);
     // A lista do servidor não traz a URL real (só `endereco`, mascarado): a tela abre pelo proxy do Hub (proxy.js).
-    // Admin busca as URLs reais para editar e copiar; quem não é admin não cadastra, edita nem remove automação.
+    // Quem gerencia (admin, ou todos se a administração liberar) cadastra, edita, remove e vê as URLs reais. Para os
+    // outros, a aba Automações da administração diz se o endereço aparece mascarado ou some e se há "Abrir em nova aba".
     const ehAdmin = (window.useEhAdmin || (() => false))();
+    const [cfgAuto, setCfgAuto] = useState({ cadastro: 'admins', endereco: 'mascarado', novaAba: true });
+    useEffect(() => {
+      api('/api/config-publica').then((c) => c && c.automacoes && setCfgAuto(c.automacoes)).catch(() => {});
+      const aoMudar = (ev) => setCfgAuto(ev.detail);
+      window.addEventListener('arx-config-automacoes', aoMudar); // admin.js avisa quando a aba Automações salva
+      return () => window.removeEventListener('arx-config-automacoes', aoMudar);
+    }, []);
+    const podeGerenciar = ehAdmin || cfgAuto.cadastro === 'todos';
     const [urlsReais, setUrlsReais] = useState({});
     useEffect(() => {
-      if (!ehAdmin) return setUrlsReais({});
+      if (!podeGerenciar) return setUrlsReais({});
       api('/api/admin/automations/urls').then(setUrlsReais).catch(() => setUrlsReais({}));
-    }, [ehAdmin, automations.length]);
+    }, [podeGerenciar, automations.length]);
     const urlReal = (a) => urlsReais[a.id] || '';
-    const urlVisivel = (a) => (ehAdmin && urlReal(a) ? urlReal(a).replace(/^https?:\/\//, '') : a.endereco);
+    const urlVisivel = (a) => (podeGerenciar && urlReal(a) ? urlReal(a).replace(/^https?:\/\//, '') : cfgAuto.endereco === 'oculto' ? '' : a.endereco);
     const urlProxy = (a) => `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/`;
+    const podeNovaAba = podeGerenciar || cfgAuto.novaAba;
     const [toasts, setToasts] = useState([]);
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [confirmDialog, setConfirmDialog] = useState(null);
@@ -483,6 +493,21 @@
       setModalOpen(true);
     }
 
+    // A aba Automações da administração (admin.js) usa este mesmo formulário e a mesma confirmação de remoção.
+    useEffect(() => {
+      window.ArxHubAutomacoes = {
+        nova: openNewModal,
+        editar: (id) => {
+          const a = automations.find((x) => String(x.id) === String(id));
+          if (a) openEditModal({ ...a, url: urlReal(a) });
+        },
+        remover: deleteAutomation,
+      };
+    });
+    useEffect(() => {
+      window.dispatchEvent(new CustomEvent('arx-automacoes', { detail: automations }));
+    }, [automations]);
+
     function closeModal() {
       setModalOpen(false);
     }
@@ -679,7 +704,7 @@
           e('span', { key: 'dot', className: 'pulse-dot', style: { position: 'relative', width: 7, height: 7, borderRadius: '50%', background: healthDotColor, color: healthDotColor } }),
           e('span', { key: 'label' }, online + '/' + total + ' online'),
         ]),
-        ehAdmin && e('button', {
+        podeGerenciar && e('button', {
           key: 'new', className: 'btn-primary', onClick: openNewModal, title: 'Nova automação',
           style: sx('display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0'),
         }, [Icon('Plus', 16, 'var(--primary-fg)', 2.25), e('span', { key: 't' }, 'Nova automação')]),
@@ -702,7 +727,7 @@
           e('div', { key: 'actions', style: sx('display:flex;align-items:center;gap:2px') }, [
             e('span', { key: 'dot', className: isPulsing ? 'pulse-dot' : '', style: { position: 'relative', width: 8, height: 8, borderRadius: '50%', background: meta.color, color: meta.color, marginTop: 6, marginRight: 4 } }),
             // o menu só tem ações de admin (editar, abrir/copiar o endereço, remover)
-            ehAdmin && e('button', {
+            podeGerenciar && e('button', {
               key: 'menu', className: 'icon-btn', onClick: (ev) => { ev.stopPropagation(); setMenuOpenId(menuOpen ? null : a.id); },
               style: sx('width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);border-radius:6px;cursor:pointer'),
             }, Icon('MoreHorizontal', 17)),
@@ -716,12 +741,12 @@
           e('div', { key: 'name', style: sx("font-weight:600;font-size:14px") }, a.name),
           e('div', { key: 'desc', style: sx('color:var(--muted);font-size:12.5px;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden') }, a.description),
         ]),
-        e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted-soft)") }, urlShort),
+        urlShort ? e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted-soft)") }, urlShort) : null,
         e('button', {
           key: 'open', className: 'card-open-btn', onClick: (ev) => { ev.stopPropagation(); openAutomation(a.id); },
           style: sx('padding:8px;background:var(--secondary);border:1px solid var(--border);color:var(--text);border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer;margin-top:2px'),
         }, 'Abrir'),
-        (ehAdmin && menuOpen) ? e('div', {
+        (podeGerenciar && menuOpen) ? e('div', {
           key: 'popover', onClick: (ev) => ev.stopPropagation(),
           style: sx('position:absolute;top:44px;right:10px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -8px rgba(0,0,0,0.12);z-index:5;overflow:hidden;min-width:170px'),
         }, [
@@ -803,7 +828,7 @@
             e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-soft);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap") }, urlVisivel(a)),
           ]),
           fabItem('reload', 'RefreshCw', 'Recarregar', () => startViewerLoad(a.id)),
-          fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(urlProxy(a), '_blank')),
+          podeNovaAba && fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(urlProxy(a), '_blank')),
           fabItem('full', 'Maximize2', 'Tela cheia', toggleFullscreen),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           fabItem('close', 'X', 'Fechar aba', () => closeTab(a.id), true),
@@ -821,7 +846,7 @@
             : 'O serviço pode estar bloqueando exibição em iframe (X-Frame-Options / CSP) ou estar fora do alcance desta rede.'),
           e('div', { key: 'actions', style: sx('display:flex;gap:10px;margin-top:6px') }, [
             e('button', { key: 'retry', className: 'btn-primary', onClick: () => startViewerLoad(a.id), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('RefreshCw', 14), ' Tentar novamente']),
-            e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(urlProxy(a), '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+            podeNovaAba && e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(urlProxy(a), '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
           ]),
         ]) : null,
         e('iframe', {

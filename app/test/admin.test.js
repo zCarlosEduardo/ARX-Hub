@@ -47,6 +47,14 @@ test('configuração padrão: cofre ativo com sessão do dia e WhatsApp desligad
   // o padrão é válido pelas próprias regras
   assert.equal(validarSecao('cofre', c.cofre).ok, true);
   assert.equal(validarSecao('whatsapp', c.whatsapp).ok, true);
+  assert.deepEqual(validarSecao('automacoes', c.automacoes), { ok: true, valor: { cadastro: 'admins', endereco: 'mascarado', novaAba: true } });
+});
+
+test('automacoes: aceita as opções da tela e recusa valor desconhecido', () => {
+  assert.deepEqual(validarSecao('automacoes', { cadastro: 'todos', endereco: 'oculto', novaAba: false }).valor, { cadastro: 'todos', endereco: 'oculto', novaAba: false });
+  assert.equal(validarSecao('automacoes', { cadastro: 'qualquer' }).ok, false);
+  assert.equal(validarSecao('automacoes', { endereco: 'completo' }).ok, false);
+  assert.equal(validarSecao('automacoes', { novaAba: 'sim' }).ok, false);
 });
 
 test('cofre: valores válidos passam; modo, sessão e horas inválidos são recusados', () => {

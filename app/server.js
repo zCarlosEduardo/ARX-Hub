@@ -188,17 +188,17 @@ function dadosOuErro(req) {
   return r.valor;
 }
 
-// Cadastro de automações (criar, editar, remover, testar conexão): só admin. `rotasAdmin` é criado mais abaixo;
-// a função só roda na requisição, quando ele já existe.
-const soAdmin = (req, res, next) => rotasAdmin.soAdmin(req, res, next);
+// Cadastro de automações (criar, editar, remover, testar conexão) e URLs reais: só admin, ou todos se a administração
+// liberar (aba Automações). `rotasAdmin` é criado mais abaixo; a função só roda na requisição, quando ele já existe.
+const podeGerenciar = (req, res, next) => rotasAdmin.podeGerenciarAutomacoes(req, res, next);
 
-// URL real de cada automação ({ id: url }): só admin, para editar, copiar e abrir direto.
-app.get('/api/admin/automations/urls', soAdmin, asyncHandler(async (req, res) => {
+// URL real de cada automação ({ id: url }): para editar, copiar e abrir direto.
+app.get('/api/admin/automations/urls', podeGerenciar, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(Object.fromEntries((await listarAutomacoes()).lista.map((a) => [a.id, a.url])));
 }));
 
-app.post('/api/automations', soAdmin, asyncHandler(async (req, res) => {
+app.post('/api/automations', podeGerenciar, asyncHandler(async (req, res) => {
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
     `INSERT INTO automations (name, url, container, description, icon, color, categories, status)
@@ -212,7 +212,7 @@ app.post('/api/automations', soAdmin, asyncHandler(async (req, res) => {
   res.status(201).json(rowToAutomation(created));
 }));
 
-app.put('/api/automations/:id', soAdmin, asyncHandler(async (req, res) => {
+app.put('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
@@ -228,7 +228,7 @@ app.put('/api/automations/:id', soAdmin, asyncHandler(async (req, res) => {
   res.json(rowToAutomation(updated));
 }));
 
-app.delete('/api/automations/:id', soAdmin, asyncHandler(async (req, res) => {
+app.delete('/api/automations/:id', podeGerenciar, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   await pool.query('DELETE FROM automations WHERE id=$1', [id]);
   invalidarCache();
@@ -245,7 +245,7 @@ app.post('/api/automations/:id/check', asyncHandler(async (req, res) => {
   res.json({ id, status });
 }));
 
-app.post('/api/test-connection', soAdmin, asyncHandler(async (req, res) => {
+app.post('/api/test-connection', podeGerenciar, asyncHandler(async (req, res) => {
   // Só admin chama; o formato da URL é validado, os hosts não são restringidos.
   const v = validarUrlTeste((req.body || {}).url);
   if (!v.ok) throw new ErroHttp(400, v.error);

@@ -64,7 +64,10 @@ test('config-publica não exige login e devolve o padrão (cofre ativo, sessão 
   try {
     const r = await s.chamar('GET', '/api/config-publica');
     assert.equal(r.status, 200);
-    assert.deepEqual(r.corpo, { cofre: { modo: 'ativo', sessao: 'dia', horas: 8 } });
+    assert.deepEqual(r.corpo, {
+      cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
+      automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
+    });
   } finally { await s.fechar(); }
 });
 
@@ -180,19 +183,39 @@ test('a identidade fica em cache por um tempo (não bate no GLPI a cada clique) 
   } finally { await s.fechar(); }
 });
 
-test('soAdmin: cadastro de automação só passa para admin (sem token 401, comum 403)', async () => {
+async function subirCadastroAutomacoes() {
   const repo = repoMemoria([{ nome: 'Carlos Eduardo de Souza Alonso' }]);
   const glpi = { async identificarUsuario(token) { if (USUARIOS[token]) return USUARIOS[token]; throw new Error('token inválido'); } };
   const rotas = criarRotasAdmin({ repo, glpi, asyncHandler, ErroHttp });
   const app = express();
-  app.delete('/api/automations/:id', rotas.soAdmin, (req, res) => res.status(204).end());
+  app.use(express.json());
+  rotas.registrar(app);
+  app.delete('/api/automations/:id', rotas.podeGerenciarAutomacoes, (req, res) => res.status(204).end());
   app.use(erroFinal(() => {}));
   const servidor = await new Promise((ok) => { const s = app.listen(0, '127.0.0.1', () => ok(s)); });
-  const url = `http://127.0.0.1:${servidor.address().port}/api/automations/1`;
-  const apagar = (token) => fetch(url, { method: 'DELETE', headers: token ? { 'X-Glpi-Token': token } : {} }).then((r) => r.status);
+  const base = `http://127.0.0.1:${servidor.address().port}`;
+  const apagar = (token) => fetch(`${base}/api/automations/1`, { method: 'DELETE', headers: token ? { 'X-Glpi-Token': token } : {} }).then((r) => r.status);
+  const configurar = (token, corpo) => fetch(`${base}/api/admin/config/automacoes`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token }, body: JSON.stringify(corpo) }).then((r) => r.status);
+  return { apagar, configurar, fechar: () => new Promise((ok) => servidor.close(ok)) };
+}
+
+test('cadastro de automação: por padrão só admin (sem token 401, comum 403)', async () => {
+  const s = await subirCadastroAutomacoes();
   try {
-    assert.equal(await apagar(), 401);
-    assert.equal(await apagar(TOKEN_COMUM), 403);
-    assert.equal(await apagar(TOKEN_ADMIN), 204);
-  } finally { await new Promise((ok) => servidor.close(ok)); }
+    assert.equal(await s.apagar(), 401);
+    assert.equal(await s.apagar(TOKEN_COMUM), 403);
+    assert.equal(await s.apagar(TOKEN_ADMIN), 204);
+  } finally { await s.fechar(); }
+});
+
+test('cadastro de automação: o admin libera para todos e só admin muda essa regra', async () => {
+  const s = await subirCadastroAutomacoes();
+  try {
+    assert.equal(await s.configurar(TOKEN_COMUM, { cadastro: 'todos' }), 403);
+    assert.equal(await s.configurar(TOKEN_ADMIN, { cadastro: 'todos', endereco: 'oculto', novaAba: false }), 200);
+    assert.equal(await s.apagar(), 204);
+    assert.equal(await s.apagar(TOKEN_COMUM), 204);
+    assert.equal(await s.configurar(TOKEN_ADMIN, { cadastro: 'admins' }), 200);
+    assert.equal(await s.apagar(TOKEN_COMUM), 403);
+  } finally { await s.fechar(); }
 });

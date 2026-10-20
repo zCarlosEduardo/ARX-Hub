@@ -9,11 +9,12 @@
 //   POST   /api/admin/admins              acrescenta um admin
 //   DELETE /api/admin/admins/:id          tira um admin (nunca o último)
 //   PUT    /api/admin/automations/ordem   nova ordem das automações
-// `soAdmin` protege também o cadastro de automações (criar, editar, remover, testar conexão) no server.js.
+//   PUT    /api/admin/config/automacoes   quem cadastra automação, como o endereço aparece, nova aba
+// `podeGerenciarAutomacoes` protege o cadastro de automações e as URLs reais no server.js (só admin, ou todos se liberado).
 const crypto = require('crypto');
 const { adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
 
-const SECOES = ['cofre', 'whatsapp'];
+const SECOES = ['cofre', 'automacoes', 'whatsapp'];
 const TTL_PADRAO_MS = 60000;
 
 /**
@@ -79,10 +80,17 @@ function criarRotasAdmin(deps) {
     next();
   });
 
+  /** Cadastro de automações e URLs reais: só admin, a não ser que a administração tenha liberado para todos. */
+  const podeGerenciarAutomacoes = asyncHandler(async (req, res, next) => {
+    if ((await configAtual()).automacoes.cadastro !== 'todos') await exigirAdmin(req);
+    next();
+  });
+
   function registrar(app) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
       res.set('Cache-Control', 'no-store');
-      res.json({ cofre: (await configAtual()).cofre });
+      const { cofre, automacoes } = await configAtual();
+      res.json({ cofre, automacoes });
     }));
 
     app.get('/api/admin/eu', asyncHandler(async (req, res) => {
@@ -141,7 +149,7 @@ function criarRotasAdmin(deps) {
     }));
   }
 
-  return { registrar, configAtual, quemE, identificar, exigirAdmin, soAdmin };
+  return { registrar, configAtual, quemE, identificar, exigirAdmin, soAdmin, podeGerenciarAutomacoes };
 }
 
 module.exports = { criarRotasAdmin };
