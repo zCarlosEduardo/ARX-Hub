@@ -198,6 +198,18 @@ app.get('/api/automations', asyncHandler(async (req, res) => {
   res.json((await listarAutomacoes()).publica.filter((a) => podeVer(a, quem)));
 }));
 
+// Hub de exemplo (inicio-exemplo.html): lista geral, sem o filtro de grupo e sem o endereço. Abrir a tela continua
+// exigindo o passe no proxy, então automação restrita só abre para quem tem acesso.
+app.get('/api/exemplo/automacoes', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json((await listarAutomacoes()).publica.map((a) => {
+    const geral = { ...a };
+    delete geral.endereco;
+    delete geral.grupos;
+    return geral;
+  }));
+}));
+
 // Execuções manuais (rodadas pela tela da automação, registradas pelo proxy) para a aba Resultados.
 // GET /api/execucoes/resumo?desde=YYYY-MM-DD&ate=YYYY-MM-DD&incluirTeste=0|1 (datas no fuso de São Paulo)
 const linhaExecucao = (r) => ({
