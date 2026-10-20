@@ -836,7 +836,7 @@
       let rodape;
       if (res) {
         rodape = e('div', { key: 'res', style: { borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 12.5 } }, [
-          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' || res.status === 'repetir' ? 'var(--warn)' : 'var(--accent)' } },
+          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' || res.status === 'repetir' || res.status === 'pendencia' ? 'var(--warn)' : 'var(--accent)' } },
             res.status === 'teste'
               ? `Teste: execução ${res.ok ? 'sem erro' : 'com erro'}`
               : res.status === 'concluido'
@@ -845,6 +845,8 @@
                   ? 'Não executado: configuração pendente'
                   : res.status === 'repetir'
                     ? 'Falha momentânea: nova tentativa automática (IA)'
+                    : res.status === 'pendencia'
+                      ? 'Pedido o que falta: chamado Pendente'
                     : 'Erro: devolutiva pendente no chamado'),
           e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
           res.status !== 'concluido'
@@ -908,6 +910,8 @@
               ? `confirma o tipo (${Math.round(item.ia.confianca * 100)}%)${item.validadoPorIa ? '; liberado para o automático' : ''}.`
               : `${item.ia.aplicar === 'auto' ? 'trocou o tipo' : 'sugere'} ${item.tipoNome || 'sem automação'} (${Math.round(item.ia.confianca * 100)}%)${item.ia.motivo ? ': ' + item.ia.motivo : ''}`),
         ]) : null,
+        item.pedirPendencia && !res ? e('div', { key: 'pend', style: { fontSize: 12, color: 'var(--warn)' } }, `Falta ${item.pedirPendencia.faltas.join(' e ')} (não está na descrição, nos acompanhamentos nem nos prints). Rodar pede no chamado e deixa Pendente, sem atribuir.`) : null,
+        item.identificadorAchadoEm ? e('div', { key: 'achado', style: { fontSize: 12, color: 'var(--muted)' } }, `Identificador achado ${item.identificadorAchadoEm === 'print' ? 'no print anexado' : 'nos acompanhamentos'}.`) : null,
         item.repetirIa && !res ? e('div', { key: 'rep', style: { fontSize: 12, color: 'var(--warn)' } }, `Nova tentativa automática ${item.repetirIa.tentativa}: ${item.repetirIa.motivo || 'falha momentânea'}.`) : null,
         detalhes,
         item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,

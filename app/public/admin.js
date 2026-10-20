@@ -748,6 +748,7 @@
         caixa(c.repetirErros, (v) => setC({ ...c, repetirErros: v }), 'Quando uma automação der erro, a IA decide se dá para tentar de novo sozinho (falha momentânea) ou se precisa de alguém.', { key: 're' }),
         c.repetirErros ? e('div', { key: 'mt', style: { maxWidth: 260 } }, [rotulo('Tentativas automáticas (1 a 5)'), e('input', { className: 'field-input', type: 'number', min: 1, max: 5, value: c.maxTentativas, onChange: (ev) => setC({ ...c, maxTentativas: ev.target.value }), style: S().input })]) : null,
         caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado (solução e devolutiva) no lugar do texto fixo; se ela falhar, vai o texto fixo.', { key: 'tx' }),
+        caixa(c.pedirPendencias, (v) => setC({ ...c, pedirPendencias: v }), 'Pedir o que falta: no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card ou código FIPE, a IA procura nos acompanhamentos e nos prints (OCR); se não achar, pede no chamado e deixa Pendente, sem atribuir.', { key: 'pp' }),
         caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra.', { key: 'ra' }),
         e('div', { key: 'wm', style: { maxWidth: 420 } }, [
           rotulo('WhatsApp'),
