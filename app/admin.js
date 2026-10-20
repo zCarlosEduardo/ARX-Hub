@@ -128,7 +128,7 @@ function configPadrao() {
     automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
     // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
     // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
-    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, whatsappModo: 'reagir' },
+    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
     whatsapp: {
       ativo: false,
       modo: 'observacao',
@@ -175,7 +175,7 @@ function validarIa(b) {
   const padrao = configPadrao().ia;
   const c = b && typeof b === 'object' ? b : {};
   const v = (k) => (c[k] === undefined ? padrao[k] : c[k]);
-  for (const k of ['ligada', 'textoPelaIa', 'repetirErros', 'reabertos']) if (typeof v(k) !== 'boolean') return { erro: `ia.${k} deve ser verdadeiro ou falso` };
+  for (const k of ['ligada', 'textoPelaIa', 'repetirErros', 'reabertos', 'pedirPendencias']) if (typeof v(k) !== 'boolean') return { erro: `ia.${k} deve ser verdadeiro ou falso` };
   const tiposBrutos = v('automaticoTipos');
   if (!Array.isArray(tiposBrutos)) return { erro: 'ia.automaticoTipos deve ser uma lista' };
   const automaticoTipos = [...new Set(tiposBrutos.map(String))];
@@ -187,7 +187,7 @@ function validarIa(b) {
   if (!Number.isInteger(maxTentativas) || maxTentativas < 1 || maxTentativas > 5) return { erro: 'as tentativas automáticas devem ser de 1 a 5' };
   const whatsappModo = v('whatsappModo');
   if (whatsappModo !== 'reagir' && whatsappModo !== 'responder') return { erro: 'ia.whatsappModo deve ser reagir ou responder' };
-  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), whatsappModo } };
+  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), pedirPendencias: v('pedirPendencias'), whatsappModo } };
 }
 
 function validarWhatsapp(b) {

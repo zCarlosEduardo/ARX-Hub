@@ -215,6 +215,7 @@ scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
       '<tr><td>Novas tentativas de erro momentâneo</td><td>' + (cfg.repetirErros ? 'Sim, até ' + cfg.maxTentativas : 'Não') + '</td></tr>' +
       '<tr><td>Resposta do chamado escrita pela IA</td><td>' + (cfg.textoPelaIa ? 'Sim' : 'Não') + '</td></tr>' +
       '<tr><td>Encerrar reaberto com outro pedido</td><td>' + (cfg.reabertos ? 'Sim' : 'Não') + '</td></tr>' +
+      '<tr><td>Pedir o que falta (placa, card, FIPE; procura antes nos acompanhamentos e prints)</td><td>' + (cfg.pedirPendencias ? 'Sim' : 'Não') + '</td></tr>' +
       '<tr><td>WhatsApp</td><td>' + (cfg.whatsappModo === 'responder' ? 'Responde com o texto da IA' : 'Só reage (a resposta da IA fica registrada)') + '</td></tr>' +
       '</tbody></table>' : '<span class="vazio">Sem dados.</span>';
   });
