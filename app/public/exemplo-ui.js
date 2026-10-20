@@ -70,7 +70,8 @@
       document.addEventListener('keydown', tecla, true);
       return () => { document.removeEventListener('keydown', tecla, true); if (antes && antes.focus) antes.focus(); };
     }, []);
-    return e('div', { className: 'exu-modal-fundo', onMouseDown: (ev) => { if (ev.target === ev.currentTarget) fechar(); } },
+    // portal no body: a janela fica por cima de tudo mesmo quando quem abre está dentro da barra do topo
+    return ReactDOM.createPortal(e('div', { className: 'exu-modal-fundo', onMouseDown: (ev) => { if (ev.target === ev.currentTarget) fechar(); } },
       e('div', { ref: caixa, className: 'exu-modal' + (perigo ? ' perigo' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exu-modal-titulo', style: largura ? { maxWidth: largura } : null }, [
         e('div', { key: 'c', className: 'exu-modal-cab' }, [
           perigo ? e('span', { key: 'i', className: 'exu-modal-icone' }, Icon('AlertCircle', 18, 'var(--error)')) : null,
@@ -82,7 +83,7 @@
         ]),
         children ? e('div', { key: 'b', className: 'exu-modal-corpo' }, children) : null,
         rodape ? e('div', { key: 'r', className: 'exu-modal-pe' }, rodape) : null,
-      ]));
+      ])), document.body);
   }
 
   function useAvisos() {

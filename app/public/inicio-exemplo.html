@@ -235,8 +235,9 @@
         const [tocado, setTocado] = useState(false);
         const [teste, setTeste] = useState('');
         const [buscaIcone, setBuscaIcone] = useState('');
-        const mudar = (k) => (ev) => setF(Object.assign({}, f, { [k]: ev.target.value }));
-        const alternarCat = (k) => setF(Object.assign({}, f, { categorias: f.categorias.includes(k) ? f.categorias.filter((x) => x !== k) : [...f.categorias, k] }));
+        // sempre a partir do estado mais novo: dois cliques seguidos não se sobrescrevem
+        const mudar = (k) => (ev) => { const x = ev.target.value; setF((o) => Object.assign({}, o, { [k]: x })); };
+        const alternarCat = (k) => setF((o) => Object.assign({}, o, { categorias: o.categorias.includes(k) ? o.categorias.filter((x) => x !== k) : [...o.categorias, k] }));
         const erros = {
           nome: !f.nome.trim() ? 'Informe o nome.' : '',
           url: !/^https?:\/\/[\w.-]+(:\d+)?\/?/.test(f.url.trim()) ? 'Use um endereço como http://container:4016/' : '',
@@ -276,12 +277,12 @@
               ])]),
               e('div', { key: 'cor', className: 'exu-campo' }, [
                 e('label', { key: 'l' }, 'Cor'),
-                e('div', { key: 'c', className: 'ex-cores', role: 'radiogroup', 'aria-label': 'Cor' }, CORES.map((c) => e('button', { key: c, type: 'button', role: 'radio', 'aria-checked': f.cor === c ? 'true' : 'false', 'aria-label': 'Cor ' + c, style: { background: c }, onClick: () => setF(Object.assign({}, f, { cor: c })) }, f.cor === c ? Ico('Check', 14, '#fff', 2.5) : null))),
+                e('div', { key: 'c', className: 'ex-cores', role: 'radiogroup', 'aria-label': 'Cor' }, CORES.map((c) => e('button', { key: c, type: 'button', role: 'radio', 'aria-checked': f.cor === c ? 'true' : 'false', 'aria-label': 'Cor ' + c, style: { background: c }, onClick: () => setF((o) => Object.assign({}, o, { cor: c })) }, f.cor === c ? Ico('Check', 14, '#fff', 2.5) : null))),
               ]),
               e('div', { key: 'i', className: 'exu-campo' }, [
                 e('label', { key: 'l' }, ['Ícone ', e('span', { key: 's', style: { fontWeight: 400, color: 'var(--muted)' } }, '(' + ICONES.length + ')')]),
                 e('label', { key: 'b', className: 'exu-busca', style: { flex: 'none', height: 32 } }, [Ico('Search', 14, 'var(--muted-soft)'), e('input', { key: 'i', value: buscaIcone, onChange: (ev) => setBuscaIcone(ev.target.value), placeholder: 'Buscar ícone (em inglês)', 'aria-label': 'Buscar ícone' })]),
-                e('div', { key: 'g', className: 'exu-icones ex-icones-lista', role: 'radiogroup', 'aria-label': 'Ícone' }, icones.map((nome) => e('button', { key: nome, type: 'button', role: 'radio', 'aria-checked': f.icone === nome ? 'true' : 'false', 'aria-pressed': f.icone === nome ? 'true' : 'false', 'aria-label': nome, title: nome, onClick: () => setF(Object.assign({}, f, { icone: nome })) }, Ico(nome, 17, f.icone === nome ? f.cor : 'currentColor')))),
+                e('div', { key: 'g', className: 'exu-icones ex-icones-lista', role: 'radiogroup', 'aria-label': 'Ícone' }, icones.map((nome) => e('button', { key: nome, type: 'button', role: 'radio', 'aria-checked': f.icone === nome ? 'true' : 'false', 'aria-pressed': f.icone === nome ? 'true' : 'false', 'aria-label': nome, title: nome, onClick: () => setF((o) => Object.assign({}, o, { icone: nome })) }, Ico(nome, 17, f.icone === nome ? f.cor : 'currentColor')))),
               ]),
             ]),
           ]),
