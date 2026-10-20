@@ -72,6 +72,16 @@ test('configuração padrão: cofre ativo com sessão do dia e WhatsApp desligad
   assert.deepEqual(validarSecao('automacoes', c.automacoes), { ok: true, valor: { cadastro: 'admins', endereco: 'mascarado', novaAba: true } });
 });
 
+test('ia: padrão desligada; aceita tipos existentes e recusa limites fora da faixa', () => {
+  assert.equal(validarSecao('ia', configPadrao().ia).ok, true);
+  const ok = validarSecao('ia', { ligada: true, automaticoTipos: ['senha_sistemas', 'senha_sistemas'], confiancaMinima: '0.85', whatsappModo: 'responder' });
+  assert.deepEqual([ok.valor.automaticoTipos, ok.valor.confiancaMinima, ok.valor.whatsappModo], [['senha_sistemas'], 0.85, 'responder']);
+  assert.equal(validarSecao('ia', { automaticoTipos: ['nao_existe'] }).ok, false);
+  assert.equal(validarSecao('ia', { confiancaMinima: 0.3 }).ok, false);
+  assert.equal(validarSecao('ia', { maxTentativas: 9 }).ok, false);
+  assert.equal(validarSecao('ia', { whatsappModo: 'gritar' }).ok, false);
+});
+
 test('automacoes: aceita as opções da tela e recusa valor desconhecido', () => {
   assert.deepEqual(validarSecao('automacoes', { cadastro: 'todos', endereco: 'oculto', novaAba: false }).valor, { cadastro: 'todos', endereco: 'oculto', novaAba: false });
   assert.equal(validarSecao('automacoes', { cadastro: 'qualquer' }).ok, false);

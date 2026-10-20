@@ -267,7 +267,7 @@ app.get('/api/admin/grupos-glpi', soAdmin, asyncHandler(async (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(await glpi.listarGrupos(String(req.get('X-Glpi-Token')).trim()));
   } catch (err) {
-    throw new ErroHttp(502, glpi.sanitizar((err && err.message) || 'Falha ao ler os grupos do GLPI.', [req.get('X-Glpi-Token')]));
+    throw new ErroHttp(424, glpi.sanitizar((err && err.message) || 'Falha ao ler os grupos do GLPI.', [req.get('X-Glpi-Token')]));
   }
 }));
 
@@ -445,6 +445,11 @@ const rotasAdmin = criarRotasAdmin({
 });
 rotasAdmin.registrar(app);
 
+// IA local: ligar/desligar, exportar, treinar e auditoria (veja rotasIa.js). Rede interna arx-ia-interna.
+const { criarRotasIa } = require('./rotasIa');
+const rotasIa = criarRotasIa({ admin: rotasAdmin, repo: repoPg(pool), asyncHandler, ErroHttp });
+rotasIa.registrar(app);
+
 // Robô do WhatsApp (veja rotasWhatsapp.js). O robô é um serviço à parte; o Hub decide o que cada mensagem vira.
 async function classificarMensagem(texto) {
   const r = await fetch(`${URL_CHAMADOS}/api/classificar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }), signal: AbortSignal.timeout(5000) });
@@ -454,6 +459,8 @@ async function classificarMensagem(texto) {
 const rotasWhatsapp = criarRotasWhatsapp({
   repo: repoWhatsapp(pool),
   admin: rotasAdmin,
+  // IA local: valida o tipo da mensagem e escreve a resposta que daria (desligada ou fora: null, segue a regra)
+  ia: { whatsapp: (corpo) => rotasIa.chamarIa('/api/whatsapp', 'POST', corpo).then((r) => (r.ok ? r.dados : null)) },
   glpi,
   classificar: classificarMensagem,
   tokenBot: process.env.WHATSAPP_BOT_TOKEN || '',

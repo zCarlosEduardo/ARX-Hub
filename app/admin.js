@@ -126,6 +126,9 @@ function configPadrao() {
     // quem cadastra, edita e remove automação (e vê o endereço real), como o endereço aparece para os outros e se
     // eles podem abrir a automação em nova aba (sempre pelo proxy, sem o endereço real)
     automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
+    // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
+    // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
+    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, whatsappModo: 'reagir' },
     whatsapp: {
       ativo: false,
       modo: 'observacao',
@@ -166,6 +169,25 @@ function validarAutomacoes(b) {
   const novaAba = c.novaAba === undefined ? padrao.novaAba : c.novaAba;
   if (typeof novaAba !== 'boolean') return { erro: 'automacoes.novaAba deve ser verdadeiro ou falso' };
   return { valor: { cadastro, endereco, novaAba } };
+}
+
+function validarIa(b) {
+  const padrao = configPadrao().ia;
+  const c = b && typeof b === 'object' ? b : {};
+  const v = (k) => (c[k] === undefined ? padrao[k] : c[k]);
+  for (const k of ['ligada', 'textoPelaIa', 'repetirErros', 'reabertos']) if (typeof v(k) !== 'boolean') return { erro: `ia.${k} deve ser verdadeiro ou falso` };
+  const tiposBrutos = v('automaticoTipos');
+  if (!Array.isArray(tiposBrutos)) return { erro: 'ia.automaticoTipos deve ser uma lista' };
+  const automaticoTipos = [...new Set(tiposBrutos.map(String))];
+  const invalido = automaticoTipos.find((t) => !CHAVES_TIPOS.has(t));
+  if (invalido) return { erro: `o tipo "${invalido}" não existe` };
+  const confiancaMinima = Number(v('confiancaMinima'));
+  if (!Number.isFinite(confiancaMinima) || confiancaMinima < 0.5 || confiancaMinima > 1) return { erro: 'a confiança mínima deve ser de 0,5 a 1' };
+  const maxTentativas = Number(v('maxTentativas'));
+  if (!Number.isInteger(maxTentativas) || maxTentativas < 1 || maxTentativas > 5) return { erro: 'as tentativas automáticas devem ser de 1 a 5' };
+  const whatsappModo = v('whatsappModo');
+  if (whatsappModo !== 'reagir' && whatsappModo !== 'responder') return { erro: 'ia.whatsappModo deve ser reagir ou responder' };
+  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), whatsappModo } };
 }
 
 function validarWhatsapp(b) {
@@ -270,7 +292,7 @@ function validarWhatsapp(b) {
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
 function validarSecao(chave, corpo) {
-  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp };
+  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp, ia: validarIa };
   const r = validadores[chave] ? validadores[chave](corpo) : { erro: 'seção de configuração desconhecida' };
   return r.erro ? { ok: false, error: r.erro } : { ok: true, valor: r.valor };
 }
