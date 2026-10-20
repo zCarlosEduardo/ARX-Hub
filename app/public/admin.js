@@ -1,8 +1,10 @@
 // Painel de administração do Hub. O botão "Administração" só aparece para quem é administrador: o Hub não tem login próprio,
 // a pessoa é identificada pelo token do GLPI (guardado no cofre dos acessos) e a lista de admins fica no servidor.
 //
-// Abas: Cofre (ativar ou desativar a senha mestra e escolher quanto tempo fica liberada), Administradores (quem pode abrir
-// este painel), Automações (ordem em que aparecem) e WhatsApp (grupos, número que responde e tipos de solicitação).
+// Páginas agrupadas no menu (GRUPOS_ABAS): Acesso (Cofre, Administradores, Histórico), Automações, IA local (IA e
+// Revisão da IA) e WhatsApp (Configuração, Vínculos, Conexão e pedidos). Layout no padrão das telas de configuração:
+// cada página com título e subtítulo, seções em cartões (secao) com rodapé de salvar, chaves liga/desliga e cartões
+// de opção; classes .admin-* em styles.css.
 // Expõe window.AdminAba (aba do cabeçalho, só para administradores) e window.AdminView (a tela, como Chamados e Resultados).
 (function () {
   const e = React.createElement;
@@ -33,23 +35,49 @@
   // ---------- peças de tela ----------
   const ui = () => hub().ui;
   const S = () => ui().S;
-  const rotulo = (texto) => e('div', { style: S().label }, texto);
-  const dica = (texto) => e('div', { style: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 } }, texto);
-  const caixa = (marcado, onChange, texto, extra = {}) =>
-    e('label', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', ...extra } }, [
-      e('input', { key: 'c', type: 'checkbox', checked: !!marcado, onChange: (ev) => onChange(ev.target.checked) }),
-      e('span', { key: 't' }, texto),
+  const rotulo = (texto) => e('div', { className: 'admin-rotulo' }, texto);
+  const dica = (texto) => e('div', { className: 'admin-dica' }, texto);
+  /** Liga/desliga (chave): o texto é a pergunta, à esquerda; a chave fica à direita, como nas telas de configuração. */
+  const caixa = (marcado, onChange, texto, { key, ...estilo } = {}) =>
+    e('label', { key, className: 'admin-chave-linha', style: estilo }, [
+      e('span', { key: 't', className: 'admin-chave-texto' }, texto),
+      e('input', { key: 'c', type: 'checkbox', role: 'switch', className: 'admin-chave', checked: !!marcado, onChange: (ev) => onChange(ev.target.checked) }),
     ]);
-  const selecao = (valor, onChange, opcoes, extra = {}) =>
-    e('select', { value: valor, onChange: (ev) => onChange(ev.target.value), style: { ...S().input, ...extra } }, opcoes.map(([v, t]) => e('option', { key: v, value: v }, t)));
-  const botao = (texto, onClick, tipo = 'sec', extra = {}) =>
-    e('button', { type: 'button', className: tipo === 'prim' ? 'btn-primary' : 'btn-outline', style: { ...(tipo === 'prim' ? S().btnPrim : S().btnSec), ...extra }, onClick, disabled: extra.disabled }, texto);
-  const rodape = (salvar, salvando, erro, ok) =>
-    e('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
-      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      ok ? e('div', { key: 'o', className: 'admin-ok', style: { color: 'var(--success, #16a34a)', fontSize: 12.5 } }, 'Salvo.') : null,
-      botao(salvando ? 'Salvando…' : 'Salvar', salvar, 'prim', { alignSelf: 'flex-start', opacity: salvando ? 0.7 : 1, disabled: salvando }),
+  /** Escolha entre opções que se excluem: cartão com título e explicação (rádio). */
+  const opcao = (nomeGrupo, marcado, onChange, titulo, descricao) =>
+    e('label', { key: titulo, className: 'admin-opcao' + (marcado ? ' marcada' : '') }, [
+      e('input', { key: 'r', type: 'radio', name: nomeGrupo, checked: !!marcado, onChange: () => onChange() }),
+      e('span', { key: 't', className: 'admin-opcao-texto' }, [e('strong', { key: 'a' }, titulo), descricao ? e('span', { key: 'b' }, descricao) : null]),
     ]);
+  const selecao = (valor, onChange, opcoes, { key, ...extra } = {}) =>
+    e('select', { key, value: valor, onChange: (ev) => onChange(ev.target.value), style: { ...S().input, ...extra } }, opcoes.map(([v, t]) => e('option', { key: v, value: v }, t)));
+  const botao = (texto, onClick, tipo = 'sec', { key, ...extra } = {}) =>
+    e('button', { key, type: 'button', className: tipo === 'prim' ? 'btn-primary' : tipo === 'perigo' ? 'btn-outline btn-outline-danger' : 'btn-outline', style: { ...(tipo === 'prim' ? S().btnPrim : S().btnSec), ...(tipo === 'perigo' ? { color: 'var(--error)' } : {}), ...extra }, onClick, disabled: extra.disabled }, texto);
+  /** Rodapé de uma seção: situação à esquerda (erro, salvo ou dica) e o botão Salvar à direita. */
+  const rodape = (salvar, salvando, erro, ok, texto = 'Salvar', nota = '') =>
+    e('div', { className: 'admin-rodape-conteudo' }, [
+      erro ? e('span', { key: 'e', className: 'admin-erro' }, erro) : ok ? e('span', { key: 'o', className: 'admin-ok' }, 'Salvo.') : e('span', { key: 'n', className: 'admin-dica' }, nota),
+      botao(salvando ? 'Salvando…' : texto, salvar, 'prim', { key: 'b', opacity: salvando ? 0.7 : 1, disabled: salvando }),
+    ]);
+  /** Bloco de configuração (cartão): título, explicação curta, conteúdo e rodapé opcional com a ação. */
+  const secao = (chave, titulo, descricao, filhos, pe = null, acao = null) =>
+    e('section', { key: chave, className: 'admin-secao' }, [
+      titulo ? e('div', { key: 'c', className: 'admin-secao-cab' }, [
+        e('div', { key: 't' }, [e('h3', { key: 'h' }, titulo), descricao ? e('p', { key: 'p' }, descricao) : null]),
+        acao,
+      ]) : null,
+      e('div', { key: 'b', className: 'admin-secao-corpo' }, filhos),
+      pe ? e('div', { key: 'r', className: 'admin-secao-rodape' }, pe) : null,
+    ]);
+  /** Campo com rótulo, controle e dica embaixo. */
+  const campo = (chave, titulo, controle, ajuda) => e('div', { key: chave, className: 'admin-campo' }, [rotulo(titulo), controle, ajuda ? dica(ajuda) : null]);
+  /** Número em destaque (cartão pequeno). */
+  const kpi = (chave, titulo, valor, detalhe, tom) =>
+    e('div', { key: chave, className: 'admin-kpi' + (tom ? ' ' + tom : '') }, [e('div', { key: 'r', className: 'admin-kpi-rotulo' }, titulo), e('div', { key: 'v', className: 'admin-kpi-valor' }, valor), detalhe ? e('div', { key: 'd', className: 'admin-kpi-detalhe' }, detalhe) : null]);
+  const selo = (texto, tom = '') => e('span', { className: 'admin-selo ' + tom }, texto);
+  const progresso = (feito, total) => e('div', { className: 'admin-progresso', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': total || 0, 'aria-valuenow': feito || 0 }, e('div', { style: { width: `${total ? Math.min(100, (feito / total) * 100) : 0}%` } }));
+  const mensagem = (erro, info) => (erro ? e('div', { key: 'msg-e', className: 'admin-aviso erro' }, erro) : info ? e('div', { key: 'msg-i', className: 'admin-aviso ok' }, info) : null);
+  const iniciais = (nome) => String(nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
 
   /** Estado comum das abas que salvam uma seção. */
   function useSalvar(fn) {
@@ -87,23 +115,21 @@
       aoSalvar({ ...config, cofre: novo });
       if (hub().recarregarPolitica) await hub().recarregarPolitica(); // vale já neste navegador
     });
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      e('div', { key: 'm' }, [
-        rotulo('Senha mestra dos acessos (cofre)'),
-        e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 } }, [
-          caixa(c.modo === 'ativo', () => setC({ ...c, modo: 'ativo' }), 'Ativa (recomendado): logins, senhas e token do GLPI ficam cifrados neste navegador com uma senha mestra.'),
-          caixa(c.modo === 'desativado', () => setC({ ...c, modo: 'desativado' }), 'Desativada: ninguém precisa de senha mestra e os acessos novos voltam a ficar em texto puro no navegador (menos seguro).'),
+    return e('div', { className: 'admin-pilha' }, [
+      secao('m', 'Senha mestra', 'Logins, senhas e o token do GLPI de cada pessoa ficam só no navegador dela. Aqui você decide se eles ficam cifrados.', [
+        e('div', { key: 'o', className: 'admin-opcoes' }, [
+          opcao('cofre-modo', c.modo === 'ativo', () => setC({ ...c, modo: 'ativo' }), 'Ativa (recomendado)', 'Os acessos ficam cifrados neste navegador com uma senha mestra.'),
+          opcao('cofre-modo', c.modo === 'desativado', () => setC({ ...c, modo: 'desativado' }), 'Desativada', 'Ninguém precisa de senha mestra e os acessos novos voltam a ficar em texto puro no navegador (menos seguro).'),
         ]),
         dica('A mudança vale para navegadores que ainda não criaram o cofre. Quem já tem cofre continua usando a senha mestra.'),
       ]),
-      e('div', { key: 's' }, [
-        rotulo('Quanto tempo o cofre fica liberado depois de destravar'),
-        selecao(c.sessao, (v) => setC({ ...c, sessao: v }), [['dia', 'Até o fim do dia'], ['horas', 'Por horas'], ['aba', 'Só nesta aba'], ['pedir', 'Pedir a senha toda vez']], { marginTop: 4 }),
-        dica(DESC_SESSAO[c.sessao]),
-        c.sessao === 'horas' ? e('div', { style: { marginTop: 8, maxWidth: 140 } }, [rotulo('Horas (1 a 72)'), e('input', { className: 'field-input admin-horas', type: 'number', min: 1, max: 72, value: c.horas, onChange: (ev) => setC({ ...c, horas: ev.target.value }), style: S().input })]) : null,
-        e('div', { style: { marginTop: 8 } }, dica('Atenção: com a sessão guardada (dia, horas), quem tiver acesso ao perfil deste navegador dentro do prazo consegue abrir o cofre. "Travar agora" ou limpar os dados do navegador encerram a sessão na hora.')),
-      ]),
-      rodape(salvar, salvando, erro, ok),
+      secao('s', 'Tempo liberado', 'Quanto tempo o cofre fica aberto depois de destravar.', [
+        e('div', { key: 'l', className: 'admin-linha-campos' }, [
+          campo('se', 'Sessão', selecao(c.sessao, (v) => setC({ ...c, sessao: v }), [['dia', 'Até o fim do dia'], ['horas', 'Por horas'], ['aba', 'Só nesta aba'], ['pedir', 'Pedir a senha toda vez']]), DESC_SESSAO[c.sessao]),
+          c.sessao === 'horas' ? campo('h', 'Horas (1 a 72)', e('input', { className: 'field-input admin-horas', type: 'number', min: 1, max: 72, value: c.horas, onChange: (ev) => setC({ ...c, horas: ev.target.value }), style: S().input })) : null,
+        ]),
+        e('div', { key: 'av', className: 'admin-aviso' }, 'Com a sessão guardada (dia, horas), quem tiver acesso ao perfil deste navegador dentro do prazo consegue abrir o cofre. "Travar agora" ou limpar os dados do navegador encerram a sessão na hora.'),
+      ], rodape(salvar, salvando, erro, ok, 'Salvar', 'Vale para as duas seções desta página.')),
     ]);
   }
 
@@ -162,35 +188,33 @@
     }
 
     const filtrados = (usuarios || []).filter((u) => !busca || u.label.toLowerCase().includes(busca.toLowerCase())).slice(0, 60);
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      eu ? e('div', { key: 'eu', style: { fontSize: 12.5, color: 'var(--muted)' } }, `Você é ${eu.nome || eu.login} (GLPI${eu.login ? `, login ${eu.login}` : ''}).`) : null,
-      e('div', { key: 'l' }, [
-        rotulo('Quem é administrador'),
-        e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 } }, !admins ? [dica('Carregando…')] : admins.map((a) =>
-          e('div', { key: a.id, className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'var(--bg)' } }, [
-            e('div', { key: 'n', style: { flex: 1, fontSize: 13 } }, [
-              e('div', { key: 'a', style: { fontWeight: 600 } }, a.nome || a.login || `GLPI ${a.glpiId}`),
-              e('div', { key: 'b', style: { fontSize: 11.5, color: 'var(--muted)' } }, [a.login ? `login ${a.login}` : null, a.glpiId ? `id ${a.glpiId}` : 'ainda não confirmado pelo GLPI', a.criadoPor ? `adicionado por ${a.criadoPor}` : null].filter(Boolean).join(' · ')),
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro, info),
+      secao('l', 'Administradores', eu ? `Você entrou como ${eu.nome || eu.login}${eu.login ? ` (login ${eu.login})` : ''}.` : null,
+        !admins ? [dica('Carregando…')] : [e('div', { key: 'lista', className: 'admin-lista' }, admins.map((a) =>
+          e('div', { key: a.id, className: 'admin-item' }, [
+            e('span', { key: 'av', className: 'admin-avatar', 'aria-hidden': true }, iniciais(a.nome || a.login)),
+            e('div', { key: 'n', className: 'admin-item-texto' }, [
+              e('strong', { key: 'a' }, a.nome || a.login || `GLPI ${a.glpiId}`),
+              e('span', { key: 'b' }, [a.login ? `login ${a.login}` : null, a.glpiId ? `id ${a.glpiId}` : 'ainda não confirmado pelo GLPI', a.criadoPor ? `adicionado por ${a.criadoPor}` : null].filter(Boolean).join(' · ')),
             ]),
-            botao('Remover', () => remover(a), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
-          ]))),
-      ]),
-      e('div', { key: 'novo', style: { borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 } }, [
-        rotulo('Adicionar administrador'),
-        e('input', { className: 'field-input admin-busca', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: usuarios ? 'Buscar pessoa do GLPI pelo nome' : 'Carregando as pessoas do GLPI…', style: S().input }),
-        selecao(escolhido, setEscolhido, [['', filtrados.length ? 'Escolha a pessoa' : 'Nenhuma pessoa encontrada'], ...filtrados.map((u) => [String(u.id), u.label])]),
+            botao('Remover', () => remover(a), 'perigo', { key: 'r', padding: '5px 10px' }),
+          ])))]),
+      secao('novo', 'Adicionar administrador', 'Escolha uma pessoa do GLPI ou informe o login de quem não aparece na lista.', [
+        e('div', { key: 'busca', className: 'admin-linha-campos' }, [
+          campo('b', 'Buscar pessoa', e('input', { className: 'field-input admin-busca', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: usuarios ? 'Nome da pessoa no GLPI' : 'Carregando as pessoas do GLPI…', style: S().input })),
+          campo('p', 'Pessoa', selecao(escolhido, setEscolhido, [['', filtrados.length ? 'Escolha a pessoa' : 'Nenhuma pessoa encontrada'], ...filtrados.map((u) => [String(u.id), u.label])])),
+        ]),
         botao('Adicionar a pessoa escolhida', () => {
           const u = (usuarios || []).find((x) => String(x.id) === escolhido);
           if (u) adicionar({ glpiId: u.id, nome: u.label });
-        }, 'prim', { alignSelf: 'flex-start', disabled: !escolhido, opacity: escolhido ? 1 : 0.6 }),
-        dica('Ou informe o login do GLPI de quem não aparece na lista:'),
-        e('div', { style: { display: 'flex', gap: 8 } }, [
+        }, 'prim', { key: 'ad', alignSelf: 'flex-start', disabled: !escolhido, opacity: escolhido ? 1 : 0.6 }),
+        e('div', { key: 'sep', className: 'admin-separador' }, 'ou'),
+        campo('lg', 'Login do GLPI', e('div', { className: 'admin-linha-acao' }, [
           e('input', { key: 'i', className: 'field-input admin-login', value: login, onChange: (ev) => setLogin(ev.target.value), placeholder: 'login do GLPI', style: { ...S().input, flex: 1 } }),
           botao('Adicionar pelo login', () => login.trim() && adicionar({ login: login.trim() }), 'sec', { key: 'b' }),
-        ]),
+        ])),
       ]),
-      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      info ? e('div', { key: 'i', className: 'admin-ok', style: { color: 'var(--success, #16a34a)', fontSize: 12.5 } }, info) : null,
     ]);
   }
 
@@ -203,23 +227,16 @@
       aoSalvar({ ...config, automacoes: novo });
       window.dispatchEvent(new CustomEvent('arx-config-automacoes', { detail: novo })); // o painel muda na hora
     });
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 22 } }, [
-      e('div', { key: 'acesso', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-        e('div', { key: 'c' }, [
-          rotulo('Quem pode cadastrar, editar e remover automações'),
-          e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 } }, [
-            caixa(c.cadastro === 'admins', () => setC({ ...c, cadastro: 'admins' }), 'Só administradores (recomendado).', { key: 'a' }),
-            caixa(c.cadastro === 'todos', () => setC({ ...c, cadastro: 'todos' }), 'Todo mundo: qualquer pessoa no Hub cadastra, edita, remove e vê o endereço real das automações.', { key: 't' }),
-          ]),
-        ]),
-        e('div', { key: 'en' }, [
-          rotulo('Endereço das automações para quem não gerencia'),
-          selecao(c.endereco, (v) => setC({ ...c, endereco: v }), [['mascarado', 'Mascarado (xxx.xxx.xxx.xxx:4016)'], ['oculto', 'Oculto (não aparece)']], { marginTop: 4 }),
-          dica('As telas sempre abrem pelo proxy do Hub: o navegador nunca recebe o endereço real de quem não gerencia.'),
-        ]),
-        caixa(c.novaAba, (v) => setC({ ...c, novaAba: v }), 'Quem não gerencia pode abrir a automação em nova aba (pelo proxy, sem o endereço real).', { key: 'na' }),
-        rodape(acesso.salvar, acesso.salvando, acesso.erro, acesso.ok),
-      ]),
+    return e('div', { className: 'admin-pilha' }, [
+      secao('acesso', 'Acesso e endereço', 'Quem gerencia as automações e o que os outros veem.', [
+        campo('c', 'Quem pode cadastrar, editar e remover', e('div', { className: 'admin-opcoes' }, [
+          opcao('auto-cadastro', c.cadastro === 'admins', () => setC({ ...c, cadastro: 'admins' }), 'Só administradores (recomendado)', 'Os outros só abrem as automações.'),
+          opcao('auto-cadastro', c.cadastro === 'todos', () => setC({ ...c, cadastro: 'todos' }), 'Todo mundo', 'Qualquer pessoa no Hub cadastra, edita, remove e vê o endereço real.'),
+        ])),
+        campo('en', 'Endereço para quem não gerencia', selecao(c.endereco, (v) => setC({ ...c, endereco: v }), [['mascarado', 'Mascarado (xxx.xxx.xxx.xxx:4016)'], ['oculto', 'Oculto (não aparece)']], { maxWidth: 360 }),
+          'As telas sempre abrem pelo proxy do Hub: o navegador nunca recebe o endereço real de quem não gerencia.'),
+        caixa(c.novaAba, (v) => setC({ ...c, novaAba: v }), 'Quem não gerencia pode abrir a automação em nova aba (pelo proxy, sem o endereço real)', { key: 'na' }),
+      ], rodape(acesso.salvar, acesso.salvando, acesso.erro, acesso.ok)),
       e(ListaAutomacoes, { key: 'lista' }),
     ]);
   }
@@ -237,13 +254,14 @@
     const termo = busca.trim().toLowerCase();
     const visiveis = grupos.filter((g) => !termo || g.label.toLowerCase().includes(termo));
     const alternar = (id) => setMarcados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-    return e('div', { className: 'admin-editor-grupos', style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' } }, [
+    return e('div', { className: 'admin-editor-grupos' }, [
       e('input', { key: 'b', className: 'field-input', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar grupo', style: S().input }),
-      e('div', { key: 'l', style: { maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 } },
-        visiveis.map((g) => caixa(marcados.has(g.id), () => alternar(g.id), g.label, { key: g.id }))),
-      dica(marcados.size ? `${marcados.size === 1 ? '1 grupo marcado' : marcados.size + ' grupos marcados'}: só eles (e os administradores) veem.` : 'Nenhum grupo marcado: todos veem.'),
-      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      botao(salvando ? 'Salvando…' : 'Salvar grupos', salvar, 'prim', { alignSelf: 'flex-start', disabled: salvando, opacity: salvando ? 0.7 : 1 }),
+      e('div', { key: 'l', className: 'admin-grupos-lista' },
+        visiveis.map((g) => e('label', { key: g.id, className: 'admin-marcar' }, [e('input', { key: 'c', type: 'checkbox', checked: marcados.has(g.id), onChange: () => alternar(g.id) }), e('span', { key: 't' }, g.label)]))),
+      e('div', { key: 'r', className: 'admin-rodape-conteudo' }, [
+        erro ? e('span', { key: 'e', className: 'admin-erro' }, erro) : dica(marcados.size ? `${marcados.size === 1 ? '1 grupo marcado' : marcados.size + ' grupos marcados'}: só eles (e os administradores) veem.` : 'Nenhum grupo marcado: todos veem.'),
+        botao(salvando ? 'Salvando…' : 'Salvar grupos', salvar, 'prim', { key: 's', disabled: salvando, opacity: salvando ? 0.7 : 1 }),
+      ]),
     ]);
   }
 
@@ -285,26 +303,25 @@
     const enderecoDe = (a) => (urls[a.id] || '').replace(/^https?:\/\//, '') || a.endereco;
     const nomeGrupo = (id) => ((gruposGlpi || []).find((g) => g.id === id) || { label: `Grupo ${id}` }).label;
     const quemVe = (a) => ((a.grupos || []).length ? 'Grupos: ' + a.grupos.map(nomeGrupo).join(', ') : 'Todos veem');
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } }, [
-      e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 } }, [
-        rotulo('Automações cadastradas'),
-        botao('Nova automação', () => painel().nova && painel().nova(), 'prim', { key: 'n', padding: '6px 12px' }),
-      ]),
-      dica('Editar e Remover usam o mesmo formulário do painel. Em Grupos, escolha os grupos do GLPI que veem a automação (nenhum = todos veem; quem está fora nem vê o card nem abre a tela). Use as setas para mudar a posição; a nova ordem aparece para todos assim que você salvar.'),
-      e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, !lista ? [dica('Carregando…')] : lista.map((a, i) =>
-        e('div', { key: a.id, className: 'admin-automacao', style: { border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', background: 'var(--bg)' } }, [
-          e('div', { key: 'linha', style: { display: 'flex', alignItems: 'center', gap: 10 } }, [
-            e('span', { key: 'p', style: { width: 22, color: 'var(--muted)', fontSize: 12 } }, i + 1),
-            e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
-              e('div', { key: 't', style: { fontSize: 13 } }, a.name),
-              e('div', { key: 'u', style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, enderecoDe(a)),
-              e('div', { key: 'g', className: 'admin-grupos-resumo', style: { fontSize: 11, color: 'var(--muted)' } }, quemVe(a)),
+    return secao('lista', 'Automações cadastradas', 'Editar e Remover usam o mesmo formulário do painel. Em Grupos, escolha quem vê cada automação (nenhum grupo = todos veem). As setas mudam a posição para todos depois de salvar.', [
+      e('div', { key: 'l', className: 'admin-lista' }, !lista ? [dica('Carregando…')] : lista.map((a, i) =>
+        e('div', { key: a.id, className: 'admin-automacao admin-item-bloco' }, [
+          e('div', { key: 'linha', className: 'admin-item' }, [
+            e('span', { key: 'p', className: 'admin-posicao' }, i + 1),
+            e('div', { key: 'n', className: 'admin-item-texto' }, [
+              e('strong', { key: 't' }, a.name),
+              e('span', { key: 'u', className: 'admin-mono' }, enderecoDe(a)),
+              e('span', { key: 'g', className: 'admin-grupos-resumo' }, quemVe(a)),
             ]),
-            botao('Grupos', () => setEditando(editando === a.id ? null : a.id), 'sec', { key: 'gr', padding: '3px 9px' }),
-            botao('Editar', () => painel().editar && painel().editar(a.id), 'sec', { key: 'ed', padding: '3px 9px' }),
-            botao('Remover', () => painel().remover && painel().remover(a.id), 'sec', { key: 'rm', padding: '3px 9px', color: 'var(--error)' }),
-            botao('↑', () => mover(i, -1), 'sec', { key: 'up', padding: '3px 9px', disabled: i === 0, opacity: i === 0 ? 0.4 : 1 }),
-            botao('↓', () => mover(i, 1), 'sec', { key: 'dn', padding: '3px 9px', disabled: i === lista.length - 1, opacity: i === lista.length - 1 ? 0.4 : 1 }),
+            e('div', { key: 'acoes', className: 'admin-item-acoes' }, [
+              botao('Grupos', () => setEditando(editando === a.id ? null : a.id), 'sec', { key: 'gr', padding: '4px 10px' }),
+              botao('Editar', () => painel().editar && painel().editar(a.id), 'sec', { key: 'ed', padding: '4px 10px' }),
+              botao('Remover', () => painel().remover && painel().remover(a.id), 'perigo', { key: 'rm', padding: '4px 10px' }),
+              e('span', { key: 'ordem', className: 'admin-ordem' }, [
+                e('button', { key: 'up', type: 'button', className: 'admin-seta', 'aria-label': `Subir ${a.name}`, disabled: i === 0, onClick: () => mover(i, -1) }, '↑'),
+                e('button', { key: 'dn', type: 'button', className: 'admin-seta', 'aria-label': `Descer ${a.name}`, disabled: i === lista.length - 1, onClick: () => mover(i, 1) }, '↓'),
+              ]),
+            ]),
           ]),
           editando === a.id ? e(EditorGrupos, {
             key: 'ed',
@@ -316,8 +333,8 @@
             },
           }) : null,
         ]))),
-      lista && lista.length ? rodape(salvar, salvando, erro, ok) : null,
-    ]);
+    ], lista && lista.length ? rodape(salvar, salvando, erro, ok, 'Salvar ordem') : null,
+    botao('Nova automação', () => painel().nova && painel().nova(), 'prim', { key: 'n', padding: '6px 12px' }));
   }
 
   // ---------- aba: WhatsApp ----------
@@ -354,99 +371,79 @@
     }, []);
     const campoTexto = (valor, onChange, placeholder, extra = {}) => e('input', { className: 'field-input', value: valor || '', onChange: (ev) => onChange(ev.target.value), placeholder, style: { ...S().input, ...extra } });
 
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      e('div', { key: 'aviso', style: { background: 'var(--accent-soft, rgba(22,163,74,0.08))', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' } },
-        'Fluxo: o robô lê a mensagem no grupo, identifica quem pediu (pelo telefone vinculado a um usuário do GLPI) e o tipo de solicitação, abre o chamado e reage na mensagem: a fazer, em andamento, concluído ou erro. A conexão do chip é feita na aba "Conexão e pedidos".'),
-      e('div', { key: 'geral' }, [
-        caixa(w.ativo, (v) => mudar((x) => ((x.ativo = v), x)), 'Automação do WhatsApp ligada', { fontWeight: 600 }),
-        e('div', { style: { marginTop: 8 } }, [rotulo('Modo de funcionamento'), selecao(w.modo, (v) => mudar((x) => ((x.modo = v), x)), (opcoes.modosWhatsapp || ['observacao', 'ativo']).map((m) => [m, { observacao: 'Observação', ativo: 'Ativo' }[m] || m]), { marginTop: 4 }), dica(NOTAS_MODO[w.modo] || '')]),
-        e('div', { style: { marginTop: 8 } }, [rotulo('Como o chamado é aberto'), selecao(w.operacao, (v) => mudar((x) => ((x.operacao = v), x)), [['fila_automatico', 'Pela fila do Chamados automático'], ['so_abrir', 'Só abrir o chamado, 24 horas (token de serviço)']], { marginTop: 4 }), dica(NOTAS_OPERACAO[w.operacao] || ''),
-          dica('Totalmente automático no servidor (abrir e executar sem ninguém com o navegador aberto) ainda não está disponível: exigiria guardar logins do SGA e do PowerCRM no servidor.'),
-          w.operacao === 'so_abrir' && painel && painel.disponivel && painel.disponivel.so_abrir === false ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12.5, marginTop: 4 } }, 'O token de serviço do GLPI não está configurado no servidor: os pedidos vão dar erro até configurar.') : null]),
-        e('div', { style: { marginTop: 8 } }, [rotulo('Texto da resposta no grupo quando o chamado for solucionado'), campoTexto(w.respostaModelo, (v) => mudar((x) => ((x.respostaModelo = v), x)), 'Chamado {chamado} concluído.'), dica('Use {chamado}, {solicitante} e {tipo}. Só responde nos grupos com "Responder no grupo" marcado.')]),
+    const chips = (lista, aoAlternar, classe) => e('div', { className: 'admin-chips' }, tipos.map((t) => {
+      const sel = lista.includes(t.chave);
+      return e('button', { key: t.chave, type: 'button', className: classe, 'aria-pressed': sel, style: S().chip(sel), onClick: () => aoAlternar(t.chave, sel) }, t.nome);
+    }));
+    return e('div', { className: 'admin-pilha' }, [
+      e('div', { key: 'aviso', className: 'admin-aviso info' },
+        'Fluxo: o robô lê a mensagem no grupo, identifica quem pediu (pelo telefone vinculado a um usuário do GLPI) e o tipo de solicitação, abre o chamado e reage na mensagem: a fazer, em andamento, concluído ou erro. A conexão do chip fica em "Conexão e pedidos".'),
+      secao('geral', 'Funcionamento', 'Liga o robô e define como o chamado é aberto.', [
+        caixa(w.ativo, (v) => mudar((x) => ((x.ativo = v), x)), 'Automação do WhatsApp ligada', { key: 'at', fontWeight: 600 }),
+        e('div', { key: 'l', className: 'admin-linha-campos' }, [
+          campo('m', 'Modo de funcionamento', selecao(w.modo, (v) => mudar((x) => ((x.modo = v), x)), (opcoes.modosWhatsapp || ['observacao', 'ativo']).map((m) => [m, { observacao: 'Observação', ativo: 'Ativo' }[m] || m])), NOTAS_MODO[w.modo] || ''),
+          campo('o', 'Como o chamado é aberto', selecao(w.operacao, (v) => mudar((x) => ((x.operacao = v), x)), [['fila_automatico', 'Pela fila do Chamados automático'], ['so_abrir', 'Só abrir o chamado, 24 horas (token de serviço)']]), NOTAS_OPERACAO[w.operacao] || ''),
+        ]),
+        w.operacao === 'so_abrir' && painel && painel.disponivel && painel.disponivel.so_abrir === false ? e('div', { key: 'av', className: 'admin-aviso alerta' }, 'O token de serviço do GLPI não está configurado no servidor: os pedidos vão dar erro até configurar.') : null,
+        dica('Totalmente automático no servidor (abrir e executar sem ninguém com o navegador aberto) ainda não está disponível: exigiria guardar logins do SGA e do PowerCRM no servidor.'),
+        campo('r', 'Resposta no grupo quando o chamado for solucionado', campoTexto(w.respostaModelo, (v) => mudar((x) => ((x.respostaModelo = v), x)), 'Chamado {chamado} concluído.'), 'Use {chamado}, {solicitante} e {tipo}. Só responde nos grupos com "Responder no grupo" ligado.'),
       ]),
-      e('div', { key: 'numeros' }, [
-        rotulo('Números (chips) do WhatsApp'),
-        e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 } }, w.numeros.map((n, i) =>
-          e('div', { key: n.id, className: 'wa-numero', style: { display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 8, alignItems: 'center' } }, [
+      secao('numeros', 'Números (chips)', 'Os números do WhatsApp que o robô usa.', [
+        e('div', { key: 'l', className: 'admin-lista' }, w.numeros.length ? w.numeros.map((n, i) =>
+          e('div', { key: n.id, className: 'wa-numero admin-grade-numero' }, [
             campoTexto(n.rotulo, (v) => mudar((x) => ((x.numeros[i].rotulo = v), x)), 'Nome (ex.: Chip dedicado)'),
             campoTexto(n.telefone, (v) => mudar((x) => ((x.numeros[i].telefone = v), x)), 'Telefone com DDI e DDD (pode ficar vazio)'),
-            caixa(n.ativo !== false, (v) => mudar((x) => ((x.numeros[i].ativo = v), x)), 'Ativo'),
-            botao('Remover', () => mudar((x) => ((x.numeros = x.numeros.filter((_, j) => j !== i)), x.grupos.forEach((g) => { if (g.numeroId === n.id) g.numeroId = ''; }), x)), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
-          ]))),
-        botao('+ Adicionar número', () => mudar((x) => (x.numeros.push({ id: proximoId('n', x.numeros), rotulo: '', telefone: '', ativo: true }), x)), 'sec', { marginTop: 6, alignSelf: 'flex-start' }),
+            caixa(n.ativo !== false, (v) => mudar((x) => ((x.numeros[i].ativo = v), x)), 'Ativo', { key: 'a' }),
+            botao('Remover', () => mudar((x) => ((x.numeros = x.numeros.filter((_, j) => j !== i)), x.grupos.forEach((g) => { if (g.numeroId === n.id) g.numeroId = ''; }), x)), 'perigo', { key: 'r', padding: '5px 10px' }),
+          ])) : [dica('Nenhum número cadastrado.')]),
+        botao('+ Adicionar número', () => mudar((x) => (x.numeros.push({ id: proximoId('n', x.numeros), rotulo: '', telefone: '', ativo: true }), x)), 'sec', { key: 'add', alignSelf: 'flex-start' }),
       ]),
       e('datalist', { key: 'dl', id: 'wa-grupos-visiveis' }, gruposVisiveis.map((gv) => e('option', { key: gv.jid, value: gv.nome }))),
-      e('div', { key: 'grupos' }, [
-        rotulo('Grupos atendidos'),
-        dica('Para cada grupo: qual número responde nele e quais tipos de solicitação o robô pode tratar.'),
-        e('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 } }, w.grupos.map((g, i) =>
-          e('div', { key: g.id, className: 'wa-grupo', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
-            e('div', { key: 'a', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } }, [
-              e('input', { className: 'field-input', list: 'wa-grupos-visiveis', value: g.nome || '', placeholder: 'Nome do grupo (como aparece no WhatsApp)', style: S().input, onChange: (ev) => { const v = ev.target.value; mudar((x) => { x.grupos[i].nome = v; const achado = gruposVisiveis.find((gv) => gv.nome === v); if (achado) x.grupos[i].jid = achado.jid; return x; }); } }),
-              campoTexto(g.jid, (v) => mudar((x) => ((x.grupos[i].jid = v), x)), 'Identificador do grupo (opcional, ...@g.us)'),
+      secao('grupos', 'Grupos atendidos', 'Para cada grupo: qual número responde, a categoria do chamado e os tipos de solicitação que o robô pode tratar.', [
+        ...(w.grupos.length ? w.grupos.map((g, i) =>
+          e('div', { key: g.id, className: 'wa-grupo admin-subcartao' }, [
+            e('div', { key: 'a', className: 'admin-linha-campos' }, [
+              campo('n', 'Nome do grupo', e('input', { className: 'field-input', list: 'wa-grupos-visiveis', value: g.nome || '', placeholder: 'Como aparece no WhatsApp', style: S().input, onChange: (ev) => { const v = ev.target.value; mudar((x) => { x.grupos[i].nome = v; const achado = gruposVisiveis.find((gv) => gv.nome === v); if (achado) x.grupos[i].jid = achado.jid; return x; }); } })),
+              campo('j', 'Identificador (opcional)', campoTexto(g.jid, (v) => mudar((x) => ((x.grupos[i].jid = v), x)), 'termina em @g.us')),
             ]),
-            e('div', { key: 'b', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-              e('span', { key: 'l', style: { fontSize: 12.5, color: 'var(--muted)' } }, 'Número que responde:'),
-              selecao(g.numeroId || '', (v) => mudar((x) => ((x.grupos[i].numeroId = v), x)), [['', 'Nenhum definido'], ...w.numeros.map((n) => [n.id, n.rotulo || n.id])], { width: 'auto', minWidth: 190 }),
-              caixa(g.ativo !== false, (v) => mudar((x) => ((x.grupos[i].ativo = v), x)), 'Grupo ativo'),
-              caixa(g.responder, (v) => mudar((x) => ((x.grupos[i].responder = v), x)), 'Responder no grupo'),
-              caixa(g.reagir !== false, (v) => mudar((x) => ((x.grupos[i].reagir = v), x)), 'Reagir às mensagens'),
+            e('div', { key: 'b', className: 'admin-linha-campos' }, [
+              campo('nr', 'Número que responde', selecao(g.numeroId || '', (v) => mudar((x) => ((x.grupos[i].numeroId = v), x)), [['', 'Nenhum definido'], ...w.numeros.map((n) => [n.id, n.rotulo || n.id])])),
+              campo('ct', 'Categoria do chamado no GLPI', selecao(g.categoriaId ? String(g.categoriaId) : '', (v) => mudar((x) => { const c = categorias.find((k) => String(k.id) === v); x.grupos[i].categoriaId = v ? Number(v) : null; x.grupos[i].categoriaLabel = c ? c.label : ''; return x; }),
+                [['', 'Nenhuma (o chamado abre sem categoria)'], ...(g.categoriaId && !categorias.some((k) => k.id === g.categoriaId) ? [[String(g.categoriaId), g.categoriaLabel || String(g.categoriaId)]] : []), ...categorias.map((k) => [String(k.id), k.label])])),
             ]),
-            e('div', { key: 'cat', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-              e('span', { key: 'l', style: { fontSize: 12.5, color: 'var(--muted)' } }, 'Categoria do chamado no GLPI:'),
-              selecao(g.categoriaId ? String(g.categoriaId) : '', (v) => mudar((x) => { const c = categorias.find((k) => String(k.id) === v); x.grupos[i].categoriaId = v ? Number(v) : null; x.grupos[i].categoriaLabel = c ? c.label : ''; return x; }),
-                [['', 'Nenhuma (o chamado abre sem categoria)'], ...(g.categoriaId && !categorias.some((k) => k.id === g.categoriaId) ? [[String(g.categoriaId), g.categoriaLabel || String(g.categoriaId)]] : []), ...categorias.map((k) => [String(k.id), k.label])], { width: 'auto', minWidth: 260, maxWidth: '100%' }),
+            e('div', { key: 'c', className: 'admin-chaves' }, [
+              caixa(g.ativo !== false, (v) => mudar((x) => ((x.grupos[i].ativo = v), x)), 'Grupo ativo', { key: 'a' }),
+              caixa(g.responder, (v) => mudar((x) => ((x.grupos[i].responder = v), x)), 'Responder no grupo', { key: 'r' }),
+              caixa(g.reagir !== false, (v) => mudar((x) => ((x.grupos[i].reagir = v), x)), 'Reagir às mensagens', { key: 'g' }),
             ]),
-            e('div', { key: 'c' }, [
-              e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Tipos de solicitação deste grupo:'),
-              e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, tipos.map((t) => {
-                const sel = g.tipos.includes(t.chave);
-                return e('button', { key: t.chave, type: 'button', className: 'wa-tipo', style: S().chip(sel), onClick: () => mudar((x) => ((x.grupos[i].tipos = sel ? x.grupos[i].tipos.filter((k) => k !== t.chave) : [...x.grupos[i].tipos, t.chave]), x)) }, t.nome);
-              })),
-            ]),
-            botao('Remover grupo', () => mudar((x) => ((x.grupos = x.grupos.filter((_, j) => j !== i)), x)), 'sec', { color: 'var(--error)', alignSelf: 'flex-start', padding: '5px 10px' }),
-          ]))),
-        botao('+ Adicionar grupo', () => mudar((x) => (x.grupos.push({ id: proximoId('g', x.grupos), nome: '', jid: '', categoriaId: null, categoriaLabel: '', numeroId: x.numeros[0] ? x.numeros[0].id : '', tipos: [], ativo: true, responder: false, reagir: true }), x)), 'sec', { marginTop: 8, alignSelf: 'flex-start' }),
+            campo('t', 'Tipos de solicitação deste grupo', chips(g.tipos, (k, sel) => mudar((x) => ((x.grupos[i].tipos = sel ? x.grupos[i].tipos.filter((q) => q !== k) : [...x.grupos[i].tipos, k]), x)), 'wa-tipo')),
+            botao('Remover grupo', () => mudar((x) => ((x.grupos = x.grupos.filter((_, j) => j !== i)), x)), 'perigo', { key: 'rm', alignSelf: 'flex-start', padding: '5px 10px' }),
+          ])) : [dica('Nenhum grupo cadastrado.')]),
+        botao('+ Adicionar grupo', () => mudar((x) => (x.grupos.push({ id: proximoId('g', x.grupos), nome: '', jid: '', categoriaId: null, categoriaLabel: '', numeroId: x.numeros[0] ? x.numeros[0].id : '', tipos: [], ativo: true, responder: false, reagir: true }), x)), 'sec', { key: 'add', alignSelf: 'flex-start' }),
       ]),
-      e('div', { key: 'privado', className: 'wa-privado', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
-        rotulo('Conversa privada com o robô'),
-        dica('A pessoa manda o pedido direto para o número do chip. A primeira linha diz a categoria do GLPI, por exemplo "Categoria Ancore". Só atende quem tem vínculo (aba Vínculos do WhatsApp).'),
-        e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' } }, [
-          caixa(w.privado.ativo, (v) => mudar((x) => ((x.privado.ativo = v), x)), 'Atender no privado', { fontWeight: 600 }),
-          caixa(w.privado.responder, (v) => mudar((x) => ((x.privado.responder = v), x)), 'Responder na conversa'),
-          caixa(w.privado.reagir !== false, (v) => mudar((x) => ((x.privado.reagir = v), x)), 'Reagir às mensagens'),
-          caixa(w.privado.explicarDuvida !== false, (v) => mudar((x) => ((x.privado.explicarDuvida = v), x)), 'Explicar na conversa quando faltar algo'),
+      secao('privado', 'Conversa privada com o robô', 'A pessoa manda o pedido direto para o número do chip. A primeira linha diz a categoria do GLPI, por exemplo "Categoria Ancore". Só atende quem tem vínculo.', [
+        e('div', { key: 'a', className: 'admin-chaves wa-privado' }, [
+          caixa(w.privado.ativo, (v) => mudar((x) => ((x.privado.ativo = v), x)), 'Atender no privado', { key: 'at', fontWeight: 600 }),
+          caixa(w.privado.responder, (v) => mudar((x) => ((x.privado.responder = v), x)), 'Responder na conversa', { key: 'r' }),
+          caixa(w.privado.reagir !== false, (v) => mudar((x) => ((x.privado.reagir = v), x)), 'Reagir às mensagens', { key: 'g' }),
+          caixa(w.privado.explicarDuvida !== false, (v) => mudar((x) => ((x.privado.explicarDuvida = v), x)), 'Explicar na conversa quando faltar algo', { key: 'd' }),
         ]),
-        e('div', { key: 'tipos' }, [
-          e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Tipos de solicitação atendidos no privado (nenhum marcado = todos):'),
-          e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, tipos.map((t) => {
-            const sel = w.privado.tipos.includes(t.chave);
-            return e('button', { key: t.chave, type: 'button', className: 'wa-tipo wa-tipo-privado', style: S().chip(sel), onClick: () => mudar((x) => ((x.privado.tipos = sel ? x.privado.tipos.filter((k) => k !== t.chave) : [...x.privado.tipos, t.chave]), x)) }, t.nome);
-          })),
-        ]),
-        e('div', { key: 'cats' }, [
-          e('div', { style: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } }, 'Categorias que a pessoa pode escrever na mensagem (o nome pode vir sem espaço ou acento):'),
-          e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, w.privado.categorias.map((c, i) =>
-            e('div', { key: i, className: 'wa-categoria', style: { display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(180px, 1.6fr) auto', gap: 8, alignItems: 'center' } }, [
-              campoTexto(c.apelido, (v) => mudar((x) => ((x.privado.categorias[i].apelido = v), x)), 'Nome (ex.: Ancore)'),
-              selecao(c.categoriaId ? String(c.categoriaId) : '', (v) => mudar((x) => { const k = categorias.find((q) => String(q.id) === v); x.privado.categorias[i].categoriaId = v ? Number(v) : null; x.privado.categorias[i].categoriaLabel = k ? k.label : ''; return x; }),
-                [['', 'Escolha a categoria do GLPI'], ...(c.categoriaId && !categorias.some((q) => q.id === c.categoriaId) ? [[String(c.categoriaId), c.categoriaLabel || String(c.categoriaId)]] : []), ...categorias.map((q) => [String(q.id), q.label])]),
-              botao('Remover', () => mudar((x) => ((x.privado.categorias = x.privado.categorias.filter((_, j) => j !== i)), x)), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
-            ]))),
-          botao('+ Adicionar categoria', () => mudar((x) => (x.privado.categorias.push({ apelido: '', categoriaId: null, categoriaLabel: '' }), x)), 'sec', { marginTop: 6, alignSelf: 'flex-start' }),
-        ]),
+        campo('tipos', 'Tipos atendidos no privado (nenhum marcado = todos)', chips(w.privado.tipos, (k, sel) => mudar((x) => ((x.privado.tipos = sel ? x.privado.tipos.filter((q) => q !== k) : [...x.privado.tipos, k]), x)), 'wa-tipo wa-tipo-privado')),
+        campo('cats', 'Categorias que a pessoa pode escrever (o nome pode vir sem espaço ou acento)', e('div', { className: 'admin-lista' }, w.privado.categorias.map((c, i) =>
+          e('div', { key: i, className: 'wa-categoria admin-grade-categoria' }, [
+            campoTexto(c.apelido, (v) => mudar((x) => ((x.privado.categorias[i].apelido = v), x)), 'Nome (ex.: Ancore)'),
+            selecao(c.categoriaId ? String(c.categoriaId) : '', (v) => mudar((x) => { const k = categorias.find((q) => String(q.id) === v); x.privado.categorias[i].categoriaId = v ? Number(v) : null; x.privado.categorias[i].categoriaLabel = k ? k.label : ''; return x; }),
+              [['', 'Escolha a categoria do GLPI'], ...(c.categoriaId && !categorias.some((q) => q.id === c.categoriaId) ? [[String(c.categoriaId), c.categoriaLabel || String(c.categoriaId)]] : []), ...categorias.map((q) => [String(q.id), q.label])]),
+            botao('Remover', () => mudar((x) => ((x.privado.categorias = x.privado.categorias.filter((_, j) => j !== i)), x)), 'perigo', { key: 'r', padding: '5px 10px' }),
+          ])))),
+        botao('+ Adicionar categoria', () => mudar((x) => (x.privado.categorias.push({ apelido: '', categoriaId: null, categoriaLabel: '' }), x)), 'sec', { key: 'add', alignSelf: 'flex-start' }),
       ]),
-      e('div', { key: 'rem' }, [
-        rotulo('Quem pode pedir (telefones autorizados)'),
-        e('textarea', { className: 'field-input wa-remetentes', value: w.remetentesTexto, onChange: (ev) => mudar((x) => ((x.remetentesTexto = ev.target.value), x)), rows: 3, placeholder: 'Um telefone por linha, com DDI e DDD. Vazio = qualquer pessoa dos grupos acima.', style: { ...S().input, resize: 'vertical' } }),
+      secao('rem', 'Quem pode pedir e reações', null, [
+        campo('t', 'Telefones autorizados', e('textarea', { className: 'field-input wa-remetentes', value: w.remetentesTexto, onChange: (ev) => mudar((x) => ((x.remetentesTexto = ev.target.value), x)), rows: 3, placeholder: 'Um telefone por linha, com DDI e DDD', style: { ...S().input, resize: 'vertical' } }), 'Vazio = qualquer pessoa dos grupos acima.'),
+        campo('r', 'Reações usadas nas mensagens', e('div', { className: 'admin-grade-reacoes' }, [['aFazer', 'A fazer'], ['andamento', 'Em andamento'], ['sucesso', 'Deu certo'], ['erro', 'Deu erro'], ['duvida', 'Faltou dado']].map(([k, t]) =>
+          e('div', { key: k }, [e('div', { key: 'd', className: 'admin-dica' }, t), campoTexto(w.reacoes[k], (v) => mudar((x) => ((x.reacoes[k] = v), x)), '', { textAlign: 'center' })])))),
       ]),
-      e('div', { key: 'reacoes' }, [
-        rotulo('Reações usadas nas mensagens'),
-        e('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginTop: 4 } }, [['aFazer', 'A fazer (pedido recebido)'], ['andamento', 'Em andamento'], ['sucesso', 'Deu certo'], ['erro', 'Deu erro'], ['duvida', 'Faltou dado']].map(([k, t]) =>
-          e('div', { key: k }, [e('div', { style: { fontSize: 11.5, color: 'var(--muted)', marginBottom: 3 } }, t), campoTexto(w.reacoes[k], (v) => mudar((x) => ((x.reacoes[k] = v), x)), '', { textAlign: 'center' })]))),
-      ]),
-      rodape(salvar, salvando, erro, ok),
+      e('div', { key: 'salvar', className: 'admin-barra-salvar' }, rodape(salvar, salvando, erro, ok, 'Salvar WhatsApp', 'Salva todas as seções desta página.')),
     ]);
   }
 
@@ -512,29 +509,29 @@
         setErro(err.message);
       }
     }
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      dica('Cada telefone que pede no grupo precisa estar ligado a um usuário do GLPI: é ele que vai como requerente do chamado aberto pelo robô. Telefone sem vínculo recebe só a reação de dúvida.'),
-      e('div', { key: 'novo', style: { display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(180px, 1.4fr) auto', gap: 8, alignItems: 'center' } }, [
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro || erroPainel, info),
+      secao('novo', 'Novo vínculo', 'Cada telefone que pede no grupo precisa estar ligado a um usuário do GLPI: é ele que vai como requerente do chamado. Telefone sem vínculo recebe só a reação de dúvida.', [e('div', { key: 'f', className: 'admin-grade-vinculo' }, [
         e('input', { key: 't', className: 'field-input wa-vinculo-telefone', value: telefone, onChange: (ev) => setTelefone(ev.target.value), placeholder: 'Telefone com DDD', style: S().input }),
         selecao(escolhido, setEscolhido, [['', 'Escolha o usuário do GLPI'], ...usuarios.map((u) => [String(u.id), u.label])]),
-        botao('Salvar vínculo', adicionar, 'prim', { padding: '8px 14px' }),
-      ]),
-      erro || erroPainel ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro || erroPainel) : null,
-      info ? e('div', { key: 'i', className: 'admin-ok', style: { color: 'var(--success, #16a34a)', fontSize: 12.5 } }, info) : null,
-      !painel ? dica('Carregando…') : painel.vinculos.length === 0 ? dica('Nenhum vínculo ainda.') : e('div', { key: 'lista', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.vinculos.map((v) =>
-        e('div', { key: v.telefone, className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 13 } }, [
-          e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
-            e('div', { key: 'a', style: { fontWeight: 600 } }, v.nome || 'Não informado'),
-            e('div', { key: 'b', style: { color: 'var(--muted)', fontSize: 12 } }, `${v.telefone} · usuário ${v.glpiId} no GLPI`),
-          ]),
-          botao('Remover', () => remover(v), 'sec', { color: 'var(--error)', padding: '5px 10px' }),
-        ]))),
+        botao('Salvar vínculo', adicionar, 'prim', { key: 'b', padding: '8px 14px' }),
+      ])]),
+      secao('lista', 'Vínculos', painel ? `${painel.vinculos.length === 1 ? '1 telefone vinculado' : painel.vinculos.length + ' telefones vinculados'}.` : null,
+        [!painel ? dica('Carregando…') : painel.vinculos.length === 0 ? dica('Nenhum vínculo ainda.') : e('div', { key: 'lista', className: 'admin-lista' }, painel.vinculos.map((v) =>
+          e('div', { key: v.telefone, className: 'admin-item' }, [
+            e('span', { key: 'av', className: 'admin-avatar', 'aria-hidden': true }, iniciais(v.nome)),
+            e('div', { key: 'n', className: 'admin-item-texto' }, [
+              e('strong', { key: 'a' }, v.nome || 'Não informado'),
+              e('span', { key: 'b' }, `${v.telefone} · usuário ${v.glpiId} no GLPI`),
+            ]),
+            botao('Remover', () => remover(v), 'perigo', { key: 'r', padding: '5px 10px' }),
+          ])))]),
     ]);
   }
 
   function AbaConexao() {
     const { painel, erro, recarregar } = usePainelWhatsapp(8000);
-    if (erro && !painel) return e('div', { style: { color: 'var(--error)', fontSize: 13 } }, erro);
+    if (erro && !painel) return mensagem(erro);
     if (!painel) return dica('Carregando…');
     const est = painel.estado;
     const semSinal = !est.atualizadoEm || Date.now() - new Date(est.atualizadoEm).getTime() > 120000;
@@ -543,15 +540,17 @@
         : est.conectado ? `Conectado${est.numero ? ` ao número ${est.numero}` : ''}.`
           : 'Desconectado: leia o QR code abaixo com o WhatsApp do chip dedicado (Aparelhos conectados).';
     const cor = est.botConfigurado && !semSinal && est.conectado ? 'var(--success, #16a34a)' : 'var(--warn)';
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      e('div', { key: 'sit', className: 'wa-situacao', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 13 } }, [
+    return e('div', { className: 'admin-pilha' }, [
+      secao('situacao', 'Situação do robô', null, [
+      e('div', { key: 'sit', className: 'wa-situacao', style: { display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 } }, [
         e('span', { key: 'p', style: { width: 9, height: 9, borderRadius: '50%', background: cor, flexShrink: 0 } }),
         e('span', { key: 't', style: { flex: 1 } }, situacao),
-        botao('Atualizar', recarregar, 'sec', { padding: '5px 10px' }),
+        botao('Atualizar', recarregar, 'sec', { key: 'b', padding: '5px 10px' }),
       ]),
       est.qr && !est.conectado && !semSinal ? e('img', { key: 'qr', className: 'wa-qr', src: est.qr, alt: 'QR code para conectar o WhatsApp', style: { width: 240, height: 240, background: '#fff', padding: 8, borderRadius: 10, border: '1px solid var(--border)', alignSelf: 'flex-start' } }) : null,
       painel.disponivel && painel.disponivel.so_abrir === false ? dica('O modo "só abrir o chamado" precisa do token de um usuário de serviço do GLPI no servidor (HUB_GLPI_TOKEN_SERVICO). Hoje não está configurado.') : null,
-      rotulo('O que cada reação significa'),
+      ]),
+      secao('legenda', 'O que cada reação significa', null, [
       e('div', { key: 'legenda', className: 'wa-legenda', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 6, fontSize: 12.5 } }, [
         ['aFazer', 'Na fila: espera alguém abrir o chamado.'],
         ['andamento', 'Chamado aberto, em andamento.'],
@@ -562,7 +561,8 @@
         e('span', { key: 'e', style: { fontSize: 16, lineHeight: 1.2 } }, (painel.reacoes && painel.reacoes[k]) || ''),
         e('span', { key: 't', style: { color: 'var(--muted)' } }, t),
       ]))),
-      rotulo('Mensagens recebidas (últimas 100, inclusive as ignoradas)'),
+      ]),
+      secao('msgs', 'Mensagens recebidas', 'As últimas 100, inclusive as ignoradas, com o que a IA local achou de cada uma.', [
       !painel.mensagens || painel.mensagens.length === 0 ? dica('Nenhuma mensagem chegou ao Hub desde a última vez que ele reiniciou.') : e('div', { key: 'msgs', className: 'wa-mensagens', style: { display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' } }, painel.mensagens.map((m, i) =>
         e('div', { key: i, className: 'wa-mensagem', style: { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 3 } }, [
           e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
@@ -578,7 +578,8 @@
             m.ia.resposta ? e('div', { key: 'r', style: { color: 'var(--text)' } }, `Resposta da IA: ${m.ia.resposta}`) : null,
           ]) : null,
         ]))),
-      rotulo('Pedidos recentes'),
+      ]),
+      secao('ped', 'Pedidos recentes', null, [
       painel.pedidos.length === 0 ? dica('Nenhum pedido ainda.') : e('div', { key: 'ped', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.pedidos.map((p) =>
         e('div', { key: p.id, className: 'wa-pedido', style: { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 3 } }, [
           e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
@@ -590,6 +591,7 @@
           e('div', { key: 'x', style: { color: 'var(--muted)' } }, p.texto),
           p.erro ? e('div', { key: 'r', style: { color: 'var(--error)' } }, p.erro) : null,
         ]))),
+      ]),
     ]);
   }
 
@@ -611,7 +613,7 @@
     'automacao.ordem': 'Mudou a ordem das automações',
     'automacao.grupos': 'Mudou os grupos que veem a automação',
   };
-  const SECOES_HISTORICO = { cofre: 'Cofre', automacoes: 'Automações', whatsapp: 'WhatsApp' };
+  const SECOES_HISTORICO = { cofre: 'Cofre', automacoes: 'Automações', whatsapp: 'WhatsApp', ia: 'IA local' };
   const curto = (v) => {
     const t = v === undefined || v === null || v === '' ? 'Não informado' : typeof v === 'string' ? v : JSON.stringify(v);
     return t.length > 120 ? t.slice(0, 117) + '...' : t;
@@ -641,22 +643,23 @@
     };
     useEffect(() => { carregar(); }, []);
     const quando = (q) => new Date(q).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } }, [
-      dica('Tudo o que muda pela administração e pelo cadastro de automações: quem fez, quando e o que estava antes e depois.'),
-      erro ? e('div', { key: 'e', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      !itens ? dica('Carregando…') : !itens.length ? dica('Sem alterações registradas.') : e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, itens.map((h) =>
-        e('div', { key: h.id, className: 'admin-historico', style: { border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 4 } }, [
-          e('div', { key: 'c', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline', fontSize: 13 } }, [
-            e('span', { key: 'q', style: { color: 'var(--muted)', fontSize: 12, fontFamily: 'var(--font-mono)' } }, quando(h.quando)),
-            e('strong', { key: 'p' }, h.quem || 'Sem identificação'),
-            e('span', { key: 'a' }, ACOES_HISTORICO[h.acao] || h.acao),
-            h.alvo ? e('span', { key: 'al', style: { color: 'var(--muted)' } }, SECOES_HISTORICO[h.alvo] || h.alvo) : null,
-          ]),
-          ...diferencas(h.antes, h.depois).slice(0, 12).map((d) =>
-            e('div', { key: d.campo, style: { fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflowWrap: 'anywhere' } },
-              d.campo + ': ' + (d.antes === null ? '' : d.antes + ' → ') + (d.depois === null ? 'removido' : d.depois))),
-        ]))),
-      itens && itens.length && !fim ? botao('Carregar mais', () => carregar(itens[itens.length - 1].id), 'sec', { alignSelf: 'flex-start' }) : null,
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro),
+      secao('h', 'Alterações', 'Quem fez, quando e o que estava antes e depois. As mais recentes primeiro.', [
+        !itens ? dica('Carregando…') : !itens.length ? dica('Sem alterações registradas.') : e('ol', { key: 'l', className: 'admin-linha-tempo' }, itens.map((h) =>
+          e('li', { key: h.id, className: 'admin-historico' }, [
+            e('div', { key: 'c', className: 'admin-historico-cab' }, [
+              e('strong', { key: 'p' }, h.quem || 'Sem identificação'),
+              e('span', { key: 'a' }, ACOES_HISTORICO[h.acao] || h.acao),
+              h.alvo ? selo(SECOES_HISTORICO[h.alvo] || h.alvo) : null,
+              e('time', { key: 'q', className: 'admin-historico-quando', dateTime: h.quando }, quando(h.quando)),
+            ]),
+            ...diferencas(h.antes, h.depois).slice(0, 12).map((d) =>
+              e('div', { key: d.campo, className: 'admin-mono admin-historico-dif' },
+                d.campo + ': ' + (d.antes === null ? '' : d.antes + ' → ') + (d.depois === null ? 'removido' : d.depois))),
+          ]))),
+        itens && itens.length && !fim ? botao('Carregar mais', () => carregar(itens[itens.length - 1].id), 'sec', { key: 'mais', alignSelf: 'flex-start' }) : null,
+      ]),
     ]);
   }
 
@@ -706,58 +709,57 @@
     const ia = estado && estado.ia;
     const exp = estado && estado.exportacao;
     const treino = ia && ia.treino;
-    const linha = (rotulo, valor) => e('div', { style: { display: 'flex', gap: 8, fontSize: 13 } }, [e('span', { key: 'r', style: { color: 'var(--muted)', minWidth: 190 } }, rotulo), e('span', { key: 'v' }, valor)]);
     const tipos = (opcoes && opcoes.tipos) || [];
 
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 18 } }, [
-      dica('IA local, grátis e sem internet: roda nesta rede, num container isolado, e nenhum dado sai para outra empresa. Desligada, os containers param e tudo segue só pelas regras de hoje.'),
-      erroEstado ? e('div', { key: 'ee', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erroEstado) : null,
-      estado && !estado.configurada ? e('div', { key: 'nc', style: { color: 'var(--warn)', fontSize: 12.5 } }, 'IA não configurada no servidor (rode scripts/gerar-segredo-ia.sh e suba ia-local, ia-controle, chamados-glpi e hub).') : null,
-      e('div', { key: 'est', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
-        rotulo('Situação'),
-        !estado ? dica('Carregando…') : e('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
-          linha('IA', ligada ? 'Ligada' : estado.controle && estado.controle.erro ? 'Controle fora do ar: ' + estado.controle.erro : 'Desligada'),
-          ...((estado.controle && estado.controle.containers) || []).map((x) => linha('Container ' + x.nome, x.estado === 'running' ? 'rodando' : x.estado === 'nao_criado' ? 'não criado (rode scripts/deploy.sh ia-local)' : 'parado')),
-          linha('Modelo treinado', ia ? (ia.treinado ? `${ia.exemplos} chamados, em ${new Date(ia.treinadoEm).toLocaleString('pt-BR')}` : 'Ainda não treinado') : 'Sem dados (IA desligada)'),
-          ia && ia.metricas ? linha('Acerto medido', `IA ${pctTxt(ia.metricas.acertoIa)} x regras de hoje ${pctTxt(ia.metricas.acertoRegras)} (${ia.metricas.total} chamados, validação cruzada)`) : null,
-          ia && ia.metricas && ia.metricas.confirmados ? linha('Nos chamados com resultado real', `IA ${pctTxt(ia.metricas.confirmados.acertoIa)} x regras ${pctTxt(ia.metricas.confirmados.acertoRegras)} (${ia.metricas.confirmados.total} chamados que rodaram numa automação)`) : null,
-          ia && ia.modelos ? linha('Modelos', `${ia.modelos.texto} (texto) e ${ia.modelos.embed} (vetores)`) : null,
-          exp && exp.etapa && exp.etapa !== 'pronto' && exp.rodando !== undefined ? linha('Exportação', exp.rodando ? `${exp.etapa}${exp.total ? ` (${exp.feito} de ${exp.total})` : ''}` : exp.erro ? 'Erro: ' + exp.erro : exp.etapa) : null,
-          exp && exp.resumo ? linha('Última exportação', `${exp.resumo.chamados} chamados (${exp.resumo.comHistorico} com resultado real de automação, ${exp.resumo.reabertos} reabertos)`) : null,
-          treino && treino.etapa ? linha('Treino', treino.rodando ? `${ETAPAS_TREINO[treino.etapa] || treino.etapa}${treino.total ? ` (${treino.feito} de ${treino.total})` : ''}` : treino.erro ? 'Erro: ' + treino.erro : ETAPAS_TREINO[treino.etapa] || treino.etapa) : null,
-        ]),
+    const met = ia && ia.metricas;
+    const rev = ia && ia.revisao;
+    return e('div', { className: 'admin-pilha' }, [
+      erroEstado ? mensagem(erroEstado) : null,
+      estado && !estado.configurada ? e('div', { key: 'nc', className: 'admin-aviso alerta' }, 'IA não configurada no servidor (rode scripts/gerar-segredo-ia.sh e suba ia-local, ia-controle, chamados-glpi e hub).') : null,
+      e('div', { key: 'kpis', className: 'admin-kpis' }, !estado ? [dica('Carregando…')] : [
+        kpi('s', 'Situação', ligada ? 'Ligada' : 'Desligada', ligada ? 'containers rodando' : 'containers parados', ligada ? 'ok' : 'apagado'),
+        kpi('m', 'Modelo treinado', ia && ia.treinado ? `${ia.exemplos.toLocaleString('pt-BR')}` : 'Sem dados', ia && ia.treinado ? `chamados, em ${new Date(ia.treinadoEm).toLocaleDateString('pt-BR')}` : ia ? 'ainda não treinado' : 'IA desligada'),
+        kpi('a', 'Acerto (validação cruzada)', met ? pctTxt(met.acertoIa) : 'Sem dados', met ? `regras de hoje ${pctTxt(met.acertoRegras)}` : null),
+        kpi('r', 'Acerto no resultado real', met && met.confirmados ? pctTxt(met.confirmados.acertoIa) : 'Sem dados', met && met.confirmados ? `${met.confirmados.total} chamados que rodaram` : null),
+        kpi('h', 'Acerto no gabarito humano', met && met.humanos ? pctTxt(met.humanos.acertoIa) : 'Sem dados', met && met.humanos ? `${met.humanos.total} decididos por pessoas` : 'decida em Revisão da IA'),
+        rev ? kpi('v', 'Revisão de todos', rev.total ? `${Math.floor((rev.feito / rev.total) * 100)}%` : 'Sem dados', rev.total ? `${rev.feito.toLocaleString('pt-BR')} de ${rev.total.toLocaleString('pt-BR')}, ${rev.divergencias} divergências` : 'não iniciada') : null,
       ]),
-      e('div', { key: 'bt', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+      secao('est', 'Situação', 'IA local, grátis e sem internet: roda nesta rede, num container isolado, e nenhum dado sai para outra empresa. Desligada, os containers param e tudo segue só pelas regras de hoje.', !estado ? [dica('Carregando…')] : [
+        e('dl', { key: 'd', className: 'admin-detalhes' }, [
+          ...((estado.controle && estado.controle.containers) || []).map((x) => [e('dt', { key: 't' + x.nome }, 'Container ' + x.nome), e('dd', { key: 'd' + x.nome }, x.estado === 'running' ? selo('rodando', 'ok') : x.estado === 'nao_criado' ? selo('não criado', 'alerta') : selo('parado'))]).flat(),
+          estado.controle && estado.controle.erro ? [e('dt', { key: 'ct' }, 'Controle'), e('dd', { key: 'cd' }, 'fora do ar: ' + estado.controle.erro)] : null,
+          ia && ia.modelos ? [e('dt', { key: 'mt' }, 'Modelos'), e('dd', { key: 'md' }, `${ia.modelos.texto} (dia a dia), ${ia.modelos.revisao || ia.modelos.texto} (revisão) e ${ia.modelos.embed} (vetores)`)] : null,
+          exp && exp.etapa && exp.etapa !== 'pronto' && exp.rodando !== undefined ? [e('dt', { key: 'et' }, 'Exportação'), e('dd', { key: 'ed' }, exp.rodando ? `${exp.etapa}${exp.total ? ` (${exp.feito} de ${exp.total})` : ''}` : exp.erro ? 'Erro: ' + exp.erro : exp.etapa)] : null,
+          exp && exp.resumo ? [e('dt', { key: 'ut' }, 'Última exportação'), e('dd', { key: 'ud' }, `${exp.resumo.chamados} chamados (${exp.resumo.comHistorico} com resultado real de automação, ${exp.resumo.reabertos} reabertos)`)] : null,
+          treino && treino.etapa ? [e('dt', { key: 'tt' }, 'Treino'), e('dd', { key: 'td' }, treino.rodando ? `${ETAPAS_TREINO[treino.etapa] || treino.etapa}${treino.total ? ` (${treino.feito} de ${treino.total})` : ''}` : treino.erro ? 'Erro: ' + treino.erro : ETAPAS_TREINO[treino.etapa] || treino.etapa)] : null,
+        ].flat().filter(Boolean)),
+        treino && treino.rodando && treino.total ? progresso(treino.feito, treino.total) : null,
+        dica('A exportação lê, só para leitura, todos os chamados da entidade Sistemas com o seu token do GLPI (não fica guardado). CPF, telefone, e-mail, placa, chassi e senhas são mascarados antes de qualquer gravação.'),
+        msg ? e('div', { key: 'm', className: 'admin-aviso ' + (msg.ok ? 'ok' : 'erro') }, msg.texto) : null,
+      ], e('div', { className: 'admin-acoes' }, [
         ligada
           ? botao(ocupado === 'desligar' ? 'Desligando…' : 'Desligar IA', acao('desligar', '/api/admin/ia/desligar', 'IA desligada: containers parados.'), 'sec', { key: 'd', disabled: !!ocupado })
           : botao(ocupado === 'ligar' ? 'Ligando…' : 'Ligar IA', acao('ligar', '/api/admin/ia/ligar', 'IA ligada.'), 'prim', { key: 'l', disabled: !!ocupado }),
-        botao(ocupado === 'exportar' ? 'Iniciando…' : 'Exportar chamados do GLPI e treinar', acao('exportar', '/api/admin/ia/exportar', 'Exportação iniciada: o treino começa sozinho no fim.'), 'sec', { key: 'x', disabled: !ligada || !!ocupado || andamento }),
+        botao(ocupado === 'exportar' ? 'Iniciando…' : 'Exportar do GLPI e treinar', acao('exportar', '/api/admin/ia/exportar', 'Exportação iniciada: o treino começa sozinho no fim.'), 'sec', { key: 'x', disabled: !ligada || !!ocupado || andamento }),
         botao(ocupado === 'treinar' ? 'Iniciando…' : 'Treinar de novo', acao('treinar', '/api/admin/ia/treinar', 'Treino iniciado.'), 'sec', { key: 't', disabled: !ligada || !!ocupado || andamento }),
-        e('a', { key: 'au', href: 'ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none' } }, 'Abrir auditoria da IA'),
-      ]),
-      msg ? e('div', { key: 'm', className: msg.ok ? 'admin-ok' : 'admin-erro', style: { color: msg.ok ? 'var(--success, #16a34a)' : 'var(--error)', fontSize: 12.5 } }, msg.texto) : null,
-      dica('A exportação lê, só para leitura, todos os chamados da entidade Sistemas com o seu token do GLPI (não fica guardado). CPF, telefone, e-mail, placa, chassi e senhas são mascarados antes de qualquer gravação.'),
-
-      e('div', { key: 'cfg', style: { display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 14 } }, [
-        rotulo('Como a IA age'),
-        e('div', { key: 'ta' }, [
-          rotulo('Tipos que rodam no automático com a validação da IA'),
-          dica('Nestes tipos, se a IA discordar da regra com confiança acima do mínimo, o chamado vai para o automático com o tipo que ela sugeriu. Nos outros tipos, a sugestão dela aparece e o chamado fica manual.'),
-          e('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 4, marginTop: 6 } },
-            tipos.map((t) => caixa(c.automaticoTipos.includes(t.chave), (v) => setC({ ...c, automaticoTipos: v ? [...c.automaticoTipos, t.chave] : c.automaticoTipos.filter((x) => x !== t.chave) }), t.nome, { key: t.chave }))),
+        e('a', { key: 'au', href: 'ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none', marginLeft: 'auto' } }, 'Abrir auditoria'),
+      ])),
+      secao('cfg', 'Como a IA age', 'Cada chave liga uma ajuda da IA. Desligada ou fora do ar, tudo segue pelas regras de hoje.', [
+        campo('ta', 'Tipos que rodam no automático com a validação da IA', e('div', { className: 'admin-grade-tipos' },
+          tipos.map((t) => e('label', { key: t.chave, className: 'admin-marcar' }, [e('input', { key: 'c', type: 'checkbox', checked: c.automaticoTipos.includes(t.chave), onChange: (ev) => setC({ ...c, automaticoTipos: ev.target.checked ? [...c.automaticoTipos, t.chave] : c.automaticoTipos.filter((x) => x !== t.chave) }) }), e('span', { key: 't' }, t.nome)]))),
+          'Nestes tipos, se a IA discordar da regra com confiança acima do mínimo, o chamado vai para o automático com o tipo que ela sugeriu. Nos outros, a sugestão aparece e o chamado fica manual.'),
+        e('div', { key: 'nums', className: 'admin-linha-campos' }, [
+          campo('cm', 'Confiança mínima (0,5 a 1)', e('input', { className: 'field-input', inputMode: 'decimal', value: String(c.confiancaMinima).replace('.', ','), onChange: (ev) => setC({ ...c, confiancaMinima: ev.target.value }), style: S().input })),
+          c.repetirErros ? campo('mt', 'Tentativas automáticas (1 a 5)', e('input', { className: 'field-input', type: 'number', min: 1, max: 5, value: c.maxTentativas, onChange: (ev) => setC({ ...c, maxTentativas: ev.target.value }), style: S().input })) : null,
+          campo('wm', 'WhatsApp', selecao(c.whatsappModo, (v) => setC({ ...c, whatsappModo: v }), [['reagir', 'Só reagir (a resposta da IA aparece nos pedidos)'], ['responder', 'Responder a mensagem com o texto da IA']])),
         ]),
-        e('div', { key: 'cm', style: { maxWidth: 260 } }, [rotulo('Confiança mínima (0,5 a 1)'), e('input', { className: 'field-input', inputMode: 'decimal', value: String(c.confiancaMinima).replace('.', ','), onChange: (ev) => setC({ ...c, confiancaMinima: ev.target.value }), style: S().input })]),
-        caixa(c.repetirErros, (v) => setC({ ...c, repetirErros: v }), 'Quando uma automação der erro, a IA decide se dá para tentar de novo sozinho (falha momentânea) ou se precisa de alguém.', { key: 're' }),
-        c.repetirErros ? e('div', { key: 'mt', style: { maxWidth: 260 } }, [rotulo('Tentativas automáticas (1 a 5)'), e('input', { className: 'field-input', type: 'number', min: 1, max: 5, value: c.maxTentativas, onChange: (ev) => setC({ ...c, maxTentativas: ev.target.value }), style: S().input })]) : null,
-        caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado (solução e devolutiva) no lugar do texto fixo; se ela falhar, vai o texto fixo.', { key: 'tx' }),
-        caixa(c.pedirPendencias, (v) => setC({ ...c, pedirPendencias: v }), 'Pedir o que falta: no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card ou código FIPE, a IA procura nos acompanhamentos e nos prints (OCR); se não achar, pede no chamado e deixa Pendente, sem atribuir.', { key: 'pp' }),
-        caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra.', { key: 'ra' }),
-        e('div', { key: 'wm', style: { maxWidth: 420 } }, [
-          rotulo('WhatsApp'),
-          selecao(c.whatsappModo, (v) => setC({ ...c, whatsappModo: v }), [['reagir', 'Só reagir (a resposta da IA aparece nos pedidos, sem enviar)'], ['responder', 'Responder a mensagem com o texto da IA']]),
+        e('div', { key: 'chaves', className: 'admin-chaves' }, [
+          caixa(c.repetirErros, (v) => setC({ ...c, repetirErros: v }), 'Quando uma automação der erro, a IA decide se dá para tentar de novo sozinho (falha momentânea) ou se precisa de alguém', { key: 're' }),
+          caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado (solução e devolutiva) no lugar do texto fixo; se ela falhar, vai o texto fixo', { key: 'tx' }),
+          caixa(c.pedirPendencias, (v) => setC({ ...c, pedirPendencias: v }), 'Pedir o que falta: no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card ou código FIPE, a IA procura nos acompanhamentos e nos prints; se não achar, pede no chamado e deixa Pendente, sem atribuir', { key: 'pp' }),
+          caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra', { key: 'ra' }),
         ]),
-        rodape(salvar, salvando, erro, ok),
-      ]),
+      ], rodape(salvar, salvando, erro, ok)),
     ]);
   }
 
@@ -803,38 +805,87 @@
     const ritmo = e2 && e2.rodando && e2.iniciouEm ? (Date.now() - Date.parse(e2.iniciouEm)) / Math.max(1, e2.feito - (e2.feitoNoInicio || 0)) : null;
     const opinioes = item ? [['Regras de hoje', item.regra, null], ['Classificador (chamados parecidos)', item.classificador && item.classificador.tipo, item.classificador && item.classificador.confianca], ['IA lendo o chamado', item.llm && item.llm.tipo, item.llm && item.llm.confianca], ['Resultado real da automação', item.real, null]].filter((o) => o[1]) : [];
     const sugeridos = [...new Set(opinioes.map((o) => o[1]))];
-    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      dica('A IA local lê TODOS os chamados exportados, um por um, e compara quatro opiniões: as regras de hoje, os chamados mais parecidos do histórico, a leitura do chamado pelo modelo de texto e o resultado real (quando a automação já rodou). Quando todas concordam é consenso; quando não, o chamado aparece aqui para uma pessoa decidir. Cada decisão vira gabarito com peso máximo no próximo treino. Nada sai desta rede.'),
-      erro ? e('div', { key: 'er', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      !estado ? dica('Carregando…') : estado.indisponivel ? dica('IA desligada ou fora do ar: ligue na aba IA local.') : e('div', { key: 'est', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
-        e('div', { key: 'n', style: { fontSize: 13 } }, `Revisados ${e2.feito} de ${e2.total || 'todos'} · consenso ${e2.consenso} · divergências ${e2.divergencias} · decididos por pessoas ${e2.decididasPorPessoas}`),
-        e2.rodando ? dica(e2.parando ? 'Parando depois do chamado atual…' : `Revisando agora${ritmo ? `; cerca de ${Math.ceil(((e2.total - e2.feito) * ritmo) / 3600000)} h para terminar` : ''}.`) : e2.erro ? e('div', { style: { color: 'var(--error)', fontSize: 12.5 } }, 'Erro: ' + e2.erro) : null,
-        e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-          e2.rodando ? botao('Parar', acao('parar'), 'sec', { key: 'p' }) : botao(e2.feito ? 'Continuar a revisão' : 'Começar a revisão', acao('iniciar'), 'prim', { key: 'i' }),
-          botao('Atualizar divergências', lerPagina, 'sec', { key: 'a' }),
-        ]),
+    const restanteH = ritmo ? Math.ceil(((e2.total - e2.feito) * ritmo) / 3600000) : null;
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro),
+      !estado ? dica('Carregando…') : estado.indisponivel ? e('div', { key: 'ind', className: 'admin-aviso alerta' }, 'IA desligada ou fora do ar: ligue na página IA local.') : e('div', { key: 'kpis', className: 'admin-kpis' }, [
+        kpi('f', 'Revisados', e2.total ? `${Math.floor((e2.feito / e2.total) * 100)}%` : 'Sem dados', `${e2.feito.toLocaleString('pt-BR')} de ${(e2.total || 0).toLocaleString('pt-BR')}`),
+        kpi('c', 'Consenso', e2.consenso.toLocaleString('pt-BR'), 'todas as opiniões iguais', 'ok'),
+        kpi('d', 'Divergências', e2.divergencias.toLocaleString('pt-BR'), 'para uma pessoa decidir', e2.divergencias ? 'alerta' : ''),
+        kpi('p', 'Decididos por pessoas', e2.decididasPorPessoas.toLocaleString('pt-BR'), 'viram gabarito no treino'),
       ]),
-      e('div', { key: 'item', style: { borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 } }, !pagina ? [dica('Carregando…')] : !item ? [dica(pagina.total ? 'Fim desta página: atualize para ver mais.' : 'Nenhuma divergência esperando decisão.')] : [
-        pagina.porGrupo ? e('div', { key: 'g', style: { fontSize: 12, color: 'var(--muted)' } }, 'Esperando decisão, das mais importantes para as menos: ' + Object.entries(pagina.porGrupo).map(([g, n]) => `${g} ${n}`).join(' · ')) : null,
-        e('div', { key: 'c', style: { fontSize: 12, color: 'var(--muted)' } }, `Divergência ${i + 1} de ${pagina.itens.length} nesta página (${pagina.total} esperando decisão) · ${item.grupo || ''} · chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
-        e('div', { key: 't', style: { fontWeight: 600, fontSize: 14 } }, item.titulo || 'Sem título'),
-        e('pre', { key: 'x', className: 'revisao-texto', style: { whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12.5, maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, margin: 0 } }, item.texto || 'Sem descrição'),
-        e('div', { key: 'o', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, opinioes.map(([quem, tipo, conf]) =>
-          e('div', { key: quem, style: { fontSize: 12.5 } }, [e('span', { key: 'q', style: { color: 'var(--muted)' } }, quem + ': '), e('strong', { key: 't' }, nome(tipo)), conf !== null && conf !== undefined ? ` (${Math.round(conf * 100)}%)` : ''])).concat(item.llm && item.llm.motivo ? [e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, 'Motivo da IA: ' + item.llm.motivo)] : [])),
-        e('div', { key: 'd', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, sugeridos.map((t) => botao(`É ${nome(t)}`, () => decidir(t), 'sec', { key: t, disabled: ocupado }))),
-        e('div', { key: 's', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, [
-          selecao(escolha, setEscolha, [['', 'Outro tipo…'], ['sem_automacao', 'Sem automação'], ...Object.entries(tipos).map(([k, v]) => [k, v])], { key: 'sel', maxWidth: 280 }),
-          botao('Salvar este', () => decidir(escolha), 'prim', { key: 'sv', disabled: !escolha || ocupado }),
-          botao('Pular', pular, 'sec', { key: 'pl', disabled: ocupado }),
+      e2 ? secao('and', 'Andamento', `A IA local lê todos os chamados exportados, um por um, com o modelo ${e2.modeloTexto || 'de texto'}, e compara quatro opiniões: as regras de hoje, os chamados mais parecidos, a leitura do chamado e o resultado real. Nada sai desta rede.`, [
+        progresso(e2.feito, e2.total),
+        e('div', { key: 's', className: 'admin-dica' }, e2.rodando
+          ? (e2.parando ? 'Parando depois do chamado atual…' : `Revisando agora${restanteH ? `; cerca de ${restanteH === 1 ? '1 hora' : restanteH + ' horas'} para terminar` : ''}.`)
+          : e2.erro ? 'Erro: ' + e2.erro : e2.terminouEm ? `Terminou em ${new Date(e2.terminouEm).toLocaleString('pt-BR')}.` : 'Parada.'),
+        e2.falhas ? dica(`${e2.falhas === 1 ? '1 chamado ficou' : e2.falhas + ' chamados ficaram'} sem resposta do modelo e ${e2.falhas === 1 ? 'volta' : 'voltam'} na próxima retomada.`) : null,
+      ], e('div', { className: 'admin-acoes' }, [
+        e2.rodando ? botao('Parar', acao('parar'), 'sec', { key: 'p' }) : botao(e2.feito ? 'Continuar a revisão' : 'Começar a revisão', acao('iniciar'), 'prim', { key: 'i' }),
+        botao('Atualizar divergências', lerPagina, 'sec', { key: 'a' }),
+      ])) : null,
+      secao('item', 'Decidir divergência', pagina && pagina.porGrupo && Object.keys(pagina.porGrupo).length ? null : 'Escolha o tipo certo de cada chamado. Cada decisão vira gabarito com peso máximo no próximo treino.', !pagina ? [dica('Carregando…')] : !item ? [e('div', { key: 'v', className: 'admin-vazio' }, pagina.total ? 'Fim desta página: atualize para ver mais.' : 'Nenhuma divergência esperando decisão.')] : [
+        pagina.porGrupo ? e('div', { key: 'g', className: 'admin-chips' }, Object.entries(pagina.porGrupo).map(([g, n]) => e('span', { key: g, className: 'admin-selo' + (item.grupo === g ? ' ativo' : '') }, `${g}: ${n}`))) : null,
+        e('div', { key: 'cab', className: 'admin-revisao-cab' }, [
+          e('div', { key: 't' }, [
+            e('div', { key: 'm', className: 'admin-dica' }, `Chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
+            e('h4', { key: 'h' }, item.titulo || 'Sem título'),
+          ]),
+          e('span', { key: 'n', className: 'admin-contador' }, `${i + 1} de ${pagina.itens.length} · ${pagina.total} na fila`),
         ]),
-      ]),
+        e('pre', { key: 'x', className: 'revisao-texto admin-texto-chamado' }, item.texto || 'Sem descrição'),
+        e('div', { key: 'o', className: 'admin-opinioes' }, opinioes.map(([quem, tipo, conf]) =>
+          e('div', { key: quem, className: 'admin-opiniao' }, [
+            e('span', { key: 'q', className: 'admin-dica' }, quem),
+            e('strong', { key: 't' }, nome(tipo)),
+            conf !== null && conf !== undefined ? e('span', { key: 'c', className: 'admin-dica' }, `confiança ${Math.round(conf * 100)}%`) : null,
+          ]))),
+        item.llm && item.llm.motivo ? e('div', { key: 'm', className: 'admin-aviso info' }, 'Motivo da IA: ' + item.llm.motivo) : null,
+      ], item ? e('div', { className: 'admin-acoes' }, [
+        ...sugeridos.map((t) => botao(`É ${nome(t)}`, () => decidir(t), 'sec', { key: t, disabled: ocupado })),
+        selecao(escolha, setEscolha, [['', 'Outro tipo…'], ['sem_automacao', 'Sem automação'], ...Object.entries(tipos).map(([k, v]) => [k, v])], { key: 'sel', maxWidth: 220, width: 'auto' }),
+        botao('Salvar este', () => decidir(escolha), 'prim', { key: 'sv', disabled: !escolha || ocupado }),
+        botao('Pular', pular, 'sec', { key: 'pl', disabled: ocupado, marginLeft: 'auto' }),
+      ]) : null),
     ]);
   }
 
-  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['ia', 'IA local', 'Bot'], ['revisao', 'Revisão da IA', 'Eye'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
+  // Menu agrupado por assunto (como as telas de configuração do GitHub e da Vercel); a descrição vira o subtítulo da página.
+  const GRUPOS_ABAS = [
+    ['Acesso', [
+      ['cofre', 'Cofre', 'Lock', 'Senha mestra dos acessos e quanto tempo o cofre fica liberado.'],
+      ['admins', 'Administradores', 'Users', 'Quem pode abrir esta administração.'],
+      ['historico', 'Histórico', 'History', 'Tudo o que muda pela administração e pelo cadastro de automações.'],
+    ]],
+    ['Automações', [
+      ['automacoes', 'Automações', 'Workflow', 'Quem gerencia, como o endereço aparece, quem vê cada automação e a ordem no painel.'],
+    ]],
+    ['IA local', [
+      ['ia', 'IA local', 'Bot', 'Ligar e desligar, treinar e escolher como a IA ajuda nos chamados.'],
+      ['revisao', 'Revisão da IA', 'Eye', 'A IA local revisa todos os chamados; você decide as divergências.'],
+    ]],
+    ['WhatsApp', [
+      ['whatsapp', 'Configuração', 'MessageCircle', 'Grupos, números, conversa privada e reações do robô do WhatsApp.'],
+      ['vinculos', 'Vínculos', 'Headset', 'Telefones ligados a usuários do GLPI.'],
+      ['conexao', 'Conexão e pedidos', 'Activity', 'Situação do robô, mensagens recebidas e pedidos recentes.'],
+    ]],
+  ];
+  const ABAS = GRUPOS_ABAS.flatMap(([, abas]) => abas);
+  const CHAVE_ABA = 'arxhub_admin_aba';
 
   function AdminView() {
-    const [aba, setAba] = useState('cofre');
+    const [aba, setAbaEstado] = useState(() => {
+      try {
+        const salva = localStorage.getItem(CHAVE_ABA);
+        return ABAS.some((a) => a[0] === salva) ? salva : 'cofre';
+      } catch {
+        return 'cofre'; // navegador sem armazenamento: começa no Cofre
+      }
+    });
+    const setAba = (k) => {
+      setAbaEstado(k);
+      try { localStorage.setItem(CHAVE_ABA, k); } catch { /* só não lembra a aba na próxima visita */ }
+    };
     const [dados, setDados] = useState(null); // { config, opcoes }
     const [erro, setErro] = useState(null);
     useEffect(() => {
@@ -843,7 +894,7 @@
     const atualizarConfig = (config) => setDados((d) => ({ ...d, config }));
 
     let corpo;
-    if (erro) corpo = e('div', { style: { color: 'var(--error)', fontSize: 13 } }, erro);
+    if (erro) corpo = mensagem(erro);
     else if (!dados) corpo = dica('Carregando…');
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
@@ -855,15 +906,23 @@
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
 
-    return e('div', { className: 'admin-tela', style: { maxWidth: 1040, margin: '0 auto', padding: '24px 20px 40px', color: 'var(--text)' } }, [
-      e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } }, [
+    const atual = ABAS.find((a) => a[0] === aba) || ABAS[0];
+    return e('div', { className: 'admin-tela' }, [
+      e('header', { key: 'cab', className: 'admin-cabecalho' }, [
         e('span', { key: 'i', className: 'glpi-head-icon' }, Icon('Settings', 16)),
-        e('h1', { key: 't', style: { margin: 0, fontWeight: 600, fontSize: 18 } }, 'Administração do Hub'),
+        e('div', { key: 't' }, [e('h1', { key: 'h' }, 'Administração do Hub'), e('p', { key: 'p' }, 'Configurações que valem para todo mundo que usa o Hub.')]),
       ]),
       e('div', { key: 'grade', className: 'admin-grid' }, [
-        e('nav', { key: 'nav', className: 'admin-nav', 'aria-label': 'Seções da administração' }, ABAS.map(([k, t, ic]) =>
-          e('button', { key: k, type: 'button', className: `admin-nav-item admin-aba admin-aba-${k}` + (aba === k ? ' ativo' : ''), 'aria-current': aba === k ? 'page' : undefined, onClick: () => setAba(k) }, [Icon(ic, 16), e('span', { key: 't' }, t)]))),
-        e('div', { key: 'corpo', className: 'admin-corpo' }, corpo),
+        e('nav', { key: 'nav', className: 'admin-nav', 'aria-label': 'Seções da administração' }, GRUPOS_ABAS.map(([grupo, abas]) =>
+          e('div', { key: grupo, className: 'admin-nav-grupo' }, [
+            e('div', { key: 'g', className: 'admin-nav-titulo' }, grupo),
+            ...abas.map(([k, t, ic]) =>
+              e('button', { key: k, type: 'button', className: `admin-nav-item admin-aba admin-aba-${k}` + (aba === k ? ' ativo' : ''), 'aria-current': aba === k ? 'page' : undefined, onClick: () => setAba(k) }, [Icon(ic, 16), e('span', { key: 't' }, t)])),
+          ]))),
+        e('main', { key: 'corpo', className: 'admin-corpo' }, [
+          e('div', { key: 'pc', className: 'admin-pagina-cab' }, [e('h2', { key: 'h' }, atual[1]), e('p', { key: 'p' }, atual[3])]),
+          e('div', { key: aba, className: 'admin-pagina' }, corpo),
+        ]),
       ]),
     ]);
   }

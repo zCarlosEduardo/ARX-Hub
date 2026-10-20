@@ -60,6 +60,8 @@
       <li><strong>Chamados reabertos:</strong> lê os acompanhamentos; se o pedido novo é de outra categoria, encerra explicando que o chamado era de uma categoria e o novo pedido é de outra.</li>
       <li><strong>Respostas:</strong> pode escrever a solução e a devolutiva no lugar do texto fixo (nunca em resposta que tenha senha; se falhar, vai o texto fixo).</li>
       <li><strong>WhatsApp:</strong> valida se a mensagem é mesmo o pedido que as regras acharam, escreve a resposta que daria (sempre registrada) e, no modo "responder", envia essa resposta no grupo.</li>
+      <li><strong>Pedir o que falta:</strong> no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card, chassi ou código FIPE, procura o dado na descrição, nos acompanhamentos e nos prints anexados (leitura do texto da imagem dentro do container da IA). Se não achar, pede no chamado e deixa Pendente, sem atribuir.</li>
+      <li><strong>Revisão de todos os chamados:</strong> lê o histórico inteiro da entidade Sistemas, um chamado por vez, e separa o que todas as opiniões concordam do que precisa de uma pessoa decidir (seção 6). As decisões viram o gabarito oficial de acerto.</li>
     </ul>
   </section>
 
@@ -70,7 +72,9 @@
       <tbody>
         <tr><td>Ollama 0.40.2</td><td>Motor que roda os modelos</td><td>MIT</td><td>Grátis</td><td>Nenhum (rede interna)</td></tr>
         <tr><td>bge-m3</td><td>Transforma cada texto num vetor de significado (1024 números)</td><td>MIT</td><td>Grátis</td><td>Nenhum</td></tr>
-        <tr><td>Qwen2.5 1.5B Instruct</td><td>Modelo de texto: desempate, WhatsApp, respostas, reabertos, erros</td><td>Apache 2.0</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>Qwen2.5 1.5B Instruct</td><td>Modelo de texto do dia a dia: desempate, WhatsApp, respostas, reabertos, erros, pedidos de pendência</td><td>Apache 2.0</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>Qwen2.5 7B Instruct</td><td>Modelo de texto maior, só para a revisão de todos os chamados (roda na placa de vídeo desta máquina)</td><td>Apache 2.0</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>Tesseract 5 (português)</td><td>Lê o texto dos prints anexados ao chamado (a imagem fica só na memória)</td><td>Apache 2.0</td><td>Grátis</td><td>Nenhum</td></tr>
         <tr><td>ia-local (código ARX)</td><td>API da IA, classificador e treino</td><td>Interno</td><td>Grátis</td><td>Nenhum</td></tr>
         <tr><td>ia-controle (código ARX)</td><td>Liga e desliga os containers a pedido da Administração</td><td>Interno</td><td>Grátis</td><td>Não usa</td></tr>
       </tbody>
@@ -93,7 +97,7 @@
       <rect x="20" y="40" width="200" height="56" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="40" y="73" font-size="13">ARX Hub (Administração, WhatsApp)</text>
       <rect x="20" y="150" width="200" height="56" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="40" y="183" font-size="13">chamados-glpi (listagem, execução)</text>
       <rect x="400" y="80" width="190" height="70" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="420" y="110" font-size="13">ia-local :4025</text><text x="420" y="130" font-size="11" style="fill:var(--muted)">classificador e API</text>
-      <rect x="660" y="80" width="190" height="70" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="680" y="110" font-size="13">ia-ollama :11434</text><text x="680" y="130" font-size="11" style="fill:var(--muted)">bge-m3 e qwen2.5:1.5b</text>
+      <rect x="660" y="80" width="190" height="70" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="680" y="110" font-size="13">ia-ollama :11434</text><text x="680" y="130" font-size="11" style="fill:var(--muted)">bge-m3, qwen2.5 1.5b e 7b</text>
       <rect x="400" y="240" width="190" height="44" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="420" y="267" font-size="13">ia-controle :4026 (Docker)</text>
       <line x1="220" y1="68" x2="400" y2="105" stroke="var(--muted)"/><line x1="220" y1="178" x2="400" y2="125" stroke="var(--muted)"/>
       <line x1="590" y1="115" x2="660" y2="115" stroke="var(--muted)"/>
@@ -115,6 +119,11 @@
       <li><strong>Dados:</strong> exportação só leitura de TODOS os chamados da entidade Sistemas (ver seção 5).</li>
       <li><strong>Treino:</strong> vetores de cada chamado, classificador e validação cruzada (seção 5).</li>
       <li><strong>Integração:</strong> listagem e execução do chamados-glpi, WhatsApp e Administração > IA local no Hub; tudo começa desligado e cada uso é ligado na Administração.</li>
+      <li><strong>Pedir o que falta:</strong> Tesseract 5.5.1 com o idioma português instalado na imagem da <code>ia-local</code> (sem internet). Teste com um print fictício: 0,3 s e a placa lida certa. O texto do pedido escrito pela IA só vai ao chamado se citar tudo o que falta; senão vai o texto fixo.</li>
+      <li><strong>Revisão um por um (primeira passada, 1.5B no processador):</strong> começou em 20/10/2026 com o modelo pequeno, a cerca de 3,7 s por chamado (9 horas no total). Parou em 3.215 de 8.803 com 343 divergências. Achado: quando o modelo demorava mais de 60 s (processador disputado), o chamado entrava como divergência sem opinião da IA. A passada foi guardada à parte (<code>revisao-qwen2.5_1.5b.jsonl</code>) e não entra na conta.</li>
+      <li><strong>Correções:</strong> sem resposta do modelo, a revisão tenta de novo e, se falhar outra vez, deixa o chamado para a próxima retomada (não vira divergência). O arquivo da revisão deixou de ser dividido aos 20 MB (a revisão inteira passa disso e metade sumiria da tela).</li>
+      <li><strong>Revisão com modelo maior (atual):</strong> placa de vídeo NVIDIA RTX 4060 (8 GB) ligada só ao motor <code>ia-ollama</code> nesta máquina (arquivo <code>docker-compose.override.yml</code>, fora do Git) e <code>qwen2.5:7b</code> (4,7 GB, id <code>845dbda0ea48</code>, Apache 2.0) só para a revisão (<code>IA_MODELO_REVISAO</code>). Medido: 100% na placa de vídeo, cerca de 1 s por pergunta. O dia a dia continua no 1.5B, que é o que vai para o servidor.</li>
+      <li><strong>Novo treino na placa de vídeo:</strong> 8.803 chamados em 2,5 minutos, já com os 14 chamados novos da exportação das 18:31.</li>
     </ol>
   </section>
 
@@ -135,20 +144,34 @@
   </section>
 
   <section class="cartao">
-    <h2>6. Como ela está configurada agora</h2>
+    <h2>6. Revisão de todos os chamados (validação um por um)</h2>
+    <p>Para cada chamado exportado, quatro opiniões: as regras de hoje, o classificador (os chamados mais parecidos, sem olhar o próprio chamado), o modelo de texto lendo o chamado com os 4 exemplos mais parecidos e o resultado real quando a automação já rodou. Todas iguais é consenso. Qualquer diferença vira divergência, que uma pessoa decide em Administração > Revisão da IA, das mais importantes para as menos:</p>
+    <ol>
+      <li>Discorda do resultado real da automação.</li>
+      <li>Classificador e modelo de texto concordam entre si e a regra não (forte sinal de erro da regra).</li>
+      <li>Outras diferenças.</li>
+      <li>Só o modelo de texto discorda, com pouca confiança (provável ruído).</li>
+    </ol>
+    <p>Cada decisão vira rótulo com peso máximo no próximo treino, e o acerto da IA nesses chamados passa a ser o número oficial de precisão.</p>
+    <div id="revisao"><span class="vazio">Lendo a revisão…</span></div>
+  </section>
+
+  <section class="cartao">
+    <h2>7. Como ela está configurada agora</h2>
     <div id="config"><span class="vazio">Lendo a configuração…</span></div>
     <p class="sub">Muda em Administração > IA local (só administradores). Cada mudança fica no Histórico da Administração.</p>
   </section>
 
   <section class="cartao">
-    <h2>7. Registro de eventos</h2>
+    <h2>8. Registro de eventos</h2>
     <div id="eventos"><span class="vazio">Lendo os eventos…</span></div>
   </section>
 
   <section class="cartao">
-    <h2>8. Requisitos para rodar em outra máquina</h2>
+    <h2>9. Requisitos para rodar em outra máquina</h2>
     <ul>
-      <li><strong>Hardware mínimo:</strong> 4 núcleos, 8 GB de RAM (os dois modelos usam cerca de 3 GB carregados), 10 GB livres em disco (imagem do Ollama 3,8 GB e modelos 2,2 GB). GPU é opcional.</li>
+      <li><strong>Hardware mínimo:</strong> 4 núcleos, 8 GB de RAM (os dois modelos usam cerca de 3 GB carregados), 10 GB livres em disco (imagem do Ollama 3,8 GB e modelos 2,2 GB). Placa de vídeo é opcional: só acelera a revisão e o treino.</li>
+      <li><strong>Com placa de vídeo</strong> (RTX 4060, 8 GB): treino de 8.803 chamados em 2,5 minutos; modelo 7B em cerca de 1 s por pergunta.</li>
       <li><strong>Desempenho medido em CPU</strong> (Ryzen 9 7900, 24 threads): vetores de 5 a 12 chamados por segundo durante o treino; um chamado novo em menos de 1 s; resposta do modelo de texto em 2 a 5 s. Num servidor de 4 núcleos, conte com 3 a 4 vezes mais.</li>
       <li><strong>Software:</strong> Docker com Compose (Docker Desktop no Windows ou Docker Engine no Linux). Nada mais: as imagens trazem tudo.</li>
     </ul>
@@ -157,12 +180,21 @@
 docker compose --profile baixar-modelos run --rm ia-baixar-modelos    # único passo com internet
 scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
 # Hub > Administração > IA local: Ligar, depois "Exportar chamados do GLPI e treinar"</pre>
+    <h3>Levar a análise desta máquina para o servidor</h3>
+    <p>Tudo o que a IA aprendeu fica no volume <code>ia-dados</code>: chamados exportados (já mascarados), modelo treinado, métricas, revisão, decisões das pessoas e eventos desta auditoria. O servidor usa o mesmo modelo de vetores (bge-m3), então o treino e a revisão feitos aqui (com o 7B) valem lá sem refazer; lá o dia a dia roda com o 1.5B.</p>
+    <pre># nesta máquina (com a IA desligada na Administração)
+docker run --rm -v arx-automacoes_ia-dados:/dados -v "$PWD":/saida alpine tar czf /saida/ia-dados.tgz -C /dados .
+# no servidor, depois do primeiro scripts/deploy.sh ia-local
+docker run --rm -v arx-automacoes_ia-dados:/dados -v "$PWD":/entrada alpine tar xzf /entrada/ia-dados.tgz -C /dados
+scripts/deploy.sh ia-local</pre>
+    <p class="sub">O arquivo tem texto de chamados (mascarado): leve por pasta restrita e apague a cópia depois. No servidor, sem <code>IA_MODELO_REVISAO</code> e sem o arquivo da placa de vídeo, tudo roda no 1.5B.</p>
   </section>
 
   <section class="cartao">
-    <h2>9. Limites conhecidos</h2>
+    <h2>10. Limites conhecidos</h2>
     <ul>
-      <li>O modelo de texto é pequeno: bom para classificar e reescrever, fraco para raciocínio longo. Por isso ele só desempata e escreve, e as respostas com senha nunca passam por ele.</li>
+      <li>O modelo de texto do dia a dia é pequeno: bom para classificar e reescrever, fraco para raciocínio longo. Por isso ele só desempata e escreve, e as respostas com senha nunca passam por ele. A revisão usa o 7B justamente para o gabarito sair com menos ruído.</li>
+      <li>A leitura dos prints depende da qualidade da imagem: print cortado ou borrado pode não ter a placa legível, e aí a IA pede o dado no chamado.</li>
       <li>Com poucos chamados com resultado real de automação, boa parte do gabarito vem das próprias regras; a IA melhora conforme as automações rodam (treine de novo de tempos em tempos).</li>
       <li>Os cadastros em Python não informam resultado por item; isso não afeta a IA, só os Resultados.</li>
     </ul>
@@ -175,7 +207,7 @@ scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
   var pct = function (x) { return x === null || x === undefined ? 'Sem dados' : String(x).replace('.', ',') + '%'; };
   var num = function (x) { return Number(x || 0).toLocaleString('pt-BR'); };
   var data = function (t) { return t ? new Date(t).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informado'; };
-  var NOMES_EVENTO = { 'servico.subiu': 'Serviço da IA subiu', 'exportacao.inicio': 'Exportação começou', 'exportacao.fim': 'Exportação terminou', 'treino.inicio': 'Treino começou', 'treino.fim': 'Treino terminou', 'treino.erro': 'Treino falhou' };
+  var NOMES_EVENTO = { 'servico.subiu': 'Serviço da IA subiu', 'exportacao.inicio': 'Exportação começou', 'exportacao.fim': 'Exportação terminou', 'treino.inicio': 'Treino começou', 'treino.fim': 'Treino terminou', 'treino.erro': 'Treino falhou', 'revisao.inicio': 'Revisão começou', 'revisao.fim': 'Revisão terminou', 'revisao.parada': 'Revisão parada', 'revisao.erro': 'Revisão falhou', 'revisao.arquivada': 'Revisão anterior guardada à parte (outro modelo)' };
   var kpi = function (r, v) { return '<div class="kpi"><div class="r">' + esc(r) + '</div><div class="v">' + esc(v) + '</div></div>'; };
 
   Promise.all([
@@ -190,7 +222,7 @@ scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
       '<span class="selo ' + (a.aoVivo ? 'ok' : 'alerta') + '">' + (a.aoVivo ? 'IA no ar' : 'IA desligada ou fora do ar') + '</span>' +
       (cfg ? '<span class="selo ' + (cfg.ligada ? 'ok' : 'alerta') + '">' + (cfg.ligada ? 'Ligada na Administração' : 'Desligada na Administração') + '</span>' : '') +
       '<span class="sub">' + (a.aoVivo ? 'Dados ao vivo, ' : a.em ? 'Última fotografia guardada, ' : '') + (a.em ? data(a.em) : '') + '</span>';
-    if (a.vazio) { $('kpis').innerHTML = ''; $('treino').innerHTML = '<span class="vazio">Sem dados: a IA ainda não respondeu.</span>'; }
+    if (a.vazio) { $('kpis').innerHTML = ''; $('treino').innerHTML = '<span class="vazio">Sem dados: a IA ainda não respondeu.</span>'; $('revisao').innerHTML = '<span class="vazio">Sem dados.</span>'; }
     else {
       $('kpis').innerHTML = kpi('Chamados no modelo', num(e.exemplos)) + kpi('Acerto da IA (validação cruzada)', m ? pct(m.acertoIa) : 'Sem dados') + kpi('Acerto das regras, mesmos chamados', m ? pct(m.acertoRegras) : 'Sem dados') + kpi('Acerto nos chamados com resultado real', m && m.confirmados ? pct(m.confirmados.acertoIa) + ' (regras ' + pct(m.confirmados.acertoRegras) + ', ' + num(m.confirmados.total) + ' chamados)' : 'Sem dados') + kpi('Acerto no gabarito humano (revisão)', m && m.humanos ? pct(m.humanos.acertoIa) + ' (regras ' + pct(m.humanos.acertoRegras) + ', ' + num(m.humanos.total) + ' chamados)' : 'Ainda sem revisão') + kpi('Revisão um por um', e.revisao ? num(e.revisao.feito) + ' de ' + num(e.revisao.total) + ' (' + num(e.revisao.divergencias) + ' divergências, ' + num(e.revisao.decididasPorPessoas) + ' decididas)' : 'Não iniciada') + kpi('Decisões registradas', num(a.decisoes && a.decisoes.total));
       var t = '';
@@ -202,6 +234,10 @@ scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
           tipos.map(function (k) { var p = (m.porTipo || {})[k] || {}; return '<tr><td>' + esc(k) + '</td><td class="n">' + num(m.distribuicao[k]) + '</td><td class="n">' + num(p.total) + '</td><td class="n">' + pct(p.acerto) + '</td></tr>'; }).join('') + '</tbody></table>';
       } else if (!(e.treino && e.treino.rodando)) t += '<p class="vazio">Ainda não treinada.</p>';
       $('treino').innerHTML = t;
+      var r = e.revisao;
+      var fatia = function (x) { return r.feito ? ' (' + pct(Math.round((x / r.feito) * 1000) / 10) + ')' : ''; };
+      $('revisao').innerHTML = r && r.total ? '<div class="kpis">' + kpi('Revisados', num(r.feito) + ' de ' + num(r.total) + ' (' + Math.floor((r.feito / r.total) * 100) + '%)') + kpi('Consenso', num(r.consenso) + fatia(r.consenso)) + kpi('Divergências', num(r.divergencias) + fatia(r.divergencias)) + kpi('Decididas por pessoas', num(r.decididasPorPessoas)) + '</div>' +
+        '<p class="sub">' + (r.rodando ? 'Revisando agora' : 'Parada') + (r.modeloTexto ? ', modelo ' + esc(r.modeloTexto) : '') + (r.falhas ? '. ' + num(r.falhas) + ' sem resposta do modelo, voltam na próxima retomada' : '') + '.</p>' : '<span class="vazio">Revisão ainda não iniciada.</span>';
       var ev = (a.eventos || []).slice().reverse();
       $('eventos').innerHTML = ev.length ? '<table><thead><tr><th>Quando</th><th>Evento</th><th>Detalhe</th></tr></thead><tbody>' + ev.map(function (x) {
         var det = Object.keys(x).filter(function (k) { return k !== 'quando' && k !== 'tipo'; }).map(function (k) { return k + ': ' + x[k]; }).join(' · ');
