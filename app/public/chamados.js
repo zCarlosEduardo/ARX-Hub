@@ -98,6 +98,9 @@
   }
 
   /** Itens somenteManual nunca entram no modo automático nem em "Rodar todos os prontos". */
+  /** Chegou a hora da nova tentativa automática de uma falha momentânea (IA)? */
+  const horaDeRepetir = (quando) => !!quando && Date.now() >= Date.parse(quando);
+
   function deveExcluirDoAutomatico(item) {
     return !!item && (item.somenteManual === true || (ehSenhaSga(item) && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
   }
@@ -525,7 +528,14 @@
         fonte.onmessage = (ev) => {
           const p = JSON.parse(ev.data);
           if (p.type === 'log') mudar((x) => ({ ...x, linhas: [...x.linhas, p.msg].slice(-400) }));
-          else if (p.type === 'resultado') setResultados((r) => ({ ...r, [p.item.id]: p.item }));
+          else if (p.type === 'resultado') {
+            setResultados((r) => ({ ...r, [p.item.id]: p.item }));
+            // falha momentânea (IA): o automático pode pegar de novo quando chegar a hora
+            if (p.item.status === 'repetir') {
+              autoRef.current.delete(p.item.id);
+              setTimeout(() => setTentativaAuto((x) => x + 1), Math.max(1000, Date.parse(p.item.repetirEm) - Date.now() + 500));
+            }
+          }
           else if (p.type === 'done') {
             fechar();
             mudar((x) => ({ ...x, fim: p }));
@@ -639,8 +649,8 @@
       if (!auto.ativo || !pronto || lista.carregando || lista.guardado || rodandoAlgo) return;
       // `lote` = TODOS os prontos, na ordem da lista; a parte deste computador é decidida na reserva (max)
       const lote = lista.itens
-        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !autoRef.current.has(i.id) && !resultados[i.id] && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
-          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status)));
+        .filter((i) => !i.problemas.length && !dispensados.includes(i.id) && !autoRef.current.has(i.id) && (!resultados[i.id] || horaDeRepetir(resultados[i.id].status === 'repetir' && resultados[i.id].repetirEm)) && !execDoChamado(i.id) && !falta(i) && !deveExcluirDoAutomatico(i) && !(i.usuario && i.usuario.daPlanilha) && !(i.foto && i.foto.multi)
+          && !(i.ultimaExecucao && ['erro', 'executando'].includes(i.ultimaExecucao.status) && !(i.repetirIa && horaDeRepetir(i.repetirIa.em))));
       if (!lote.length) return;
       lote.forEach((i) => autoRef.current.add(i.id));
       // Vários computadores podem estar no automático: antes de rodar, RESERVA no servidor (atômico) os chamados deste lote.
@@ -826,14 +836,16 @@
       let rodape;
       if (res) {
         rodape = e('div', { key: 'res', style: { borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 12.5 } }, [
-          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' ? 'var(--warn)' : 'var(--accent)' } },
+          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' || res.status === 'repetir' ? 'var(--warn)' : 'var(--accent)' } },
             res.status === 'teste'
               ? `Teste: execução ${res.ok ? 'sem erro' : 'com erro'}`
               : res.status === 'concluido'
                 ? 'Solucionado no GLPI'
                 : res.status === 'nao_rodou'
                   ? 'Não executado: configuração pendente'
-                  : 'Erro: devolutiva pendente no chamado'),
+                  : res.status === 'repetir'
+                    ? 'Falha momentânea: nova tentativa automática (IA)'
+                    : 'Erro: devolutiva pendente no chamado'),
           e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
           res.status !== 'concluido'
             ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Rodar novamente')])
@@ -887,6 +899,16 @@
           e('strong', { key: 't' }, avisoConfianca(item).titulo),
           e('div', { key: 'o' }, avisoConfianca(item).orientacao),
         ]) : null,
+        // opinião da IA local (Administração > IA): confirma, sugere outro tipo ou encerra reaberto
+        item.ia || item.reabertoIa ? e('div', { key: 'ia', className: 'chamado-ia', style: { fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' } }, [
+          e('span', { key: 'r', style: { fontWeight: 600, color: 'var(--text)' } }, 'IA:'),
+          e('span', { key: 't' }, item.reabertoIa
+            ? `reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.`
+            : item.ia.concorda
+              ? `confirma o tipo (${Math.round(item.ia.confianca * 100)}%)${item.validadoPorIa ? '; liberado para o automático' : ''}.`
+              : `${item.ia.aplicar === 'auto' ? 'trocou o tipo' : 'sugere'} ${item.tipoNome || 'sem automação'} (${Math.round(item.ia.confianca * 100)}%)${item.ia.motivo ? ': ' + item.ia.motivo : ''}`),
+        ]) : null,
+        item.repetirIa && !res ? e('div', { key: 'rep', style: { fontSize: 12, color: 'var(--warn)' } }, `Nova tentativa automática ${item.repetirIa.tentativa}: ${item.repetirIa.motivo || 'falha momentânea'}.`) : null,
         detalhes,
         item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
         item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,

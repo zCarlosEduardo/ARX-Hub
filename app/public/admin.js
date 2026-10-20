@@ -572,6 +572,11 @@
           ]),
           e('div', { key: 't', style: { color: 'var(--muted)' } }, m.trecho),
           m.motivo ? e('div', { key: 'm' }, m.motivo) : null,
+          // o que a IA local achou e a resposta que ela daria (mostrada sempre, mesmo no modo só reagir)
+          m.ia ? e('div', { key: 'ia', className: 'wa-ia', style: { borderTop: '1px dashed var(--border)', paddingTop: 4, color: 'var(--muted)' } }, [
+            e('div', { key: 'c' }, `IA: ${m.ia.tipo === 'sem_automacao' ? 'não é pedido de automação' : m.ia.tipo} (${Math.round((Number(m.ia.confianca) || 0) * 100)}%)${m.ia.tipoRegra ? `; regra: ${m.ia.tipoRegra}` : '; a regra não reconheceu'}${m.ia.motivo ? `. ${m.ia.motivo}` : ''}`),
+            m.ia.resposta ? e('div', { key: 'r', style: { color: 'var(--text)' } }, `Resposta da IA: ${m.ia.resposta}`) : null,
+          ]) : null,
         ]))),
       rotulo('Pedidos recentes'),
       painel.pedidos.length === 0 ? dica('Nenhum pedido ainda.') : e('div', { key: 'ped', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, painel.pedidos.map((p) =>
@@ -591,6 +596,10 @@
   // ---------- tela ----------
   // ---------- aba: Histórico (quem mudou o quê pela administração e pelo cadastro de automações) ----------
   const ACOES_HISTORICO = {
+    'ia.ligar': 'Ligou a IA local',
+    'ia.desligar': 'Desligou a IA local',
+    'ia.exportar': 'Exportou os chamados para a IA',
+    'ia.treinar': 'Treinou a IA',
     'config.alterar': 'Alterou a configuração',
     'admin.adicionar': 'Adicionou administrador',
     'admin.remover': 'Removeu administrador',
@@ -649,7 +658,106 @@
     ]);
   }
 
-  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
+  // ---------- aba: IA local (ligar/desligar de verdade, exportar e treinar, como ela age) ----------
+  const ETAPAS_TREINO = { vetores: 'calculando os vetores dos chamados', avaliacao: 'medindo o acerto (validação cruzada)', gravando: 'gravando o modelo', pronto: 'pronto', erro: 'erro' };
+  const pctTxt = (x) => (x === null || x === undefined ? 'Sem dados' : `${String(x).replace('.', ',')}%`);
+
+  function AbaIa({ config, opcoes, aoSalvar }) {
+    const [estado, setEstado] = useState(null);
+    const [erroEstado, setErroEstado] = useState(null);
+    const [ocupado, setOcupado] = useState('');
+    const [msg, setMsg] = useState(null);
+    const [c, setC] = useState(() => copia(config.ia));
+    const atualizar = async () => {
+      try {
+        setEstado(await api('GET', '/api/admin/ia/estado'));
+        setErroEstado(null);
+      } catch (err) {
+        setErroEstado(err.message);
+      }
+    };
+    const andamento = estado && ((estado.exportacao && estado.exportacao.rodando) || (estado.ia && estado.ia.treino && estado.ia.treino.rodando));
+    useEffect(() => {
+      atualizar();
+      const t = setInterval(atualizar, andamento ? 3000 : 15000);
+      return () => clearInterval(t);
+    }, [andamento]);
+    const acao = (nome, caminho, texto) => async () => {
+      setOcupado(nome);
+      setMsg(null);
+      try {
+        await api('POST', caminho);
+        setMsg({ ok: true, texto });
+      } catch (err) {
+        setMsg({ ok: false, texto: err.message });
+      }
+      setOcupado('');
+      atualizar();
+    };
+    const { erro, ok, salvando, salvar } = useSalvar(async () => {
+      const novo = await api('PUT', '/api/admin/config/ia', { ...c, ligada: estado && estado.config ? estado.config.ligada : c.ligada, confiancaMinima: Number(String(c.confiancaMinima).replace(',', '.')), maxTentativas: Number(c.maxTentativas) });
+      setC(novo);
+      aoSalvar({ ...config, ia: novo });
+    });
+
+    const ligada = !!(estado && estado.controle && estado.controle.ligada);
+    const ia = estado && estado.ia;
+    const exp = estado && estado.exportacao;
+    const treino = ia && ia.treino;
+    const linha = (rotulo, valor) => e('div', { style: { display: 'flex', gap: 8, fontSize: 13 } }, [e('span', { key: 'r', style: { color: 'var(--muted)', minWidth: 190 } }, rotulo), e('span', { key: 'v' }, valor)]);
+    const tipos = (opcoes && opcoes.tipos) || [];
+
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 18 } }, [
+      dica('IA local, grátis e sem internet: roda nesta rede, num container isolado, e nenhum dado sai para outra empresa. Desligada, os containers param e tudo segue só pelas regras de hoje.'),
+      erroEstado ? e('div', { key: 'ee', className: 'admin-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erroEstado) : null,
+      estado && !estado.configurada ? e('div', { key: 'nc', style: { color: 'var(--warn)', fontSize: 12.5 } }, 'IA não configurada no servidor (rode scripts/gerar-segredo-ia.sh e suba ia-local, ia-controle, chamados-glpi e hub).') : null,
+      e('div', { key: 'est', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+        rotulo('Situação'),
+        !estado ? dica('Carregando…') : e('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+          linha('IA', ligada ? 'Ligada' : estado.controle && estado.controle.erro ? 'Controle fora do ar: ' + estado.controle.erro : 'Desligada'),
+          ...((estado.controle && estado.controle.containers) || []).map((x) => linha('Container ' + x.nome, x.estado === 'running' ? 'rodando' : x.estado === 'nao_criado' ? 'não criado (rode scripts/deploy.sh ia-local)' : 'parado')),
+          linha('Modelo treinado', ia ? (ia.treinado ? `${ia.exemplos} chamados, em ${new Date(ia.treinadoEm).toLocaleString('pt-BR')}` : 'Ainda não treinado') : 'Sem dados (IA desligada)'),
+          ia && ia.metricas ? linha('Acerto medido', `IA ${pctTxt(ia.metricas.acertoIa)} x regras de hoje ${pctTxt(ia.metricas.acertoRegras)} (${ia.metricas.total} chamados, validação cruzada)`) : null,
+          ia && ia.modelos ? linha('Modelos', `${ia.modelos.texto} (texto) e ${ia.modelos.embed} (vetores)`) : null,
+          exp && exp.etapa && exp.etapa !== 'pronto' && exp.rodando !== undefined ? linha('Exportação', exp.rodando ? `${exp.etapa}${exp.total ? ` (${exp.feito} de ${exp.total})` : ''}` : exp.erro ? 'Erro: ' + exp.erro : exp.etapa) : null,
+          exp && exp.resumo ? linha('Última exportação', `${exp.resumo.chamados} chamados (${exp.resumo.comHistorico} com resultado real de automação, ${exp.resumo.reabertos} reabertos)`) : null,
+          treino && treino.etapa ? linha('Treino', treino.rodando ? `${ETAPAS_TREINO[treino.etapa] || treino.etapa}${treino.total ? ` (${treino.feito} de ${treino.total})` : ''}` : treino.erro ? 'Erro: ' + treino.erro : ETAPAS_TREINO[treino.etapa] || treino.etapa) : null,
+        ]),
+      ]),
+      e('div', { key: 'bt', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+        ligada
+          ? botao(ocupado === 'desligar' ? 'Desligando…' : 'Desligar IA', acao('desligar', '/api/admin/ia/desligar', 'IA desligada: containers parados.'), 'sec', { key: 'd', disabled: !!ocupado })
+          : botao(ocupado === 'ligar' ? 'Ligando…' : 'Ligar IA', acao('ligar', '/api/admin/ia/ligar', 'IA ligada.'), 'prim', { key: 'l', disabled: !!ocupado }),
+        botao(ocupado === 'exportar' ? 'Iniciando…' : 'Exportar chamados do GLPI e treinar', acao('exportar', '/api/admin/ia/exportar', 'Exportação iniciada: o treino começa sozinho no fim.'), 'sec', { key: 'x', disabled: !ligada || !!ocupado || andamento }),
+        botao(ocupado === 'treinar' ? 'Iniciando…' : 'Treinar de novo', acao('treinar', '/api/admin/ia/treinar', 'Treino iniciado.'), 'sec', { key: 't', disabled: !ligada || !!ocupado || andamento }),
+        e('a', { key: 'au', href: 'ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none' } }, 'Abrir auditoria da IA'),
+      ]),
+      msg ? e('div', { key: 'm', className: msg.ok ? 'admin-ok' : 'admin-erro', style: { color: msg.ok ? 'var(--success, #16a34a)' : 'var(--error)', fontSize: 12.5 } }, msg.texto) : null,
+      dica('A exportação lê, só para leitura, todos os chamados da entidade Sistemas com o seu token do GLPI (não fica guardado). CPF, telefone, e-mail, placa, chassi e senhas são mascarados antes de qualquer gravação.'),
+
+      e('div', { key: 'cfg', style: { display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 14 } }, [
+        rotulo('Como a IA age'),
+        e('div', { key: 'ta' }, [
+          rotulo('Tipos que rodam no automático com a validação da IA'),
+          dica('Nestes tipos, se a IA discordar da regra com confiança acima do mínimo, o chamado vai para o automático com o tipo que ela sugeriu. Nos outros tipos, a sugestão dela aparece e o chamado fica manual.'),
+          e('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 4, marginTop: 6 } },
+            tipos.map((t) => caixa(c.automaticoTipos.includes(t.chave), (v) => setC({ ...c, automaticoTipos: v ? [...c.automaticoTipos, t.chave] : c.automaticoTipos.filter((x) => x !== t.chave) }), t.nome, { key: t.chave }))),
+        ]),
+        e('div', { key: 'cm', style: { maxWidth: 260 } }, [rotulo('Confiança mínima (0,5 a 1)'), e('input', { className: 'field-input', inputMode: 'decimal', value: String(c.confiancaMinima).replace('.', ','), onChange: (ev) => setC({ ...c, confiancaMinima: ev.target.value }), style: S().input })]),
+        caixa(c.repetirErros, (v) => setC({ ...c, repetirErros: v }), 'Quando uma automação der erro, a IA decide se dá para tentar de novo sozinho (falha momentânea) ou se precisa de alguém.', { key: 're' }),
+        c.repetirErros ? e('div', { key: 'mt', style: { maxWidth: 260 } }, [rotulo('Tentativas automáticas (1 a 5)'), e('input', { className: 'field-input', type: 'number', min: 1, max: 5, value: c.maxTentativas, onChange: (ev) => setC({ ...c, maxTentativas: ev.target.value }), style: S().input })]) : null,
+        caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado (solução e devolutiva) no lugar do texto fixo; se ela falhar, vai o texto fixo.', { key: 'tx' }),
+        caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra.', { key: 'ra' }),
+        e('div', { key: 'wm', style: { maxWidth: 420 } }, [
+          rotulo('WhatsApp'),
+          selecao(c.whatsappModo, (v) => setC({ ...c, whatsappModo: v }), [['reagir', 'Só reagir (a resposta da IA aparece nos pedidos, sem enviar)'], ['responder', 'Responder a mensagem com o texto da IA']]),
+        ]),
+        rodape(salvar, salvando, erro, ok),
+      ]),
+    ]);
+  }
+
+  const ABAS = [['cofre', 'Cofre', 'Lock'], ['admins', 'Administradores', 'Users'], ['automacoes', 'Automações', 'Workflow'], ['historico', 'Histórico', 'History'], ['ia', 'IA local', 'Bot'], ['whatsapp', 'WhatsApp', 'MessageCircle'], ['vinculos', 'Vínculos do WhatsApp', 'Headset'], ['conexao', 'Conexão e pedidos', 'Bot']];
 
   function AdminView() {
     const [aba, setAba] = useState('cofre');
@@ -667,6 +775,7 @@
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
+    else if (aba === 'ia') corpo = e(AbaIa, { key: 'ia', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });

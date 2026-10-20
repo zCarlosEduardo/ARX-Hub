@@ -90,3 +90,15 @@ test('grupo guarda a categoria do GLPI; modelo de resposta é validado', () => {
   assert.equal(validarSecao('whatsapp', { ...base, respostaModelo: 'x'.repeat(500) }).ok, false);
   assert.equal(validarSecao('whatsapp', { ...base, respostaModelo: '   ' }).ok, false);
 });
+
+test('tipoComIa: concorda vale; discorda forte troca só para tipo liberado; certeza de que não é pedido ignora', () => {
+  const { tipoComIa } = require('../whatsapp');
+  const cfg = { confiancaMinima: 0.8, automaticoTipos: ['cadastro_usuario'] };
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: null, cfg }), { tipo: 'senha_sistemas', origem: 'regra' });
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'senha_sistemas', confianca: 0.5 }, cfg }), { tipo: 'senha_sistemas', origem: 'regra e ia' });
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'cadastro_usuario', confianca: 0.9 }, cfg }), { tipo: 'cadastro_usuario', origem: 'ia' });
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'fechamento', confianca: 0.99 }, cfg }), { tipo: 'senha_sistemas', origem: 'regra' });
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'cadastro_usuario', confianca: 0.6 }, cfg }), { tipo: 'senha_sistemas', origem: 'regra' });
+  assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'sem_automacao', confianca: 0.95 }, cfg }), { tipo: null, origem: 'ia' });
+  assert.deepEqual(tipoComIa({ tipoRegra: null, ia: { tipo: 'cadastro_usuario', confianca: 0.95 }, cfg }), { tipo: 'cadastro_usuario', origem: 'ia' });
+});

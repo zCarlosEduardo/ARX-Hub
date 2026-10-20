@@ -94,4 +94,21 @@ function textoResposta(modelo, { ticketId, solicitante, tipo }) {
     .replace(/\{tipo\}/g, tipo || '');
 }
 
-module.exports = { chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta };
+/**
+ * Tipo final de uma mensagem com a opinião da IA local (Administração > IA). Concordou: vale. Discordou com confiança
+ * acima do mínimo: se ela tem certeza de que não é pedido, o robô ignora; se sugere outro tipo liberado para o
+ * automático com a validação dela, vale o tipo dela. No resto, vale a regra.
+ * @returns {{tipo: string|null, origem: 'regra'|'ia'|'regra e ia'}}
+ */
+function tipoComIa({ tipoRegra, ia, cfg }) {
+  const regra = tipoRegra || null;
+  if (!ia || !ia.tipo) return { tipo: regra, origem: 'regra' };
+  const tipoIa = ia.tipo === 'sem_automacao' ? null : ia.tipo;
+  if (tipoIa === regra) return { tipo: regra, origem: 'regra e ia' };
+  if ((Number(ia.confianca) || 0) < (Number(cfg && cfg.confiancaMinima) || 0.8)) return { tipo: regra, origem: 'regra' };
+  if (!tipoIa) return { tipo: null, origem: 'ia' };
+  if (((cfg && cfg.automaticoTipos) || []).includes(tipoIa)) return { tipo: tipoIa, origem: 'ia' };
+  return { tipo: regra, origem: 'regra' };
+}
+
+module.exports = { chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta, tipoComIa };

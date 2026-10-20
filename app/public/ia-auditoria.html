@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARX Auditoria da IA</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var d = document.documentElement, t = null;
+      try { t = localStorage.getItem('arx-tema'); } catch (e) {}
+      d.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    })();
+  </script>
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: var(--font-sans, Geist, sans-serif); margin: 0; }
+    .pagina { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; display: flex; flex-direction: column; gap: 18px; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 16px; margin: 0 0 8px; }
+    h3 { font-size: 13.5px; margin: 14px 0 6px; }
+    p, li { font-size: 13.5px; line-height: 1.6; color: var(--text); }
+    .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .cartao { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .kpi .r { color: var(--muted); font-size: 12px; }
+    .kpi .v { font-size: 20px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    code, pre { font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 12px; }
+    pre { background: var(--secondary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; }
+    .selo { display: inline-flex; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid currentColor; }
+    .ok { color: var(--accent); } .alerta { color: var(--warn); } .ruim { color: var(--error); }
+    .linha { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+    ol.tempo { padding-left: 18px; margin: 0; }
+    ol.tempo li { margin-bottom: 6px; }
+    svg text { fill: var(--text); font-family: inherit; }
+    .vazio { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+<main class="pagina">
+  <header>
+    <h1>Auditoria da IA local</h1>
+    <div class="sub">Como a IA das automações ARX foi pensada, instalada, treinada e colocada em produção, e o que ela está fazendo agora. Os números desta página são agregados: nenhum chamado, texto ou pessoa aparece aqui.</div>
+    <div class="linha" style="margin-top:10px" id="situacao"><span class="vazio">Lendo a situação da IA…</span></div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="cartao">
+    <h2>1. O que é e o que faz</h2>
+    <p>Uma IA que roda inteira dentro da rede da ARX, sem serviço pago e sem enviar nada para outra empresa. Ela não substitui as regras de classificação que já existem: trabalha como <strong>validadora</strong>, ao lado delas.</p>
+    <ul>
+      <li><strong>Chamados do GLPI:</strong> confere o tipo que as regras deram a cada chamado aberto. Se concorda, confirma. Se discorda com confiança acima do mínimo e o tipo sugerido está liberado na Administração, o chamado vai para o automático com a sugestão dela; senão, fica para alguém confirmar, com a sugestão visível no card.</li>
+      <li><strong>Erros:</strong> quando uma automação falha, decide se é falha momentânea (repete sozinho depois de 2 minutos, até o limite) ou se precisa de alguém.</li>
+      <li><strong>Chamados reabertos:</strong> lê os acompanhamentos; se o pedido novo é de outra categoria, encerra explicando que o chamado era de uma categoria e o novo pedido é de outra.</li>
+      <li><strong>Respostas:</strong> pode escrever a solução e a devolutiva no lugar do texto fixo (nunca em resposta que tenha senha; se falhar, vai o texto fixo).</li>
+      <li><strong>WhatsApp:</strong> valida se a mensagem é mesmo o pedido que as regras acharam, escreve a resposta que daria (sempre registrada) e, no modo "responder", envia essa resposta no grupo.</li>
+    </ul>
+  </section>
+
+  <section class="cartao">
+    <h2>2. Privacidade, licenças e custo</h2>
+    <table>
+      <thead><tr><th>Componente</th><th>Função</th><th>Licença</th><th>Custo</th><th>Acesso à internet</th></tr></thead>
+      <tbody>
+        <tr><td>Ollama 0.40.2</td><td>Motor que roda os modelos</td><td>MIT</td><td>Grátis</td><td>Nenhum (rede interna)</td></tr>
+        <tr><td>bge-m3</td><td>Transforma cada texto num vetor de significado (1024 números)</td><td>MIT</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>Qwen2.5 1.5B Instruct</td><td>Modelo de texto: desempate, WhatsApp, respostas, reabertos, erros</td><td>Apache 2.0</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>ia-local (código ARX)</td><td>API da IA, classificador e treino</td><td>Interno</td><td>Grátis</td><td>Nenhum</td></tr>
+        <tr><td>ia-controle (código ARX)</td><td>Liga e desliga os containers a pedido da Administração</td><td>Interno</td><td>Grátis</td><td>Não usa</td></tr>
+      </tbody>
+    </table>
+    <h3>Por que nenhum dado sai</h3>
+    <ul>
+      <li>A IA (<code>ia-local</code>) e o motor (<code>ia-ollama</code>) estão SÓ na rede Docker <code>arx-ia-interna</code>, criada com <code>internal: true</code>: o Docker não dá rota para fora. Testado na instalação: uma requisição da IA para a internet falhou por falta de rota.</li>
+      <li>Os modelos foram baixados UMA vez, por um container separado (perfil <code>baixar-modelos</code>), que não participa da rede interna e termina depois do download.</li>
+      <li>Só o Hub e o chamados-glpi entram na rede interna para conversar com a IA, com um token (<code>IA_TOKEN</code>) que fica só nos arquivos <code>.env</code>, fora do Git.</li>
+      <li>CPF, CNPJ, telefone, e-mail, placa, chassi e senhas escritas no chamado são mascarados antes de qualquer gravação da IA (exportação, treino e registro de decisões).</li>
+      <li>O token do GLPI usado na exportação só lê, vai no pedido e não é guardado nem registrado.</li>
+    </ul>
+  </section>
+
+  <section class="cartao">
+    <h2>3. Arquitetura</h2>
+    <svg viewBox="0 0 900 300" width="100%" role="img" aria-label="Diagrama: Hub e chamados-glpi falam com a IA local pela rede interna; a IA usa o Ollama; o ia-controle liga e desliga os dois; nenhuma saída para a internet a partir da rede interna.">
+      <rect x="320" y="20" width="560" height="200" rx="14" fill="none" stroke="var(--accent)" stroke-dasharray="6 5"/>
+      <text x="335" y="42" font-size="12" style="fill:var(--accent)">rede arx-ia-interna (internal: sem internet)</text>
+      <rect x="20" y="40" width="200" height="56" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="40" y="73" font-size="13">ARX Hub (Administração, WhatsApp)</text>
+      <rect x="20" y="150" width="200" height="56" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="40" y="183" font-size="13">chamados-glpi (listagem, execução)</text>
+      <rect x="400" y="80" width="190" height="70" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="420" y="110" font-size="13">ia-local :4025</text><text x="420" y="130" font-size="11" style="fill:var(--muted)">classificador e API</text>
+      <rect x="660" y="80" width="190" height="70" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="680" y="110" font-size="13">ia-ollama :11434</text><text x="680" y="130" font-size="11" style="fill:var(--muted)">bge-m3 e qwen2.5:1.5b</text>
+      <rect x="400" y="240" width="190" height="44" rx="10" fill="var(--card)" stroke="var(--border)"/><text x="420" y="267" font-size="13">ia-controle :4026 (Docker)</text>
+      <line x1="220" y1="68" x2="400" y2="105" stroke="var(--muted)"/><line x1="220" y1="178" x2="400" y2="125" stroke="var(--muted)"/>
+      <line x1="590" y1="115" x2="660" y2="115" stroke="var(--muted)"/>
+      <line x1="120" y1="96" x2="400" y2="262" stroke="var(--muted)" stroke-dasharray="3 4"/>
+      <text x="230" y="230" font-size="11" style="fill:var(--muted)">ligar e desligar</text>
+    </svg>
+  </section>
+
+  <section class="cartao">
+    <h2>4. Como foi construída e instalada (linha do tempo)</h2>
+    <ol class="tempo">
+      <li><strong>Decisão do papel:</strong> validar e não substituir as regras; começar medindo (o acerto da IA contra as regras no mesmo chamado) antes de deixar decidir.</li>
+      <li><strong>Escolha dos modelos:</strong> a máquina final é um servidor simples, sem GPU. Por isso o núcleo é um classificador sobre vetores (rápido em CPU) e o modelo de texto é o menor que ainda escreve bem em português (Qwen2.5 1.5B, licença Apache 2.0; o 3B tem licença própria, por isso ficou de fora).</li>
+      <li><strong>Código:</strong> <code>ia-local</code> em Node sem nenhuma dependência de npm (só a biblioteca padrão), <code>ia-controle</code> idem. Testes automáticos com dados fictícios para a máscara de dados, o classificador, os erros, o serviço e as rotas.</li>
+      <li><strong>Containers:</strong> imagem <code>ollama/ollama:0.40.2</code> (id <code>sha256:b86366bb528b…</code>, publicada em 08/10/2026); rede <code>arx-ia-interna</code> com <code>internal: true</code>; volumes <code>ia-modelos</code> e <code>ia-dados</code>.</li>
+      <li><strong>Segredos:</strong> <code>scripts/gerar-segredo-ia.sh</code> gerou <code>IA_TOKEN</code> e <code>IA_CONTROLE_TOKEN</code> (aleatórios, 64 caracteres) direto nos <code>.env</code>; nenhum valor foi exibido.</li>
+      <li><strong>Modelos:</strong> <code>docker compose --profile baixar-modelos run --rm ia-baixar-modelos</code> baixou <code>qwen2.5:1.5b</code> (986 MB, id <code>65ec06548149</code>) e <code>bge-m3</code> (1,2 GB, id <code>790764642607</code>).</li>
+      <li><strong>Subida:</strong> <code>scripts/deploy.sh ia-ollama ia-local ia-controle</code>; depois chamados-glpi e Hub entraram na rede interna. Verificado: sem internet a partir da IA; vetor de 1024 dimensões em cerca de 2 s no primeiro uso; resposta do modelo de texto em cerca de 1,6 s.</li>
+      <li><strong>Dados:</strong> exportação só leitura de TODOS os chamados da entidade Sistemas (ver seção 5).</li>
+      <li><strong>Treino:</strong> vetores de cada chamado, classificador e validação cruzada (seção 5).</li>
+      <li><strong>Integração:</strong> listagem e execução do chamados-glpi, WhatsApp e Administração > IA local no Hub; tudo começa desligado e cada uso é ligado na Administração.</li>
+    </ol>
+  </section>
+
+  <section class="cartao">
+    <h2>5. Dados e treino</h2>
+    <h3>De onde vieram os exemplos</h3>
+    <p>Todos os chamados da entidade Sistemas lidos do GLPI (só leitura). Cada chamado recebeu um rótulo, o "gabarito" do treino, do mais confiável para o menos:</p>
+    <ol>
+      <li>Já rodou numa automação (banco-central, <code>chamados_automacao</code>): o tipo foi aprovado por uma pessoa ou pelo automático. Peso 1 se concluiu, 0,9 em modo teste, 0,7 se deu erro.</li>
+      <li>Senão, o que as regras de hoje dizem (peso 0,5), ou "sem automação".</li>
+    </ol>
+    <p>Chamados reabertos (solução recusada no GLPI) levaram também os últimos acompanhamentos, para a IA aprender o pedido novo.</p>
+    <h3>Como ela aprende</h3>
+    <p>Cada chamado (título e descrição, com dados pessoais mascarados) vira um vetor de 1024 números pelo bge-m3; chamados com o mesmo pedido ficam perto uns dos outros, mesmo escritos de jeitos diferentes. Para um chamado novo, a IA olha os 7 mais parecidos do histórico e cada um vota no seu tipo, com peso pela semelhança (ao quadrado) e pelo peso do rótulo. A confiança é a fatia dos votos do vencedor. Abaixo de 0,75, ou quando discorda das regras, o modelo de texto recebe o chamado e os 4 exemplos mais parecidos e desempata.</p>
+    <h3>Como o acerto foi medido</h3>
+    <p>Validação cruzada em 5 partes: o chamado testado nunca está no treino. O acerto da IA e o das regras de hoje são medidos nos mesmos chamados (amostra espalhada de até 3.000). Atenção: quando o rótulo veio das próprias regras (peso 0,5), as regras "acertam" por definição; o número que mais importa é o acerto nos chamados com resultado real de automação.</p>
+    <div id="treino"><span class="vazio">Lendo as métricas…</span></div>
+  </section>
+
+  <section class="cartao">
+    <h2>6. Como ela está configurada agora</h2>
+    <div id="config"><span class="vazio">Lendo a configuração…</span></div>
+    <p class="sub">Muda em Administração > IA local (só administradores). Cada mudança fica no Histórico da Administração.</p>
+  </section>
+
+  <section class="cartao">
+    <h2>7. Registro de eventos</h2>
+    <div id="eventos"><span class="vazio">Lendo os eventos…</span></div>
+  </section>
+
+  <section class="cartao">
+    <h2>8. Requisitos para rodar em outra máquina</h2>
+    <ul>
+      <li><strong>Hardware mínimo:</strong> 4 núcleos, 8 GB de RAM (os dois modelos usam cerca de 3 GB carregados), 10 GB livres em disco (imagem do Ollama 3,8 GB e modelos 2,2 GB). GPU é opcional.</li>
+      <li><strong>Desempenho medido em CPU</strong> (Ryzen 9 7900, 24 threads): vetores de 5 a 12 chamados por segundo durante o treino; um chamado novo em menos de 1 s; resposta do modelo de texto em 2 a 5 s. Num servidor de 4 núcleos, conte com 3 a 4 vezes mais.</li>
+      <li><strong>Software:</strong> Docker com Compose (Docker Desktop no Windows ou Docker Engine no Linux). Nada mais: as imagens trazem tudo.</li>
+    </ul>
+    <h3>Passo a passo</h3>
+    <pre>scripts/gerar-segredo-ia.sh                                           # tokens nos .env (não exibe)
+docker compose --profile baixar-modelos run --rm ia-baixar-modelos    # único passo com internet
+scripts/deploy.sh ia-ollama ia-local ia-controle chamados-glpi hub
+# Hub > Administração > IA local: Ligar, depois "Exportar chamados do GLPI e treinar"</pre>
+  </section>
+
+  <section class="cartao">
+    <h2>9. Limites conhecidos</h2>
+    <ul>
+      <li>O modelo de texto é pequeno: bom para classificar e reescrever, fraco para raciocínio longo. Por isso ele só desempata e escreve, e as respostas com senha nunca passam por ele.</li>
+      <li>Com poucos chamados com resultado real de automação, boa parte do gabarito vem das próprias regras; a IA melhora conforme as automações rodam (treine de novo de tempos em tempos).</li>
+      <li>Os cadastros em Python não informam resultado por item; isso não afeta a IA, só os Resultados.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var pct = function (x) { return x === null || x === undefined ? 'Sem dados' : String(x).replace('.', ',') + '%'; };
+  var num = function (x) { return Number(x || 0).toLocaleString('pt-BR'); };
+  var data = function (t) { return t ? new Date(t).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informado'; };
+  var NOMES_EVENTO = { 'servico.subiu': 'Serviço da IA subiu', 'exportacao.inicio': 'Exportação começou', 'exportacao.fim': 'Exportação terminou', 'treino.inicio': 'Treino começou', 'treino.fim': 'Treino terminou', 'treino.erro': 'Treino falhou' };
+  var kpi = function (r, v) { return '<div class="kpi"><div class="r">' + esc(r) + '</div><div class="v">' + esc(v) + '</div></div>'; };
+
+  Promise.all([
+    fetch('/api/ia/auditoria-publica', { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; }),
+    fetch('/api/config-publica', { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; }),
+  ]).then(function (res) {
+    var a = res[0] || { vazio: true };
+    var cfg = (res[1] && res[1].ia) || null;
+    var e = a.estado || {};
+    var m = a.metricas || null;
+    $('situacao').innerHTML =
+      '<span class="selo ' + (a.aoVivo ? 'ok' : 'alerta') + '">' + (a.aoVivo ? 'IA no ar' : 'IA desligada ou fora do ar') + '</span>' +
+      (cfg ? '<span class="selo ' + (cfg.ligada ? 'ok' : 'alerta') + '">' + (cfg.ligada ? 'Ligada na Administração' : 'Desligada na Administração') + '</span>' : '') +
+      '<span class="sub">' + (a.aoVivo ? 'Dados ao vivo, ' : a.em ? 'Última fotografia guardada, ' : '') + (a.em ? data(a.em) : '') + '</span>';
+    if (a.vazio) { $('kpis').innerHTML = ''; $('treino').innerHTML = '<span class="vazio">Sem dados: a IA ainda não respondeu.</span>'; }
+    else {
+      $('kpis').innerHTML = kpi('Chamados no modelo', num(e.exemplos)) + kpi('Acerto da IA (validação cruzada)', m ? pct(m.acertoIa) : 'Sem dados') + kpi('Acerto das regras, mesmos chamados', m ? pct(m.acertoRegras) : 'Sem dados') + kpi('Decisões registradas', num(a.decisoes && a.decisoes.total));
+      var t = '';
+      if (e.treino && e.treino.rodando) t += '<p class="alerta">Treino em andamento: ' + esc(e.treino.etapa) + '.</p>';
+      if (m) {
+        t += '<p>Treinado em ' + esc(data(m.treinadoEm)) + ' com ' + num(m.total) + ' chamados na medição. Modelos: ' + esc(m.modeloEmbed) + ' (vetores) e ' + esc(m.modeloTexto) + ' (texto).</p>';
+        var tipos = Object.keys(m.distribuicao || {}).sort(function (x, y) { return (m.distribuicao[y] || 0) - (m.distribuicao[x] || 0); });
+        t += '<table><thead><tr><th>Tipo</th><th class="n">Chamados no histórico</th><th class="n">Testados</th><th class="n">Acerto da IA</th></tr></thead><tbody>' +
+          tipos.map(function (k) { var p = (m.porTipo || {})[k] || {}; return '<tr><td>' + esc(k) + '</td><td class="n">' + num(m.distribuicao[k]) + '</td><td class="n">' + num(p.total) + '</td><td class="n">' + pct(p.acerto) + '</td></tr>'; }).join('') + '</tbody></table>';
+      } else if (!(e.treino && e.treino.rodando)) t += '<p class="vazio">Ainda não treinada.</p>';
+      $('treino').innerHTML = t;
+      var ev = (a.eventos || []).slice().reverse();
+      $('eventos').innerHTML = ev.length ? '<table><thead><tr><th>Quando</th><th>Evento</th><th>Detalhe</th></tr></thead><tbody>' + ev.map(function (x) {
+        var det = Object.keys(x).filter(function (k) { return k !== 'quando' && k !== 'tipo'; }).map(function (k) { return k + ': ' + x[k]; }).join(' · ');
+        return '<tr><td>' + esc(data(x.quando)) + '</td><td>' + esc(NOMES_EVENTO[x.tipo] || x.tipo) + '</td><td>' + esc(det) + '</td></tr>';
+      }).join('') + '</tbody></table>' + (a.decisoes ? '<p class="sub">Decisões recentes: ' + num(a.decisoes.concorda) + ' concordaram com as regras, ' + num(a.decisoes.discorda) + ' discordaram.</p>' : '') : '<span class="vazio">Sem eventos registrados.</span>';
+    }
+    $('config').innerHTML = cfg ? '<table><tbody>' +
+      '<tr><td>Ligada</td><td>' + (cfg.ligada ? 'Sim' : 'Não') + '</td></tr>' +
+      '<tr><td>Tipos no automático com a validação dela</td><td>' + (cfg.automaticoTipos.length ? esc(cfg.automaticoTipos.join(', ')) : 'Nenhum') + '</td></tr>' +
+      '<tr><td>Confiança mínima</td><td>' + String(cfg.confiancaMinima).replace('.', ',') + '</td></tr>' +
+      '<tr><td>Novas tentativas de erro momentâneo</td><td>' + (cfg.repetirErros ? 'Sim, até ' + cfg.maxTentativas : 'Não') + '</td></tr>' +
+      '<tr><td>Resposta do chamado escrita pela IA</td><td>' + (cfg.textoPelaIa ? 'Sim' : 'Não') + '</td></tr>' +
+      '<tr><td>Encerrar reaberto com outro pedido</td><td>' + (cfg.reabertos ? 'Sim' : 'Não') + '</td></tr>' +
+      '<tr><td>WhatsApp</td><td>' + (cfg.whatsappModo === 'responder' ? 'Responde com o texto da IA' : 'Só reage (a resposta da IA fica registrada)') + '</td></tr>' +
+      '</tbody></table>' : '<span class="vazio">Sem dados.</span>';
+  });
+})();
+</script>
+</body>
+</html>

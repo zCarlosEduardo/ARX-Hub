@@ -71,6 +71,8 @@ function criarRotasWhatsapp(deps) {
       trecho: trecho(b.texto),
       resultado: r.status,
       motivo: r.motivo || '',
+      // análise da IA local e a resposta que ela daria (aparece mesmo no modo só reagir, para conferir)
+      ia: r.ia ? { tipo: r.ia.tipo, confianca: r.ia.confianca, motivo: truncar(r.ia.motivo || '', 200), resposta: truncar(r.ia.resposta || '', 300), tipoRegra: r.ia.tipoRegra } : null,
     });
     if (decisoes.length > 100) decisoes.length = 100;
   }
@@ -107,15 +109,21 @@ function criarRotasWhatsapp(deps) {
     if (cfg.remetentesAutorizados.length && !cfg.remetentesAutorizados.some((t) => W.mesmoTelefone(t, b.remetente))) return ignorar('Telefone fora da lista de autorizados.');
 
     const { apelido, texto } = ehPrivado ? W.extrairCategoria(bruto) : { apelido: '', texto: bruto };
-    const { tipo } = await classificar(texto);
+    const { tipo: tipoRegra } = await classificar(texto);
+    // IA local ligada: valida o tipo pelo contexto e diz a resposta que daria (sempre registrada para conferir)
+    const cfgIa = (await admin.configAtual()).ia || {};
+    const analiseIa = cfgIa.ligada && deps.ia ? await deps.ia.whatsapp({ mensagem: texto, tipoRegra }).catch(() => null) : null;
+    const { tipo } = W.tipoComIa({ tipoRegra, ia: analiseIa, cfg: cfgIa });
+    const comIa = (r) => (analiseIa ? { ...r, ia: { tipo: analiseIa.tipo, confianca: analiseIa.confianca, motivo: analiseIa.motivo, resposta: analiseIa.resposta, tipoRegra } } : r);
+    const respostaIa = cfgIa.whatsappModo === 'responder' && analiseIa && analiseIa.resposta ? analiseIa.resposta : null;
     const tiposLiberados = ehPrivado ? cfg.privado.tipos : grupo.tipos;
     // conversa solta ou pedido que não é deste grupo: o robô fica quieto
-    if (!tipo) return ignorar('Não parece um pedido de nenhum tipo atendido.');
-    if (tiposLiberados.length && !tiposLiberados.includes(tipo)) return ignorar(`O tipo "${NOME_TIPO.get(tipo) || tipo}" não está liberado ${ehPrivado ? 'na conversa privada' : 'neste grupo'}.`);
+    if (!tipo) return comIa(ignorar(analiseIa && tipoRegra ? 'A IA avaliou que não é um pedido atendido.' : 'Não parece um pedido de nenhum tipo atendido.'));
+    if (tiposLiberados.length && !tiposLiberados.includes(tipo)) return comIa(ignorar(`O tipo "${NOME_TIPO.get(tipo) || tipo}" não está liberado ${ehPrivado ? 'na conversa privada' : 'neste grupo'}.`));
 
     const vinculo = W.acharVinculo(await repo.listarVinculos(), b.remetente);
     // no privado qualquer pessoa pode escrever para o chip: quem não tem vínculo é ignorado em silêncio (nos grupos continua a dúvida)
-    if (ehPrivado && !vinculo) return ignorar('Telefone sem vínculo com usuário do GLPI (ignorado no privado).');
+    if (ehPrivado && !vinculo) return comIa(ignorar('Telefone sem vínculo com usuário do GLPI (ignorado no privado).'));
     const categoriaFixa = CATEGORIA_FIXA[tipo] || null;
     const categoria = ehPrivado && !categoriaFixa ? W.acharCategoria(cfg.privado.categorias, apelido) : null;
     const reagirLigado = ehPrivado ? cfg.privado.reagir : grupo.reagir;
@@ -148,16 +156,18 @@ function criarRotasWhatsapp(deps) {
     }
     const { pedido, novo } = await repo.criarPedido({ ...base, status, ticketId: null, erro: status === 'pendente' || status === 'observado' ? '' : erro });
     const reagir = (st) => (reagirLigado ? W.reacaoDoStatus(st, cfg.reacoes) : null);
-    if (!novo) return { status: pedido.status, motivo: 'Mensagem repetida: o robô já tinha tratado.', pedidoId: pedido.id, ticketId: pedido.ticketId, repetida: true, reacao: reagir(pedido.status) };
-    if (status !== 'abrindo') return { status, motivo: erro, pedidoId: pedido.id, ticketId: null, reacao: reagir(status), ...(resposta ? { resposta } : {}) };
+    // modo "responder" da IA: o texto dela vai para o grupo junto da reação (no modo Observação nada é enviado)
+    if (!resposta && respostaIa && cfg.modo !== 'observacao' && (status === 'pendente' || status === 'abrindo')) resposta = respostaIa;
+    if (!novo) return comIa({ status: pedido.status, motivo: 'Mensagem repetida: o robô já tinha tratado.', pedidoId: pedido.id, ticketId: pedido.ticketId, repetida: true, reacao: reagir(pedido.status) });
+    if (status !== 'abrindo') return comIa({ status, motivo: erro, pedidoId: pedido.id, ticketId: null, reacao: reagir(status), ...(resposta ? { resposta } : {}) });
     try {
       const ticketId = await abrirNoGlpi(pedido, tokenServico);
       await repo.mudarStatus(pedido.id, 'aberto', { ticketId });
-      return { status: 'aberto', motivo: `Chamado ${ticketId} aberto.`, pedidoId: pedido.id, ticketId, reacao: reagir('aberto') };
+      return comIa({ status: 'aberto', motivo: `Chamado ${ticketId} aberto.`, pedidoId: pedido.id, ticketId, reacao: reagir('aberto'), ...(resposta ? { resposta } : {}) });
     } catch (err) {
       const msg = truncar(limpar(err.message, tokenServico), 300);
       await repo.mudarStatus(pedido.id, 'erro', { erro: msg });
-      return { status: 'erro', motivo: msg, pedidoId: pedido.id, ticketId: null, reacao: reagir('erro') };
+      return comIa({ status: 'erro', motivo: msg, pedidoId: pedido.id, ticketId: null, reacao: reagir('erro') });
     }
   }
 

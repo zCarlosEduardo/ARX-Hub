@@ -14,7 +14,7 @@
 const crypto = require('crypto');
 const { adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
 
-const SECOES = ['cofre', 'automacoes', 'whatsapp'];
+const SECOES = ['cofre', 'automacoes', 'whatsapp', 'ia'];
 const TTL_PADRAO_MS = 60000;
 
 /**
@@ -109,8 +109,9 @@ function criarRotasAdmin(deps) {
   function registrar(app) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
       res.set('Cache-Control', 'no-store');
-      const { cofre, automacoes } = await configAtual();
-      res.json({ cofre, automacoes });
+      // ia: lida pelo chamados-glpi (não tem segredo: só ligada, tipos e limites)
+      const { cofre, automacoes, ia } = await configAtual();
+      res.json({ cofre, automacoes, ia });
     }));
 
     app.get('/api/admin/eu', asyncHandler(async (req, res) => {

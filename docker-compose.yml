@@ -41,11 +41,16 @@ services:
       WHATSAPP_BOT_TOKEN: ${WHATSAPP_BOT_TOKEN:-}
       HUB_GLPI_TOKEN_SERVICO: ${HUB_GLPI_TOKEN_SERVICO:-}
       CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://chamados-glpi:4013}
+      # IA local (ARX-Automacoes/ia-local): segredos gerados por scripts/gerar-segredo-ia.sh, só no .env
+      IA_TOKEN: ${IA_TOKEN:-}
+      IA_CONTROLE_TOKEN: ${IA_CONTROLE_TOKEN:-}
     # Rede das automações (projeto ARX-Automacoes): o Hub e o proxy falam com elas pelo nome do container, e as portas 40xx
     # ficam publicadas só em 127.0.0.1 (ninguém na rede as acessa direto).
     networks:
       - default
       - automacoes
+      # rede interna da IA local (sem internet): fala com ia-local:4025 (WhatsApp, auditoria, treino)
+      - ia
     # Tutoriais em vídeo do botão "?" (pasta fora do Git): TUTORIAIS_DIR no .env aponta para a pasta videos gerada
     # em Documentacao-Automacoes; sem ela, o Hub sobe igual e o botão não aparece.
     volumes:
@@ -64,3 +69,6 @@ networks:
   automacoes:
     external: true
     name: arx-automacoes_default
+  ia:
+    external: true
+    name: arx-ia-interna
