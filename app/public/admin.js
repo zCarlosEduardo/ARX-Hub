@@ -526,8 +526,8 @@
     ]);
   }
 
-  /** Aba do cabeçalho: só existe para administradores (o servidor confere o token do GLPI). */
-  function AdminAba({ ativa, aoAbrir, compacto }) {
+  /** true quando o token do GLPI do cofre é de um administrador (o servidor confere). Usado também pelo app.js. */
+  function useEhAdmin() {
     const [admin, setAdmin] = useState(false);
     const ultimo = useRef(null);
     useEffect(() => {
@@ -551,7 +551,12 @@
         parar();
       };
     }, []);
-    if (!admin) return null;
+    return admin;
+  }
+
+  /** Aba do cabeçalho: só existe para administradores. */
+  function AdminAba({ ativa, aoAbrir, compacto }) {
+    if (!useEhAdmin()) return null;
     return e('button', {
       type: 'button',
       className: 'panel-tab admin-btn' + (ativa ? ' ativa' : '') + (compacto ? ' compact' : ''),
@@ -562,6 +567,7 @@
     }, [Icon('Settings', 14), e('span', { key: 't', className: 'panel-tab-label' }, 'Administração')]);
   }
 
+  window.useEhAdmin = useEhAdmin;
   window.AdminAba = AdminAba;
   window.AdminView = AdminView;
 })();

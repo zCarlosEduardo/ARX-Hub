@@ -43,8 +43,10 @@
   };
 
   async function api(path, options) {
+    // Token do GLPI do cofre: o servidor só deixa admin cadastrar, editar ou remover automação.
+    const token = ((window.ArxAcessosHub && window.ArxAcessosHub.ler()) || {}).userToken || '';
     const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token },
       ...options,
     });
     if (!res.ok) {
@@ -68,6 +70,9 @@
     const [modalForm, setModalForm] = useState(null);
     const [testState, setTestState] = useState('idle');
     const [menuOpenId, setMenuOpenId] = useState(null);
+    // Quem não é admin não cadastra, edita nem remove automação e vê o endereço mascarado (admin.js e mascara.js).
+    const ehAdmin = (window.useEhAdmin || (() => false))();
+    const urlVisivel = (a) => (ehAdmin ? a.url.replace(/^https?:\/\//, '') : window.ArxMascara.mascararUrl(a.url));
     const [toasts, setToasts] = useState([]);
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [confirmDialog, setConfirmDialog] = useState(null);
@@ -664,7 +669,7 @@
           e('span', { key: 'dot', className: 'pulse-dot', style: { position: 'relative', width: 7, height: 7, borderRadius: '50%', background: healthDotColor, color: healthDotColor } }),
           e('span', { key: 'label' }, online + '/' + total + ' online'),
         ]),
-        e('button', {
+        ehAdmin && e('button', {
           key: 'new', className: 'btn-primary', onClick: openNewModal, title: 'Nova automação',
           style: sx('display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0'),
         }, [Icon('Plus', 16, 'var(--primary-fg)', 2.25), e('span', { key: 't' }, 'Nova automação')]),
@@ -676,7 +681,7 @@
       const meta = STATUS_META[a.status] || STATUS_META.checking;
       const isPulsing = a.status !== 'offline';
       const menuOpen = menuOpenId === a.id;
-      const urlShort = a.url.replace(/^https?:\/\//, '');
+      const urlShort = urlVisivel(a);
       const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
       return e('div', {
         key: a.id, className: 'card', onClick: () => openAutomation(a.id),
@@ -686,7 +691,8 @@
           e('div', { key: 'icon', style: { width: 38, height: 38, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: a.color + '22', color: a.color } }, Icon(a.icon, 19, a.color)),
           e('div', { key: 'actions', style: sx('display:flex;align-items:center;gap:2px') }, [
             e('span', { key: 'dot', className: isPulsing ? 'pulse-dot' : '', style: { position: 'relative', width: 8, height: 8, borderRadius: '50%', background: meta.color, color: meta.color, marginTop: 6, marginRight: 4 } }),
-            e('button', {
+            // o menu só tem ações de admin (editar, abrir/copiar o endereço, remover)
+            ehAdmin && e('button', {
               key: 'menu', className: 'icon-btn', onClick: (ev) => { ev.stopPropagation(); setMenuOpenId(menuOpen ? null : a.id); },
               style: sx('width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);border-radius:6px;cursor:pointer'),
             }, Icon('MoreHorizontal', 17)),
@@ -705,7 +711,7 @@
           key: 'open', className: 'card-open-btn', onClick: (ev) => { ev.stopPropagation(); openAutomation(a.id); },
           style: sx('padding:8px;background:var(--secondary);border:1px solid var(--border);color:var(--text);border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer;margin-top:2px'),
         }, 'Abrir'),
-        menuOpen ? e('div', {
+        (ehAdmin && menuOpen) ? e('div', {
           key: 'popover', onClick: (ev) => ev.stopPropagation(),
           style: sx('position:absolute;top:44px;right:10px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -8px rgba(0,0,0,0.12);z-index:5;overflow:hidden;min-width:170px'),
         }, [
@@ -784,10 +790,10 @@
               e('span', { key: 'dot', className: a.status !== 'offline' ? 'pulse-dot' : '', style: { position: 'relative', width: 6, height: 6, borderRadius: '50%', background: STATUS_META[a.status].color, color: STATUS_META[a.status].color, flexShrink: 0 } }),
               e('span', { key: 't', style: sx('overflow:hidden;text-overflow:ellipsis;white-space:nowrap') }, a.name),
             ]),
-            e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-soft);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap") }, a.url),
+            e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-soft);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap") }, urlVisivel(a)),
           ]),
           fabItem('reload', 'RefreshCw', 'Recarregar', () => startViewerLoad(a.id)),
-          fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(a.url, '_blank')),
+          ehAdmin && fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(a.url, '_blank')),
           fabItem('full', 'Maximize2', 'Tela cheia', toggleFullscreen),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           fabItem('close', 'X', 'Fechar aba', () => closeTab(a.id), true),
@@ -805,7 +811,7 @@
             : 'O serviço pode estar bloqueando exibição em iframe (X-Frame-Options / CSP) ou estar fora do alcance desta rede.'),
           e('div', { key: 'actions', style: sx('display:flex;gap:10px;margin-top:6px') }, [
             e('button', { key: 'retry', className: 'btn-primary', onClick: () => startViewerLoad(a.id), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('RefreshCw', 14), ' Tentar novamente']),
-            e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(a.url, '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+            ehAdmin && e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(a.url, '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
           ]),
         ]) : null,
         e('iframe', {

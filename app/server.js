@@ -181,7 +181,11 @@ function dadosOuErro(req) {
   return r.valor;
 }
 
-app.post('/api/automations', asyncHandler(async (req, res) => {
+// Cadastro de automações (criar, editar, remover, testar conexão): só admin. `rotasAdmin` é criado mais abaixo;
+// a função só roda na requisição, quando ele já existe.
+const soAdmin = (req, res, next) => rotasAdmin.soAdmin(req, res, next);
+
+app.post('/api/automations', soAdmin, asyncHandler(async (req, res) => {
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
     `INSERT INTO automations (name, url, container, description, icon, color, categories, status)
@@ -195,7 +199,7 @@ app.post('/api/automations', asyncHandler(async (req, res) => {
   res.status(201).json(rowToAutomation(created));
 }));
 
-app.put('/api/automations/:id', asyncHandler(async (req, res) => {
+app.put('/api/automations/:id', soAdmin, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   const d = dadosOuErro(req);
   const { rows } = await pool.query(
@@ -211,7 +215,7 @@ app.put('/api/automations/:id', asyncHandler(async (req, res) => {
   res.json(rowToAutomation(updated));
 }));
 
-app.delete('/api/automations/:id', asyncHandler(async (req, res) => {
+app.delete('/api/automations/:id', soAdmin, asyncHandler(async (req, res) => {
   const id = idOuErro(req);
   await pool.query('DELETE FROM automations WHERE id=$1', [id]);
   invalidarCache();
@@ -228,8 +232,8 @@ app.post('/api/automations/:id/check', asyncHandler(async (req, res) => {
   res.json({ id, status });
 }));
 
-app.post('/api/test-connection', asyncHandler(async (req, res) => {
-  // Só valida o formato da URL; restringir hosts fica para quando o Hub tiver autenticação.
+app.post('/api/test-connection', soAdmin, asyncHandler(async (req, res) => {
+  // Só admin chama; o formato da URL é validado, os hosts não são restringidos.
   const v = validarUrlTeste((req.body || {}).url);
   if (!v.ok) throw new ErroHttp(400, v.error);
   const status = await checkUrl(v.valor);
