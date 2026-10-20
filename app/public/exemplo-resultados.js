@@ -58,7 +58,7 @@
         }, [
           c.erros ? e('div', { key: 'e', className: 'exr-seg erro topo', style: { height: (c.erros / topo) * 100 + '%' } }) : null,
           c.ok ? e('div', { key: 'o', className: 'exr-seg ok' + (c.erros ? '' : ' topo'), style: { height: (c.ok / topo) * 100 + '%' } }) : null,
-          foco === i ? e('div', { key: 'd', className: 'exr-dica' }, [
+          foco === i ? e('div', { key: 'd', className: 'exr-dica' + (i < cols.length / 4 ? ' esq' : i > (cols.length * 3) / 4 ? ' dir' : '') }, [
             e('b', { key: 'b' }, c.rotulo),
             e('div', { key: 'o' }, 'Resolvidos: ' + num(c.ok)), e('div', { key: 'e' }, 'Com erro: ' + num(c.erros)),
             e('div', { key: 't', style: { color: 'var(--muted)' } }, 'Taxa de erro: ' + (c.total ? pct((c.erros / c.total) * 100) : 'Sem dados')),

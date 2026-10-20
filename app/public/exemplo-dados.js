@@ -65,7 +65,7 @@
     if (!tipo) status = 'sem_automacao';
     else if (tipo === 'erro_exportar_modelo' && r() < 0.6) { status = 'pendencia'; pendencias.push('Placa ou código do card'); }
     else if (tipo === 'sincronizar_vistoria' && r() < 0.3) { status = 'pendencia'; pendencias.push('Placa, chassi ou ID'); }
-    else if (tipo === 'desbloquear_usuario_sga' || (tipo === 'senha_sistemas' && r() < 0.35)) { status = 'manual'; confianca = 'media'; }
+    else if (tipo === 'desbloquear_usuario_sga' || (['senha_sistemas', 'cadastro_usuario'].includes(tipo) && r() < 0.4)) { status = 'manual'; confianca = 'media'; }
     else if (r() < 0.08) status = 'erro';
     const ia = tipo ? { concorda: r() > 0.1, confianca: Math.round((0.78 + r() * 0.21) * 100) } : (r() < 0.3 ? { concorda: false, sugestao: um(tipos), confianca: Math.round((0.6 + r() * 0.2) * 100) } : null);
     chamados.push(Object.assign(base, {
