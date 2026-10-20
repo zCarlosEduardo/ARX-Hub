@@ -20,6 +20,8 @@ services:
     container_name: arx-hub
     ports:
       - "8317:8317"
+      # proxy das automações (app/proxy.js): o navegador abre as telas só por aqui, sem ver o endereço delas
+      - "8318:8318"
     environment:
       DATABASE_URL: postgres://arxhub:${POSTGRES_PASSWORD:-arxhub_dev_password}@db:5432/arxhub
       PORT: "8317"

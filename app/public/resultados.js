@@ -10,7 +10,7 @@
   const { GraficoSemanas, BarrasHorizontais, Legenda } = window.Graficos;
   const D = window.GraficosDados;
 
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`;
+  const SERVICO = `${location.origin}/servicos/chamados`;
   const KEY_PERIODO = 'arxhub_resultados_periodo';
 
   const ler = (k, padrao) => {

@@ -10,7 +10,7 @@
   const { GraficoColunas } = window.Graficos;
   const D = window.GraficosDados;
 
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`;
+  const SERVICO = `${location.origin}/servicos/chamados`;
   const KEY = 'arxhub_disponibilidade_filtro';
 
   const ler = (k, padrao) => {
@@ -161,7 +161,7 @@
         if (!resp.ok) throw new Error(dados.error || `HTTP ${resp.status}`);
         setEstado({ carregando: false, dados, erro: null, em: new Date() });
       } catch (err) {
-        setEstado((x) => ({ ...x, carregando: false, erro: err.name === 'TypeError' ? 'o chamados-glpi (porta 4013) não respondeu' : err.message }));
+        setEstado((x) => ({ ...x, carregando: false, erro: err.name === 'TypeError' ? 'o chamados-glpi não respondeu' : err.message }));
       }
     }, [filtro.desde, filtro.ate, soErros, datasOk]);
 

@@ -42,6 +42,8 @@
     info: { color: '#1E4A9E', icon: 'Activity' },
   };
 
+  const PORTA_PROXY = 8318; // proxy das automações (PROXY_PORT do servidor; acessos.js usa a mesma)
+
   async function api(path, options) {
     // Token do GLPI do cofre: o servidor só deixa admin cadastrar, editar ou remover automação.
     const token = ((window.ArxAcessosHub && window.ArxAcessosHub.ler()) || {}).userToken || '';
@@ -70,9 +72,17 @@
     const [modalForm, setModalForm] = useState(null);
     const [testState, setTestState] = useState('idle');
     const [menuOpenId, setMenuOpenId] = useState(null);
-    // Quem não é admin não cadastra, edita nem remove automação e vê o endereço mascarado (admin.js e mascara.js).
+    // A lista do servidor não traz a URL real (só `endereco`, mascarado): a tela abre pelo proxy do Hub (proxy.js).
+    // Admin busca as URLs reais para editar e copiar; quem não é admin não cadastra, edita nem remove automação.
     const ehAdmin = (window.useEhAdmin || (() => false))();
-    const urlVisivel = (a) => (ehAdmin ? a.url.replace(/^https?:\/\//, '') : window.ArxMascara.mascararUrl(a.url));
+    const [urlsReais, setUrlsReais] = useState({});
+    useEffect(() => {
+      if (!ehAdmin) return setUrlsReais({});
+      api('/api/admin/automations/urls').then(setUrlsReais).catch(() => setUrlsReais({}));
+    }, [ehAdmin, automations.length]);
+    const urlReal = (a) => urlsReais[a.id] || '';
+    const urlVisivel = (a) => (ehAdmin && urlReal(a) ? urlReal(a).replace(/^https?:\/\//, '') : a.endereco);
+    const urlProxy = (a) => `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/`;
     const [toasts, setToasts] = useState([]);
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [confirmDialog, setConfirmDialog] = useState(null);
@@ -715,9 +725,9 @@
           key: 'popover', onClick: (ev) => ev.stopPropagation(),
           style: sx('position:absolute;top:44px;right:10px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -8px rgba(0,0,0,0.12);z-index:5;overflow:hidden;min-width:170px'),
         }, [
-          e('button', { key: 'edit', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); openEditModal(a); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Pencil', 14), ' Editar']),
-          e('button', { key: 'newtab', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); window.open(a.url, '_blank'); setMenuOpenId(null); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
-          e('button', { key: 'copy', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); copyUrl(a.url); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Copy', 14), ' Copiar URL']),
+          e('button', { key: 'edit', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); openEditModal({ ...a, url: urlReal(a) }); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Pencil', 14), ' Editar']),
+          e('button', { key: 'newtab', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); window.open(urlProxy(a), '_blank'); setMenuOpenId(null); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+          e('button', { key: 'copy', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); copyUrl(urlReal(a)); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Copy', 14), ' Copiar URL']),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           e('button', { key: 'del', className: 'menu-item-danger', onClick: (ev) => { ev.stopPropagation(); deleteAutomation(a.id); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--error);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Trash2', 14), ' Remover']),
         ]) : null,
@@ -793,7 +803,7 @@
             e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-soft);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap") }, urlVisivel(a)),
           ]),
           fabItem('reload', 'RefreshCw', 'Recarregar', () => startViewerLoad(a.id)),
-          ehAdmin && fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(a.url, '_blank')),
+          fabItem('ext', 'ExternalLink', 'Abrir em nova aba', () => window.open(urlProxy(a), '_blank')),
           fabItem('full', 'Maximize2', 'Tela cheia', toggleFullscreen),
           e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
           fabItem('close', 'X', 'Fechar aba', () => closeTab(a.id), true),
@@ -811,12 +821,12 @@
             : 'O serviço pode estar bloqueando exibição em iframe (X-Frame-Options / CSP) ou estar fora do alcance desta rede.'),
           e('div', { key: 'actions', style: sx('display:flex;gap:10px;margin-top:6px') }, [
             e('button', { key: 'retry', className: 'btn-primary', onClick: () => startViewerLoad(a.id), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('RefreshCw', 14), ' Tentar novamente']),
-            ehAdmin && e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(a.url, '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
+            e('button', { key: 'ext', className: 'btn-outline', onClick: () => window.open(urlProxy(a), '_blank'), style: sx('display:flex;align-items:center;gap:7px;padding:10px 16px;background:var(--secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
           ]),
         ]) : null,
         e('iframe', {
           key: 'frame-' + a.id + '-' + (viewerNonce.current[a.id] || 0),
-          src: a.url, title: a.name,
+          src: urlProxy(a), title: a.name,
           onLoad: () => onIframeLoad(a.id),
           style: Object.assign({ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', background: 'var(--bg)' }, state === 'loaded' ? {} : { visibility: 'hidden' }),
         }),

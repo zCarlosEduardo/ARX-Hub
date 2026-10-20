@@ -12,7 +12,7 @@
   const { useState, useEffect, useRef, useCallback } = React;
   const { Icon } = window.Icons;
 
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`; // chamados-glpi
+  const SERVICO = `${location.origin}/servicos/chamados`; // chamados-glpi
   const INTERVALO_MS = 60 * 1000;
 
   // ---------- ícones que o icons.js não tem (mesmo traço dele) ----------
@@ -46,7 +46,7 @@
     if (!resp.ok || !dados) throw new Error((dados && dados.error) || `HTTP ${resp.status}`);
     return dados;
   }
-  const motivoFalha = (erro) => (erro.name === 'TimeoutError' || erro.name === 'TypeError' ? 'o chamados-glpi (porta 4013) não respondeu' : erro.message);
+  const motivoFalha = (erro) => (erro.name === 'TimeoutError' || erro.name === 'TypeError' ? 'o chamados-glpi não respondeu' : erro.message);
 
   // ---------- item da lista ----------
   function ItemAlerta({ a, resolvido }) {

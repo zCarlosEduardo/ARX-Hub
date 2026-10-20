@@ -44,7 +44,7 @@
     } catch { return novo(); }
   })();
   const KEY_AUTO = 'arxhub_chamados_auto'; // só o limite e os tipos; "ligado" nunca volta sozinho
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`;
+  const SERVICO = `${location.origin}/servicos/chamados`;
 
   const ler = (k, padrao) => {
     try {

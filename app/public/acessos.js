@@ -18,7 +18,7 @@
   const KEY_ACESSOS = 'arxhub_chamados_acessos_v2';
   const KEY_TOKEN_HUB = 'arxhub_glpi_user_token'; // o mesmo token do "Abrir chamado" (só legado: o cofre guarda o token)
   const cofre = window.ArxCofre; // null se o navegador bloqueia o armazenamento
-  const SERVICO = `${location.protocol}//${location.hostname}:4013`; // chamados-glpi
+  const SERVICO = `${location.origin}/servicos/chamados`; // chamados-glpi
   const PRAZO_PEDIDO_MS = 1100; // a automação espera ~1,5 s pela resposta
 
   const copia = (x) => JSON.parse(JSON.stringify(x));
@@ -321,47 +321,17 @@
   }
   const temAlgo = (d) => !!(d.sga.length || d.crm || d.senhaPadrao);
 
-  let automacoes = null; // lista do GET /api/automations do Hub
-  let buscandoAutomacoes = null;
-  let ultimaBuscaAutomacoes = 0;
-  function carregarAutomacoes(forcar) {
-    if (buscandoAutomacoes) return buscandoAutomacoes;
-    if (automacoes && !forcar) return Promise.resolve(automacoes);
-    ultimaBuscaAutomacoes = Date.now();
-    buscandoAutomacoes = buscarJson('/api/automations', 6000)
-      .then((d) => {
-        automacoes = Array.isArray(d) ? d : (d && d.automations) || [];
-        return automacoes;
-      })
-      .catch(() => automacoes || [])
-      .finally(() => {
-        buscandoAutomacoes = null;
-      });
-    return buscandoAutomacoes;
-  }
-
   const comPrazo = (promessa, ms, reserva) => Promise.race([promessa, new Promise((r) => setTimeout(() => r(reserva), Math.max(0, ms)))]);
-  const portaDe = (u) => u.port || (u.protocol === 'https:' ? '443' : '80');
+  const PORTA_PROXY = '8318'; // as automações abrem só pelo proxy do Hub (proxy.js; app.js usa a mesma porta)
 
-  /** O endereço (protocolo+host+porta) é o de uma automação cadastrada? */
-  function origemCadastrada(origem, lista) {
-    let o;
+  /** O pedido veio do proxy das automações deste Hub? Ele só serve automações cadastradas. */
+  function origemDoProxy(origem) {
     try {
-      o = new URL(origem);
+      const o = new URL(origem);
+      return o.hostname === location.hostname && o.protocol === location.protocol && o.port === PORTA_PROXY;
     } catch {
       return false;
     }
-    return (lista || []).some((a) => {
-      let u;
-      try {
-        u = new URL(a.url, location.href);
-      } catch {
-        return false;
-      }
-      if (u.origin === o.origin) return true;
-      // Hub aberto por outro nome da mesma máquina (localhost, IP...): mesma porta da automação, no host do Hub
-      return o.hostname === location.hostname && o.protocol === u.protocol && portaDe(o) === portaDe(u);
-    });
   }
 
   function ehIframeDaPagina(janela) {
@@ -399,12 +369,7 @@
 
   async function atenderPedido(janela, origem) {
     const limite = Date.now() + PRAZO_PEDIDO_MS;
-    let lista = await comPrazo(carregarAutomacoes(), limite - Date.now(), automacoes || []);
-    // automação cadastrada há pouco: busca a lista de novo (no máximo a cada 10 s)
-    if (!origemCadastrada(origem, lista) && Date.now() - ultimaBuscaAutomacoes > 10000) {
-      lista = await comPrazo(carregarAutomacoes(true), Math.max(300, limite - Date.now()), automacoes || []);
-    }
-    if (!origemCadastrada(origem, lista) || !ehIframeDaPagina(janela)) return;
+    if (!origemDoProxy(origem) || !ehIframeDaPagina(janela)) return;
     const pedido = { origem, recebeu: false };
     pedidos.set(janela, pedido);
     if (!temAlgo(dadosParaAutomacoes())) return;
@@ -421,7 +386,6 @@
 
   // adianta as listas se já há algo para entregar
   if (temAlgo(dadosParaAutomacoes())) {
-    carregarAutomacoes();
     carregarEmpresas();
   }
 
