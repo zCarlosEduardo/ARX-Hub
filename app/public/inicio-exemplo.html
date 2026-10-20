@@ -6,6 +6,7 @@
   <title>ARX Hub de exemplo</title>
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="exemplo.css">
   <script>
     (function () {
       var t = null;
@@ -132,13 +133,6 @@
     .ex-visor iframe { flex: 1; width: 100%; border: none; background: var(--bg); }
     .ex-carregando { position: absolute; inset: 40px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; background: var(--bg); }
 
-    /* Chamados e Resultados (componentes reais) dentro da moldura nova */
-    .ex-legado > div[style*="max-width: 1200px"] { max-width: 1480px !important; padding: 24px 24px 48px !important; }
-    .ex-legado > div > div[style*="padding: 18px 24px 0"] { max-width: 1480px !important; }
-    .ex-legado [style*="font-size: 19px"] { font-size: 20px !important; letter-spacing: -0.01em; }
-    .ex-legado [style*="border-radius: 14px"] { border-radius: 12px !important; box-shadow: var(--shadow-card); }
-    .ex-legado [style*="animation: fadeInUp"] { animation: none !important; }
-
     /* busca geral (Ctrl K) */
     .ex-fundo { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; z-index: 50; animation: fadeIn 0.12s ease; }
     .ex-paleta { width: 100%; max-width: 560px; background: var(--popover); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden; animation: modalIn 0.16s var(--ease); }
@@ -176,13 +170,9 @@
   <script src="cofre.js" defer></script>
   <script src="acessos.js" defer></script>
   <script src="alertas.js" defer></script>
-  <script src="chamados-cache.js" defer></script>
-  <script src="chamados-auto.js" defer></script>
-  <script src="chamados.js" defer></script>
-  <script src="graficos-dados.js" defer></script>
-  <script src="graficos.js" defer></script>
-  <script src="disponibilidade.js" defer></script>
-  <script src="resultados.js" defer></script>
+  <script src="exemplo-dados.js" defer></script>
+  <script src="exemplo-chamados.js" defer></script>
+  <script src="exemplo-resultados.js" defer></script>
   <script src="arx-ajuda.js" defer></script>
   <script src="ajuda.js" defer></script>
 </head>
@@ -214,7 +204,8 @@
       // passe do proxy: sem token (cofre travado) a tela abre sem passe e só funciona se a automação for de todo mundo
       const pedirPasse = (id) => fetch('/api/automations/' + id + '/passe', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token() } })
         .then((r) => (r.ok ? r.json() : {})).then((r) => r.passe || '').catch(() => '');
-      const urlTela = (a, passe) => `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/` + (passe ? '?passe=' + encodeURIComponent(passe) : '');
+      const exemploDe = (a) => (/foto de perfil/i.test(a.name) ? 'exemplo-foto-perfil.html' : '');
+      const urlTela = (a, passe) => exemploDe(a) || `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/` + (passe ? '?passe=' + encodeURIComponent(passe) : '');
 
       function Status({ s }) {
         return e('span', { className: 'ex-status ' + (s || 'checking') }, [e('i', { key: 'i' }), STATUS[s] || STATUS.checking]);
@@ -530,12 +521,12 @@
           ]),
         ]);
 
-        const legado = (k, View) => (montadas[k] && View ? e('div', { key: k, className: 'ex-pagina ex-legado', hidden: !!ativa || pagina !== k }, e(View)) : null);
+        const legado = (k, View) => (montadas[k] && View ? e('div', { key: k, className: 'ex-pagina', hidden: !!ativa || pagina !== k }, e(View)) : null);
         const conteudo = e('main', { key: 'c', className: 'ex-conteudo' }, [
           e('div', { key: 'painel', ref: areaRef, className: 'ex-pagina', hidden: !!ativa || pagina !== 'painel' },
             e(Painel, { lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef })),
-          legado('chamados', window.ChamadosView),
-          legado('resultados', window.ResultadosView),
+          legado('chamados', window.ExemploChamados),
+          legado('resultados', window.ExemploResultados),
           // cada tela aberta fica montada (escondida) para não perder o que está rodando nela
           ...abertas.map((x) => { const a = porId(x.id); return a ? e(Visor, { key: 'v' + x.id, a, passe: x.passe, recarga: x.recarga, ativo: ativa === x.id, fechar: () => fechar(x.id), recarregar: () => recarregar(x.id) }) : null; }),
         ]);

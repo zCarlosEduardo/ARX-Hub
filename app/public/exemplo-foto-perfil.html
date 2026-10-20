@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARX Foto de perfil de exemplo</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="exemplo.css">
+  <script>
+    (function () {
+      var d = document.documentElement, t = null;
+      try { t = localStorage.getItem('arxhub_exemplo_tema') || localStorage.getItem('arx-tema'); } catch (e) { /* sem armazenamento: tema claro */ }
+      d.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+      // o Hub de exemplo repassa o tema por postMessage, como faz com as automações reais
+      window.addEventListener('message', function (ev) {
+        if (ev.data && ev.data.type === 'arx-theme') d.setAttribute('data-theme', ev.data.theme === 'dark' ? 'dark' : 'light');
+      });
+    })();
+  </script>
+  <style>
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); }
+    .fp-tela { max-width: 1180px; margin: 0 auto; padding: 24px 24px 64px; display: flex; flex-direction: column; gap: 18px; }
+    .fp-cab-dir { display: flex; align-items: center; gap: 8px; }
+    .fp-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); }
+    .fp-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+    .fp-campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .fp-campo label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
+    .fp-campo label span { font-weight: 400; color: var(--muted-soft); font-variant-numeric: tabular-nums; }
+    .fp-campo input, .fp-campo textarea { height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text); font: inherit; font-size: 14px; outline: none; }
+    .fp-campo textarea { height: 180px; padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; resize: vertical; }
+    .fp-campo input:focus, .fp-campo textarea:focus { border-color: var(--ring-border); box-shadow: 0 0 0 3px var(--ring); }
+    .fp-campo input[aria-invalid="true"] { border-color: var(--error); }
+    .fp-ajuda { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0; }
+    .fp-erro { font-size: 12px; color: var(--error); margin: 0; }
+    .fp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .fp-chip { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+    .fp-chip:hover { color: var(--text); border-color: var(--border-hover); }
+    .fp-previa { position: relative; aspect-ratio: 1; width: 100%; max-width: 460px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--hover-bg-soft); }
+    .fp-previa canvas { width: 100%; height: 100%; display: block; }
+    .fp-selo { position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .fp-acoes-previa { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+    .fp-passos { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+    .fp-passos li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+    .fp-passos li i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-hover); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; }
+    .fp-passos li.feito { color: var(--text); }
+    .fp-passos li.feito i { border-color: var(--accent); background: var(--accent); color: #fff; }
+    .fp-passos li.agora i { border-color: var(--accent); border-top-color: transparent; animation: spin 0.8s linear infinite; }
+    .fp-lote { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .fp-mini { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card); }
+    .fp-mini canvas { width: 100%; aspect-ratio: 1; display: block; }
+    .fp-mini div { padding: 8px 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .fp-mini b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .fp-mini.erro { border-color: var(--error-border); }
+    details.fp-tec summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+    details.fp-tec pre { margin: 10px 0 0; padding: 12px; border-radius: 8px; background: var(--log-bg); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; max-height: 180px; overflow: auto; }
+    @media (max-width: 860px) { .fp-grade { grid-template-columns: minmax(0, 1fr); } .fp-tela { padding: 16px 16px 48px; } }
+    @media (prefers-reduced-motion: reduce) { .fp-passos li.agora i { animation: none; } }
+  </style>
+  <script src="exemplo-dados.js"></script>
+</head>
+<body>
+  <main class="fp-tela">
+    <header class="exu-cab">
+      <div>
+        <h2>Gerar foto de perfil</h2>
+        <p>Foto corporativa com nome e departamento, a mesma usada nos chamados do GLPI.</p>
+      </div>
+      <div class="fp-cab-dir">
+        <span class="fp-tag">Exemplo: nada é enviado ao servidor</span>
+        <span class="exu-sit concluido"><i></i>No ar</span>
+      </div>
+    </header>
+
+    <div class="exu-abas" role="tablist">
+      <button type="button" class="exu-aba" role="tab" aria-selected="true" data-aba="uma">Uma foto</button>
+      <button type="button" class="exu-aba" role="tab" aria-selected="false" data-aba="varias">Várias fotos</button>
+      <button type="button" class="exu-aba" role="tab" aria-selected="false" data-aba="historico">Histórico <span class="n" id="nHist">0</span></button>
+    </div>
+
+    <!-- uma foto: formulário e prévia ao vivo lado a lado -->
+    <section data-painel="uma" class="fp-grade">
+      <form class="exu-cartao" id="form" novalidate>
+        <div class="exu-cartao-cab"><div><h3>Dados da foto</h3><p>A prévia ao lado muda enquanto você digita.</p></div></div>
+        <div class="exu-cartao-corpo">
+          <div class="fp-campo">
+            <label for="nome">Nome <span id="contNome">0/40</span></label>
+            <input id="nome" maxlength="40" autocomplete="off" placeholder="Primeiro e último nome" aria-describedby="ajudaNome erroNome">
+            <p class="fp-ajuda" id="ajudaNome">Use só o primeiro e o último nome. Nomes longos encolhem para caber na arte.</p>
+            <p class="fp-erro" id="erroNome" hidden></p>
+          </div>
+          <div class="fp-campo">
+            <label for="depto">Departamento <span id="contDepto">0/40</span></label>
+            <input id="depto" maxlength="40" autocomplete="off" placeholder="Ex.: Qualidade" aria-describedby="ajudaDepto erroDepto">
+            <p class="fp-ajuda" id="ajudaDepto">Sai em caixa alta e quebra em duas linhas quando é extenso.</p>
+            <p class="fp-erro" id="erroDepto" hidden></p>
+            <div class="fp-chips" id="chips" aria-label="Departamentos usados com frequência"></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="submit" class="exu-btn primario" id="gerar">Gerar foto</button>
+            <button type="button" class="exu-btn" id="limpar">Limpar</button>
+          </div>
+          <ol class="fp-passos" id="passos" hidden>
+            <li data-p="0"><i></i>Conferindo nome e departamento</li>
+            <li data-p="1"><i></i>Montando a arte em 1600 x 1600</li>
+            <li data-p="2"><i></i>Foto pronta para baixar</li>
+          </ol>
+        </div>
+      </form>
+      <section class="exu-cartao">
+        <div class="exu-cartao-cab"><div><h3>Prévia</h3><p>Ilustrativa: no exemplo a arte é desenhada no navegador, sem o fundo oficial.</p></div></div>
+        <div class="exu-cartao-corpo">
+          <div class="fp-previa"><canvas id="previa" width="800" height="800" aria-label="Prévia da foto de perfil" role="img"></canvas><span class="fp-selo" id="seloPrevia">Prévia ao vivo</span></div>
+          <div class="fp-acoes-previa">
+            <button type="button" class="exu-btn" id="baixar" disabled>Baixar PNG</button>
+            <button type="button" class="exu-btn" id="copiar" disabled>Copiar imagem</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- várias fotos: uma por linha -->
+    <section data-painel="varias" class="exu-cartao" hidden>
+      <div class="exu-cartao-cab"><div><h3>Várias fotos de uma vez</h3><p>Uma pessoa por linha, no formato Nome; Departamento.</p></div></div>
+      <div class="exu-cartao-corpo">
+        <div class="fp-campo">
+          <label for="lote">Lista <span id="contLote">0 linhas</span></label>
+          <textarea id="lote" spellcheck="false" placeholder="Ana Lima; Qualidade&#10;Bruno Costa; Comercial"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+          <button type="button" class="exu-btn primario" id="gerarLote" disabled>Gerar fotos</button>
+          <button type="button" class="exu-btn" id="exemploLote">Preencher com exemplo</button>
+        </div>
+        <div class="fp-lote" id="grade"></div>
+      </div>
+    </section>
+
+    <!-- histórico fictício -->
+    <section data-painel="historico" class="exu-cartao" hidden>
+      <div class="exu-cartao-cab"><div><h3>Histórico</h3><p>Fotos geradas nesta sessão e pelos chamados (fictícios).</p></div></div>
+      <div class="exu-cartao-corpo" style="overflow-x:auto">
+        <table class="exr-tab"><thead><tr><th>Quando</th><th>Nome</th><th>Departamento</th><th>Origem</th><th></th></tr></thead><tbody id="hist"></tbody></table>
+      </div>
+    </section>
+
+    <details class="fp-tec exu-cartao" style="padding:14px 18px">
+      <summary>Detalhes técnicos da execução</summary>
+      <pre id="log">Nenhuma execução ainda.</pre>
+    </details>
+  </main>
+
+  <script>
+    (function () {
+      var D = window.ExemploDados;
+      var AZUL = '#1B458A'; // cor do modelo de arte da empresa (não é cor de interface)
+      var $ = function (id) { return document.getElementById(id); };
+      var limpo = function (s) { return String(s || '').replace(/\s+/g, ' ').trim(); };
+      var historico = [];
+      for (var i = 0; i < 6; i++) historico.push({ quando: 'Há ' + (i + 1) * 3 + ' h', nome: D.pessoa(), depto: D.DEPTOS[i % D.DEPTOS.length].toUpperCase(), origem: i % 2 ? 'Tela' : 'Chamado #' + (48200 + i * 11) });
+
+      function quebrar(depto) {
+        var p = depto.split(' '), melhor = null;
+        for (var i = 1; i < p.length; i++) {
+          var a = p.slice(0, i).join(' '), b = p.slice(i).join(' '), dif = Math.abs(a.length - b.length);
+          if (!melhor || dif < melhor.dif) melhor = { linhas: [a, b], dif: dif };
+        }
+        return melhor ? melhor.linhas : [depto];
+      }
+      function caber(ctx, texto, tamanho, peso, max) {
+        ctx.font = peso + ' ' + tamanho + 'px Geist, sans-serif';
+        var w = ctx.measureText(texto).width;
+        return w > max ? tamanho * (max / w) : tamanho;
+      }
+      // Mesma composição do modelo (nome grande, linha, departamento em caixa alta), escala 1600 -> canvas.
+      function desenhar(canvas, nome, depto) {
+        var ctx = canvas.getContext('2d'), L = canvas.width, k = L / 1600;
+        ctx.clearRect(0, 0, L, L);
+        var g = ctx.createLinearGradient(0, 0, 0, L);
+        g.addColorStop(0, '#eaf0fa'); g.addColorStop(0.62, '#ffffff');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, L, L);
+        ctx.fillStyle = AZUL; ctx.beginPath(); ctx.arc(800 * k, 560 * k, 300 * k, 0, Math.PI * 2); ctx.globalAlpha = 0.08; ctx.fill(); ctx.globalAlpha = 1;
+        ctx.textAlign = 'center'; ctx.fillStyle = AZUL;
+        ctx.font = '700 ' + 230 * k + 'px Geist, sans-serif'; ctx.fillText('ARX', 800 * k, 640 * k);
+        ctx.fillRect(230 * k, 1080 * k, 1140 * k, 6 * k);
+        ctx.fillRect(0, 1520 * k, L, 80 * k);
+        if (!nome && !depto) {
+          ctx.fillStyle = '#8c8c8c'; ctx.font = '500 ' + 50 * k + 'px Geist, sans-serif';
+          ctx.fillText('Digite o nome e o departamento', 800 * k, 1250 * k);
+          return;
+        }
+        ctx.fillStyle = AZUL;
+        var tn = caber(ctx, nome, 92 * k, 700, 1000 * k);
+        ctx.font = '700 ' + tn + 'px Geist, sans-serif'; ctx.fillText(nome, 790 * k, 1225 * k);
+        var linhas = [depto];
+        ctx.font = '600 ' + 50 * k + 'px Geist, sans-serif';
+        if (ctx.measureText(depto).width > 1000 * k) linhas = quebrar(depto);
+        var td = Math.min.apply(null, linhas.map(function (l) { return caber(ctx, l, 50 * k, 600, 1000 * k); }));
+        ctx.font = '600 ' + td + 'px Geist, sans-serif';
+        linhas.forEach(function (l, i) { ctx.fillText(l, 800 * k, (1332 + i * 58) * k); });
+      }
+
+      // ---------- abas ----------
+      document.querySelectorAll('.exu-aba').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.querySelectorAll('.exu-aba').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+          document.querySelectorAll('[data-painel]').forEach(function (p) { p.hidden = p.getAttribute('data-painel') !== b.getAttribute('data-aba'); });
+        });
+      });
+
+      // ---------- uma foto ----------
+      var nome = $('nome'), depto = $('depto'), canvas = $('previa'), gerada = false;
+      function validar(mostrar) {
+        var n = limpo(nome.value), d = limpo(depto.value), erros = {};
+        if (!n) erros.nome = 'Informe o nome.';
+        else if (n.split(' ').length < 2) erros.nome = 'Informe o primeiro e o último nome.';
+        if (!d) erros.depto = 'Informe o departamento.';
+        if (mostrar) {
+          [['nome', nome, 'erroNome'], ['depto', depto, 'erroDepto']].forEach(function (c) {
+            c[1].setAttribute('aria-invalid', erros[c[0]] ? 'true' : 'false');
+            $(c[2]).hidden = !erros[c[0]]; $(c[2]).textContent = erros[c[0]] || '';
+          });
+        }
+        return erros;
+      }
+      function atualizar() {
+        $('contNome').textContent = nome.value.length + '/40';
+        $('contDepto').textContent = depto.value.length + '/40';
+        desenhar(canvas, limpo(nome.value), limpo(depto.value).toUpperCase());
+        if (gerada) { gerada = false; $('baixar').disabled = true; $('copiar').disabled = true; $('seloPrevia').textContent = 'Prévia ao vivo'; }
+        if (nome.getAttribute('aria-invalid') === 'true' || depto.getAttribute('aria-invalid') === 'true') validar(true);
+      }
+      nome.addEventListener('input', atualizar);
+      depto.addEventListener('input', atualizar);
+      D.DEPTOS.slice(0, 5).forEach(function (d) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'fp-chip'; b.textContent = d;
+        b.onclick = function () { depto.value = d; atualizar(); depto.focus(); };
+        $('chips').appendChild(b);
+      });
+      function registrar(linhas) { $('log').textContent = linhas.join('\n'); }
+      $('form').addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var erros = validar(true);
+        if (erros.nome) return nome.focus();
+        if (erros.depto) return depto.focus();
+        var n = limpo(nome.value), d = limpo(depto.value).toUpperCase(), passos = $('passos');
+        passos.hidden = false;
+        $('gerar').disabled = true;
+        var t0 = performance.now();
+        [0, 1, 2].forEach(function (p) {
+          setTimeout(function () {
+            passos.querySelectorAll('li').forEach(function (li) {
+              var i = Number(li.getAttribute('data-p'));
+              li.className = i < p || p === 2 ? 'feito' : i === p ? 'agora' : '';
+              li.querySelector('i').textContent = li.className === 'feito' ? '✓' : '';
+            });
+            if (p === 2) {
+              gerada = true;
+              $('gerar').disabled = false; $('baixar').disabled = false; $('copiar').disabled = !(navigator.clipboard && window.ClipboardItem);
+              $('seloPrevia').textContent = 'Foto gerada';
+              historico.unshift({ quando: 'Agora', nome: n, depto: d, origem: 'Tela' });
+              mostrarHistorico();
+              registrar(['[ok] nome: ' + n, '[ok] departamento: ' + d, '[tempo] arte montada em ' + Math.round(performance.now() - t0) + ' ms', '[exemplo] nada foi enviado ao servidor']);
+            }
+          }, p * 650);
+        });
+      });
+      $('limpar').onclick = function () { nome.value = ''; depto.value = ''; validar(false); ['erroNome', 'erroDepto'].forEach(function (x) { $(x).hidden = true; }); nome.setAttribute('aria-invalid', 'false'); depto.setAttribute('aria-invalid', 'false'); $('passos').hidden = true; atualizar(); nome.focus(); };
+      function baixar(c, n) {
+        var a = document.createElement('a');
+        a.href = c.toDataURL('image/png'); a.download = 'foto-perfil-' + n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-') + '.png';
+        a.click();
+      }
+      $('baixar').onclick = function () { baixar(canvas, limpo(nome.value)); };
+      $('copiar').onclick = function () {
+        canvas.toBlob(function (blob) {
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () { $('copiar').textContent = 'Copiada'; setTimeout(function () { $('copiar').textContent = 'Copiar imagem'; }, 1500); })
+            .catch(function () { $('copiar').textContent = 'Não deu para copiar'; });
+        });
+      };
+
+      // ---------- várias fotos ----------
+      var lote = $('lote');
+      function linhasLote() { return lote.value.split('\n').map(limpo).filter(Boolean); }
+      lote.addEventListener('input', function () { var n = linhasLote().length; $('contLote').textContent = n === 1 ? '1 linha' : n + ' linhas'; $('gerarLote').disabled = !n; });
+      $('exemploLote').onclick = function () {
+        lote.value = [0, 1, 2, 3, 4].map(function (i) { return D.pessoa() + '; ' + D.DEPTOS[i]; }).concat(['Nome sem departamento']).join('\n');
+        lote.dispatchEvent(new Event('input'));
+      };
+      $('gerarLote').onclick = function () {
+        var grade = $('grade');
+        grade.innerHTML = '';
+        linhasLote().forEach(function (linha, i) {
+          var partes = linha.split(';'), n = limpo(partes[0]), d = limpo(partes[1]).toUpperCase();
+          var caixa = document.createElement('div'), c = document.createElement('canvas'), rod = document.createElement('div');
+          c.width = 400; c.height = 400; caixa.className = 'fp-mini';
+          var erro = !n || !d ? 'Falta o departamento' : '';
+          rod.innerHTML = '<b></b><span class="exu-sit"><i></i>Na fila</span>';
+          rod.querySelector('b').textContent = n || 'Sem nome';
+          caixa.appendChild(c); caixa.appendChild(rod); grade.appendChild(caixa);
+          desenhar(c, '', '');
+          setTimeout(function () {
+            var sit = rod.querySelector('.exu-sit');
+            if (erro) { caixa.classList.add('erro'); sit.className = 'exu-sit erro'; sit.lastChild.textContent = erro; return; }
+            desenhar(c, n, d);
+            sit.className = 'exu-sit concluido'; sit.lastChild.textContent = 'Pronta';
+            var b = document.createElement('button');
+            b.type = 'button'; b.className = 'exu-btn pequeno'; b.textContent = 'Baixar';
+            b.onclick = function () { baixar(c, n); };
+            sit.replaceWith(b);
+            historico.unshift({ quando: 'Agora', nome: n, depto: d, origem: 'Várias fotos' });
+            mostrarHistorico();
+          }, 400 + i * 350);
+        });
+      };
+
+      // ---------- histórico ----------
+      function mostrarHistorico() {
+        $('nHist').textContent = historico.length;
+        var tb = $('hist');
+        tb.innerHTML = '';
+        historico.forEach(function (h) {
+          var tr = document.createElement('tr');
+          [h.quando, h.nome, h.depto, h.origem].forEach(function (v) { var td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          var td = document.createElement('td'), b = document.createElement('button');
+          b.type = 'button'; b.className = 'exu-btn pequeno'; b.textContent = 'Usar de novo';
+          b.onclick = function () { nome.value = h.nome; depto.value = h.depto; atualizar(); document.querySelector('[data-aba="uma"]').click(); nome.focus(); };
+          td.style.textAlign = 'right'; td.appendChild(b); tr.appendChild(td); tb.appendChild(tr);
+        });
+      }
+      mostrarHistorico();
+      (document.fonts ? document.fonts.ready : Promise.resolve()).then(atualizar);
+    })();
+  </script>
+</body>
+</html>
