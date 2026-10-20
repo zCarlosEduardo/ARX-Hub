@@ -815,7 +815,8 @@
         ]),
       ]),
       e('div', { key: 'item', style: { borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 } }, !pagina ? [dica('Carregando…')] : !item ? [dica(pagina.total ? 'Fim desta página: atualize para ver mais.' : 'Nenhuma divergência esperando decisão.')] : [
-        e('div', { key: 'c', style: { fontSize: 12, color: 'var(--muted)' } }, `Divergência ${i + 1} de ${pagina.itens.length} nesta página (${pagina.total} esperando decisão) · chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
+        pagina.porGrupo ? e('div', { key: 'g', style: { fontSize: 12, color: 'var(--muted)' } }, 'Esperando decisão, das mais importantes para as menos: ' + Object.entries(pagina.porGrupo).map(([g, n]) => `${g} ${n}`).join(' · ')) : null,
+        e('div', { key: 'c', style: { fontSize: 12, color: 'var(--muted)' } }, `Divergência ${i + 1} de ${pagina.itens.length} nesta página (${pagina.total} esperando decisão) · ${item.grupo || ''} · chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
         e('div', { key: 't', style: { fontWeight: 600, fontSize: 14 } }, item.titulo || 'Sem título'),
         e('pre', { key: 'x', className: 'revisao-texto', style: { whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12.5, maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, margin: 0 } }, item.texto || 'Sem descrição'),
         e('div', { key: 'o', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, opinioes.map(([quem, tipo, conf]) =>
