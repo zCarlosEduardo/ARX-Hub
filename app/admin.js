@@ -93,6 +93,9 @@ const SLUG = /^[a-z0-9][a-z0-9_-]{0,29}$/;
 function configPadrao() {
   return {
     cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
+    // quem cadastra, edita e remove automação (e vê o endereço real), como o endereço aparece para os outros e se
+    // eles podem abrir a automação em nova aba (sempre pelo proxy, sem o endereço real)
+    automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
     whatsapp: {
       ativo: false,
       modo: 'observacao',
@@ -121,6 +124,18 @@ function validarCofre(b) {
   const horas = c.horas === undefined ? padrao.horas : Number(c.horas);
   if (!Number.isInteger(horas) || horas < 1 || horas > 72) return { erro: 'cofre.horas deve ser um número inteiro de 1 a 72' };
   return { valor: { modo, sessao, horas } };
+}
+
+function validarAutomacoes(b) {
+  const padrao = configPadrao().automacoes;
+  const c = b && typeof b === 'object' ? b : {};
+  const cadastro = c.cadastro === undefined ? padrao.cadastro : c.cadastro;
+  if (cadastro !== 'admins' && cadastro !== 'todos') return { erro: 'automacoes.cadastro deve ser admins ou todos' };
+  const endereco = c.endereco === undefined ? padrao.endereco : c.endereco;
+  if (endereco !== 'mascarado' && endereco !== 'oculto') return { erro: 'automacoes.endereco deve ser mascarado ou oculto' };
+  const novaAba = c.novaAba === undefined ? padrao.novaAba : c.novaAba;
+  if (typeof novaAba !== 'boolean') return { erro: 'automacoes.novaAba deve ser verdadeiro ou falso' };
+  return { valor: { cadastro, endereco, novaAba } };
 }
 
 function validarWhatsapp(b) {
@@ -225,7 +240,8 @@ function validarWhatsapp(b) {
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
 function validarSecao(chave, corpo) {
-  const r = chave === 'cofre' ? validarCofre(corpo) : chave === 'whatsapp' ? validarWhatsapp(corpo) : { erro: 'seção de configuração desconhecida' };
+  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp };
+  const r = validadores[chave] ? validadores[chave](corpo) : { erro: 'seção de configuração desconhecida' };
   return r.erro ? { ok: false, error: r.erro } : { ok: true, valor: r.valor };
 }
 

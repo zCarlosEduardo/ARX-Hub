@@ -194,15 +194,61 @@
     ]);
   }
 
-  // ---------- aba: ordem das automações ----------
-  function AbaAutomacoes() {
+  // ---------- aba: Automações (quem gerencia, como o endereço aparece, cadastro e ordem) ----------
+  function AbaAutomacoes({ config, aoSalvar }) {
+    const [c, setC] = useState(() => copia(config.automacoes));
+    const acesso = useSalvar(async () => {
+      const novo = await api('PUT', '/api/admin/config/automacoes', c);
+      setC(novo);
+      aoSalvar({ ...config, automacoes: novo });
+      window.dispatchEvent(new CustomEvent('arx-config-automacoes', { detail: novo })); // o painel muda na hora
+    });
+    return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 22 } }, [
+      e('div', { key: 'acesso', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+        e('div', { key: 'c' }, [
+          rotulo('Quem pode cadastrar, editar e remover automações'),
+          e('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 } }, [
+            caixa(c.cadastro === 'admins', () => setC({ ...c, cadastro: 'admins' }), 'Só administradores (recomendado).', { key: 'a' }),
+            caixa(c.cadastro === 'todos', () => setC({ ...c, cadastro: 'todos' }), 'Todo mundo: qualquer pessoa no Hub cadastra, edita, remove e vê o endereço real das automações.', { key: 't' }),
+          ]),
+        ]),
+        e('div', { key: 'en' }, [
+          rotulo('Endereço das automações para quem não gerencia'),
+          selecao(c.endereco, (v) => setC({ ...c, endereco: v }), [['mascarado', 'Mascarado (xxx.xxx.xxx.xxx:4016)'], ['oculto', 'Oculto (não aparece)']], { marginTop: 4 }),
+          dica('As telas sempre abrem pelo proxy do Hub: o navegador nunca recebe o endereço real de quem não gerencia.'),
+        ]),
+        caixa(c.novaAba, (v) => setC({ ...c, novaAba: v }), 'Quem não gerencia pode abrir a automação em nova aba (pelo proxy, sem o endereço real).', { key: 'na' }),
+        rodape(acesso.salvar, acesso.salvando, acesso.erro, acesso.ok),
+      ]),
+      e(ListaAutomacoes, { key: 'lista' }),
+    ]);
+  }
+
+  /** Cadastro (pelo formulário do painel, app.js) e ordem das automações. */
+  function ListaAutomacoes() {
     const [lista, setLista] = useState(null);
+    const [urls, setUrls] = useState({});
     const { erro, ok, salvando, salvar } = useSalvar(async () => {
       await api('PUT', '/api/admin/automations/ordem', { ids: lista.map((a) => a.id) });
     });
     useEffect(() => {
       fetch('/api/automations').then((r) => r.json()).then(setLista).catch(() => setLista([]));
+      // o painel avisa a cada mudança (cadastro, edição, remoção, status): a lista acompanha
+      // mantém a ordem ainda não salva: as que já estavam ficam onde estão, as novas entram no fim
+      const aoMudar = (ev) => setLista((atual) => {
+        const novos = new Map(ev.detail.map((a) => [String(a.id), a]));
+        if (!atual) return ev.detail;
+        const ficam = atual.filter((a) => novos.has(String(a.id))).map((a) => novos.get(String(a.id)));
+        return [...ficam, ...ev.detail.filter((a) => !ficam.some((f) => String(f.id) === String(a.id)))];
+      });
+      window.addEventListener('arx-automacoes', aoMudar);
+      return () => window.removeEventListener('arx-automacoes', aoMudar);
     }, []);
+    const quantas = lista ? lista.length : 0;
+    useEffect(() => {
+      api('GET', '/api/admin/automations/urls').then(setUrls).catch(() => setUrls({}));
+    }, [quantas]);
+    const painel = () => window.ArxHubAutomacoes || {};
     const mover = (i, d) => setLista((l) => {
       const j = i + d;
       if (j < 0 || j >= l.length) return l;
@@ -210,14 +256,24 @@
       [n[i], n[j]] = [n[j], n[i]];
       return n;
     });
+    const enderecoDe = (a) => (urls[a.id] || '').replace(/^https?:\/\//, '') || a.endereco;
     return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } }, [
-      dica('Use as setas para mudar a posição das automações no painel. A nova ordem aparece para todos assim que você salvar.'),
+      e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 } }, [
+        rotulo('Automações cadastradas'),
+        botao('Nova automação', () => painel().nova && painel().nova(), 'prim', { key: 'n', padding: '6px 12px' }),
+      ]),
+      dica('Editar e Remover usam o mesmo formulário do painel. Use as setas para mudar a posição das automações no painel; a nova ordem aparece para todos assim que você salvar.'),
       e('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, !lista ? [dica('Carregando…')] : lista.map((a, i) =>
         e('div', { key: a.id, className: 'admin-automacao', style: { display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', background: 'var(--bg)' } }, [
           e('span', { key: 'p', style: { width: 22, color: 'var(--muted)', fontSize: 12 } }, i + 1),
-          e('span', { key: 'n', style: { flex: 1, fontSize: 13 } }, a.name),
-          botao('↑', () => mover(i, -1), 'sec', { padding: '3px 9px', disabled: i === 0, opacity: i === 0 ? 0.4 : 1 }),
-          botao('↓', () => mover(i, 1), 'sec', { padding: '3px 9px', disabled: i === lista.length - 1, opacity: i === lista.length - 1 ? 0.4 : 1 }),
+          e('div', { key: 'n', style: { flex: 1, minWidth: 0 } }, [
+            e('div', { key: 't', style: { fontSize: 13 } }, a.name),
+            e('div', { key: 'u', style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, enderecoDe(a)),
+          ]),
+          botao('Editar', () => painel().editar && painel().editar(a.id), 'sec', { key: 'ed', padding: '3px 9px' }),
+          botao('Remover', () => painel().remover && painel().remover(a.id), 'sec', { key: 'rm', padding: '3px 9px', color: 'var(--error)' }),
+          botao('↑', () => mover(i, -1), 'sec', { key: 'up', padding: '3px 9px', disabled: i === 0, opacity: i === 0 ? 0.4 : 1 }),
+          botao('↓', () => mover(i, 1), 'sec', { key: 'dn', padding: '3px 9px', disabled: i === lista.length - 1, opacity: i === lista.length - 1 ? 0.4 : 1 }),
         ]))),
       lista && lista.length ? rodape(salvar, salvando, erro, ok) : null,
     ]);
@@ -508,7 +564,7 @@
     else if (!dados) corpo = dica('Carregando…');
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
-    else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes' });
+    else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
     else corpo = e(AbaWhatsapp, { key: 'whatsapp', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
