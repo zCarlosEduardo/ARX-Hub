@@ -76,7 +76,43 @@
       erro: status === 'erro' ? 'O SGA não respondeu no tempo esperado. Pode ser momentâneo.' : null,
     }));
   }
+  // alguns já solucionados, para ver a resposta que foi ao GLPI
+  for (let i = 0; i < 6; i++) {
+    const tipo = um(['senha_sistemas', 'foto_perfil', 'cadastro_usuario', 'inativacao_consultor', 'cadastro_modelo', 'sincronizar_vistoria']);
+    chamados.push(Object.assign(MODELOS[tipo](), {
+      id: 48100 + i * 13, tipo, status: 'concluido', confianca: 'alta', pendencias: [], ia: { concorda: true, confianca: entre(88, 99) },
+      associacao: um(ASSOCIACOES), abertoHaMin: entre(200, 2400), solucionadoHaMin: entre(20, 190), erro: null,
+    }));
+  }
   chamados.sort((a, b) => a.abertoHaMin - b.abertoHaMin);
+
+  // Textos que a automação escreve no GLPI (fictícios, no tom dos modelos de solução).
+  const primeiro = (n) => String(n || '').split(' ')[0];
+  const ASSINATURA = '\n\nby automação';
+  function respostaSolucao(c) {
+    const ola = 'Olá, ' + primeiro(c.solicitante) + '!\n\n';
+    const d = c.dados || {};
+    const textos = {
+      senha_sistemas: 'A senha do SGA do usuário ' + (d['Usuário'] || '') + ' foi redefinida. A senha temporária foi enviada por mensagem privada e o sistema vai pedir a troca no primeiro acesso.',
+      cadastro_usuario: 'O acesso de ' + (d.Nome || 'colaborador') + ' foi criado no SGA e no PowerCRM. Usuário e senha inicial foram enviados ao gestor por mensagem privada.',
+      cadastro_consultor: 'O consultor ' + (d.Consultor || '') + ' foi cadastrado na regional ' + (d.Regional || 'informada') + ' e já pode receber leads.',
+      inativacao_consultor: 'O consultor ' + (d.Consultor || '') + ' foi inativado no PowerCRM e no SGA. Os leads em aberto ficaram com o gestor da regional.',
+      foto_perfil: 'Segue em anexo a foto de perfil de ' + (d.Nome || '') + ' (' + (d.Departamento || '').toUpperCase() + '), no tamanho certo para o WhatsApp.',
+      erro_exportar_modelo: 'O modelo do card foi ajustado no SGA e a exportação voltou a funcionar. Pode exportar de novo.',
+      sincronizar_vistoria: 'As fotos da vistoria da placa ' + (d.Placa || '') + ' foram enviadas do PowerCRM para o SGA (18 fotos).',
+      cadastro_modelo: 'O modelo foi cadastrado no SGA a partir do código FIPE informado e já aparece na busca.',
+      desbloquear_usuario_sga: 'O usuário ' + (d['Usuário'] || '') + ' foi desbloqueado no SGA. A senha continua a mesma.',
+    };
+    return ola + (textos[c.tipo] || 'Solicitação atendida.') + ASSINATURA;
+  }
+  function perguntaIa(c) {
+    return 'Olá, ' + primeiro(c.solicitante) + '! Para seguir com este chamado preciso de: ' + c.pendencias.join(', ').toLowerCase() +
+      '. Pode responder aqui no chamado? Se tiver um print da tela do card, também ajuda. Assim que chegar, a automação continua sozinha.' + ASSINATURA;
+  }
+  function devolutivaErro(c) {
+    return 'Olá, ' + primeiro(c.solicitante) + '. A automação tentou atender o chamado, mas ' + (c.erro || 'não conseguiu concluir').replace(/\.$/, '').toLowerCase() +
+      '. O chamado ficou Pendente e alguém da equipe de Sistemas vai conferir.' + ASSINATURA;
+  }
 
   // Resultados: 120 dias de execuções (dá para comparar 12 semanas e o mês passado com o período anterior).
   const DIAS = 120;
@@ -127,5 +163,5 @@
     return { nome, dias, agora: i === 9 ? 'offline' : 'online' };
   });
 
-  window.ExemploDados = { TIPOS, ASSOCIACOES, chamados, porDia, pessoa, DEPTOS, disponibilidade };
+  window.ExemploDados = { TIPOS, ASSOCIACOES, chamados, porDia, pessoa, DEPTOS, disponibilidade, respostaSolucao, perguntaIa, devolutivaErro, MODELOS, placa, login };
 })();

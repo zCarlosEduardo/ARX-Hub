@@ -162,16 +162,12 @@
   <script src="vendor/react.production.min.js"></script>
   <script src="vendor/react-dom.production.min.js"></script>
   <script src="icons.js" defer></script>
-  <script src="vendor/arx-cripto.min.js" defer></script>
-  <script src="cofre.js" defer></script>
-  <script src="acessos.js" defer></script>
-  <script src="alertas.js" defer></script>
   <script src="exemplo-dados.js" defer></script>
   <script src="exemplo-ui.js" defer></script>
+  <script src="exemplo-topo.js" defer></script>
+  <script src="exemplo-automacoes.js" defer></script>
   <script src="exemplo-chamados.js" defer></script>
   <script src="exemplo-resultados.js" defer></script>
-  <script src="arx-ajuda.js" defer></script>
-  <script src="ajuda.js" defer></script>
 </head>
 <body>
   <div id="root"></div>
@@ -184,7 +180,6 @@
       const STATUS = { online: 'No ar', offline: 'Fora do ar', checking: 'Verificando' };
       const COR_STATUS = { online: 'var(--accent)', offline: 'var(--error)', checking: 'var(--warn)' };
       const PAGINAS = { painel: ['Painel', 'LayoutDashboard'], chamados: ['Chamados', 'Headset'], resultados: ['Resultados', 'BarChart3'] };
-      const PORTA_PROXY = 8318; // a mesma do app.js
       const CARTAO_ALTURA = 148, CARTAO_LARGURA_MIN = 240, LINHA_ALTURA = 52, VAO = 12;
 
       function ler(chave, padrao) {
@@ -195,19 +190,15 @@
       }
       const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
       const hora = (d) => (d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
-      const token = () => ((window.ArxAcessosHub && window.ArxAcessosHub.ler()) || {}).userToken || '';
       const isDb = (a) => (a.categories || []).includes('db');
-      const categoria = (a) => ((a.categories || []).map((k) => CATEGORIAS[k] && CATEGORIAS[k].label).filter(Boolean)[0]) || 'Geral';
-      // passe do proxy: sem token (cofre travado) a tela abre sem passe e só funciona se a automação for de todo mundo
-      const pedirPasse = (id) => fetch('/api/automations/' + id + '/passe', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': token() } })
-        .then((r) => (r.ok ? r.json() : {})).then((r) => r.passe || '').catch(() => '');
-      const exemploDe = (a) => (/foto de perfil/i.test(a.name) ? 'exemplo-foto-perfil.html' : '');
-      const urlTela = (a, passe) => exemploDe(a) || `${location.protocol}//${location.hostname}:${PORTA_PROXY}/a/${a.id}/` + (passe ? '?passe=' + encodeURIComponent(passe) : '');
+      const categoria = (a) => (a.categories || []).map((k) => CATEGORIAS[k] && CATEGORIAS[k].label).filter(Boolean).join(' · ') || 'Geral';
+      const urlTela = (a) => (/foto de perfil/i.test(a.name) ? 'exemplo-foto-perfil.html' : 'exemplo-automacao.html?a=' + window.ExemploAutomacoes.chaveDe(a.name));
+      const Ico = (...x) => window.ExemploUI.Ico(...x);
 
       function Status({ s }) {
         return e('span', { className: 'ex-status ' + (s || 'checking') }, [e('i', { key: 'i' }), STATUS[s] || STATUS.checking]);
       }
-      const icone = (a, tam, cls) => e('span', { key: 'ic', className: cls || 'ex-ic', style: { background: a.color + '22' } }, Icon(a.icon, tam || 18, a.color));
+      const icone = (a, tam, cls) => e('span', { key: 'ic', className: cls || 'ex-ic', style: { background: a.color + '22' } }, Ico(a.icon, tam || 18, a.color));
 
       // Quantos cartões cabem na área visível: colunas pela largura, linhas pela altura que sobra abaixo da grade.
       function useCabe(refArea, refGrade, visao, deps) {
@@ -234,43 +225,82 @@
         return cabe;
       }
 
-      const ICONES_NOVA = ['Workflow', 'Bot', 'FileText', 'Users', 'Database', 'BarChart3', 'Server', 'Receipt'];
-      // Janela "Nova automação" do exemplo: valida como o Hub valida, mas não salva nada.
-      function NovaAutomacao({ fechar, salvar }) {
-        const [f, setF] = useState({ nome: '', url: '', icone: 'Workflow', categoria: 'Painel', descricao: '' });
+      // Janela de cadastro e edição de automação: valida como o Hub, guarda só nesta sessão do exemplo.
+      function FormAutomacao({ inicial, fechar, salvar }) {
+        const { Modal, Campo, ICONES, CORES } = window.ExemploUI;
+        const editando = !!inicial;
+        const [f, setF] = useState(() => inicial
+          ? { nome: inicial.name, url: 'http://' + (inicial.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-') + ':4016/', icone: inicial.icon, cor: inicial.color, categorias: (inicial.categories || []).slice(), descricao: inicial.description || '' }
+          : { nome: '', url: '', icone: 'Workflow', cor: CORES[0], categorias: [], descricao: '' });
         const [tocado, setTocado] = useState(false);
         const [teste, setTeste] = useState('');
+        const [buscaIcone, setBuscaIcone] = useState('');
         const mudar = (k) => (ev) => setF(Object.assign({}, f, { [k]: ev.target.value }));
+        const alternarCat = (k) => setF(Object.assign({}, f, { categorias: f.categorias.includes(k) ? f.categorias.filter((x) => x !== k) : [...f.categorias, k] }));
         const erros = {
           nome: !f.nome.trim() ? 'Informe o nome.' : '',
           url: !/^https?:\/\/[\w.-]+(:\d+)?\/?/.test(f.url.trim()) ? 'Use um endereço como http://container:4016/' : '',
+          categorias: !f.categorias.length ? 'Escolha pelo menos uma categoria.' : '',
         };
-        const ok = !erros.nome && !erros.url;
-        const { Modal, Campo } = window.ExemploUI;
+        const ok = !erros.nome && !erros.url && !erros.categorias;
+        const icones = ICONES.filter((n) => n.toLowerCase().includes(buscaIcone.toLowerCase()));
+        const previa = { name: f.nome || 'Nome da automação', description: f.descricao || 'A descrição aparece aqui, em até duas linhas.', icon: f.icone, color: f.cor, categories: f.categorias, status: 'online' };
         return e(Modal, {
-          titulo: 'Nova automação', descricao: 'Ela aparece no Painel para quem tem acesso e o Hub passa a conferir se está no ar.', fechar, largura: 560,
+          titulo: editando ? 'Editar automação' : 'Nova automação', largura: 720, fechar,
+          descricao: editando ? 'As mudanças valem para todos que veem esta automação.' : 'Ela aparece no Painel para quem tem acesso e o Hub passa a conferir se está no ar.',
           rodape: [
-            e('button', { key: 't', type: 'button', className: 'exu-btn', style: { marginRight: 'auto' }, disabled: !!erros.url, onClick: () => { setTeste('testando'); setTimeout(() => setTeste('ok'), 900); } },
-              teste === 'testando' ? 'Testando…' : teste === 'ok' ? 'Respondeu em 42 ms' : 'Testar conexão'),
+            e('button', { key: 't', type: 'button', className: 'exu-btn', style: { marginRight: 'auto' }, disabled: !!erros.url || teste === 'testando', onClick: () => { setTeste('testando'); setTimeout(() => setTeste('ok'), 900); } },
+              [teste === 'ok' ? Ico('Check', 14, 'var(--accent)') : Ico('Activity', 14, 'currentColor'), teste === 'testando' ? 'Testando…' : teste === 'ok' ? 'Respondeu em 42 ms' : 'Testar conexão']),
             e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: fechar }, 'Cancelar'),
-            e('button', { key: 's', type: 'button', className: 'exu-btn primario', onClick: () => { setTocado(true); if (ok) salvar(f); } }, 'Cadastrar'),
+            e('button', { key: 's', type: 'button', className: 'exu-btn primario', onClick: () => { setTocado(true); if (ok) salvar(f); } }, editando ? 'Salvar' : 'Cadastrar'),
           ],
         }, [
-          e('div', { key: 'd', className: 'exu-duas-col' }, [
-            e(Campo, { key: 'n', rotulo: 'Nome', id: 'nvNome', erro: tocado && erros.nome }, e('input', { id: 'nvNome', value: f.nome, onChange: mudar('nome'), placeholder: 'Ex.: Alterar senha SGA', maxLength: 60, 'aria-invalid': tocado && !!erros.nome })),
-            e(Campo, { key: 'c', rotulo: 'Categoria', id: 'nvCat' }, e('select', { id: 'nvCat', value: f.categoria, onChange: mudar('categoria') }, ['Painel', 'SGA', 'PowerCRM', 'Banco de Dados'].map((c) => e('option', { key: c }, c)))),
+          e('div', { key: 'g', className: 'ex-form-auto' }, [
+            e('div', { key: 'c', style: { display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 } }, [
+              e(Campo, { key: 'n', rotulo: 'Nome', id: 'nvNome', erro: tocado && erros.nome }, e('input', { id: 'nvNome', value: f.nome, onChange: mudar('nome'), placeholder: 'Ex.: Alterar senha SGA', maxLength: 60, 'aria-invalid': !!(tocado && erros.nome) })),
+              e(Campo, { key: 'u', rotulo: 'Endereço interno', id: 'nvUrl', erro: tocado && erros.url, ajuda: 'O navegador nunca vê este endereço: a tela abre pelo proxy do Hub.' }, e('input', { id: 'nvUrl', value: f.url, onChange: (ev) => { setTeste(''); mudar('url')(ev); }, placeholder: 'http://container:4016/', spellCheck: false, 'aria-invalid': !!(tocado && erros.url), style: { fontFamily: 'var(--font-mono)', fontSize: 13 } })),
+              e('div', { key: 'cat', className: 'exu-campo' }, [
+                e('label', { key: 'l' }, ['Categorias ', e('span', { key: 's', style: { fontWeight: 400, color: 'var(--muted)' } }, '(pode marcar mais de uma)')]),
+                e('div', { key: 'c', className: 'ex-cats', role: 'group', 'aria-label': 'Categorias' }, CATEGORY_CHOICES.map((c) => e('button', {
+                  key: c.key, type: 'button', 'aria-pressed': f.categorias.includes(c.key) ? 'true' : 'false', onClick: () => alternarCat(c.key),
+                }, [e('i', { key: 'i', style: { background: c.color } }), c.label, f.categorias.includes(c.key) ? Ico('Check', 13, 'currentColor', 2.25) : null]))),
+                tocado && erros.categorias ? e('p', { key: 'e', className: 'exu-campo-erro' }, erros.categorias) : null,
+              ]),
+              e(Campo, { key: 'ds', rotulo: 'Descrição', id: 'nvDesc', ajuda: f.descricao.length + '/160 · aparece no cartão, em até duas linhas.' }, e('textarea', { id: 'nvDesc', value: f.descricao, onChange: mudar('descricao'), maxLength: 160 })),
+            ]),
+            e('div', { key: 'v', style: { display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 } }, [
+              e('div', { key: 'p', className: 'exu-campo' }, [e('label', { key: 'l' }, 'Prévia do cartão'), e('div', { key: 'c', className: 'ex-card', style: { cursor: 'default', transform: 'none' } }, [
+                e('div', { key: 't', className: 'ex-card-topo' }, [icone(previa), e('div', { key: 'n', style: { minWidth: 0 } }, [e('div', { key: 'n', className: 'ex-nome' }, previa.name), e('div', { key: 'c', className: 'ex-cat' }, categoria(previa))])]),
+                e('p', { key: 'd', className: 'ex-desc' }, previa.description),
+                e('div', { key: 'r', className: 'ex-rodape' }, [e(Status, { key: 's', s: 'online' })]),
+              ])]),
+              e('div', { key: 'cor', className: 'exu-campo' }, [
+                e('label', { key: 'l' }, 'Cor'),
+                e('div', { key: 'c', className: 'ex-cores', role: 'radiogroup', 'aria-label': 'Cor' }, CORES.map((c) => e('button', { key: c, type: 'button', role: 'radio', 'aria-checked': f.cor === c ? 'true' : 'false', 'aria-label': 'Cor ' + c, style: { background: c }, onClick: () => setF(Object.assign({}, f, { cor: c })) }, f.cor === c ? Ico('Check', 14, '#fff', 2.5) : null))),
+              ]),
+              e('div', { key: 'i', className: 'exu-campo' }, [
+                e('label', { key: 'l' }, ['Ícone ', e('span', { key: 's', style: { fontWeight: 400, color: 'var(--muted)' } }, '(' + ICONES.length + ')')]),
+                e('label', { key: 'b', className: 'exu-busca', style: { flex: 'none', height: 32 } }, [Ico('Search', 14, 'var(--muted-soft)'), e('input', { key: 'i', value: buscaIcone, onChange: (ev) => setBuscaIcone(ev.target.value), placeholder: 'Buscar ícone (em inglês)', 'aria-label': 'Buscar ícone' })]),
+                e('div', { key: 'g', className: 'exu-icones ex-icones-lista', role: 'radiogroup', 'aria-label': 'Ícone' }, icones.map((nome) => e('button', { key: nome, type: 'button', role: 'radio', 'aria-checked': f.icone === nome ? 'true' : 'false', 'aria-pressed': f.icone === nome ? 'true' : 'false', 'aria-label': nome, title: nome, onClick: () => setF(Object.assign({}, f, { icone: nome })) }, Ico(nome, 17, f.icone === nome ? f.cor : 'currentColor')))),
+              ]),
+            ]),
           ]),
-          e(Campo, { key: 'u', rotulo: 'Endereço interno', id: 'nvUrl', erro: tocado && erros.url, ajuda: 'O navegador nunca vê este endereço: a tela abre pelo proxy do Hub.' }, e('input', { id: 'nvUrl', value: f.url, onChange: (ev) => { setTeste(''); mudar('url')(ev); }, placeholder: 'http://container:4016/', spellCheck: false, 'aria-invalid': tocado && !!erros.url, style: { fontFamily: 'var(--font-mono)', fontSize: 13 } })),
-          e('div', { key: 'i', className: 'exu-campo' }, [
-            e('label', { key: 'l' }, 'Ícone'),
-            e('div', { key: 'g', className: 'exu-icones', role: 'group', 'aria-label': 'Ícone' }, ICONES_NOVA.map((nome) => e('button', { key: nome, type: 'button', 'aria-pressed': f.icone === nome ? 'true' : 'false', 'aria-label': nome, onClick: () => setF(Object.assign({}, f, { icone: nome })) }, Icon(nome, 17, 'currentColor')))),
-          ]),
-          e(Campo, { key: 'ds', rotulo: 'Descrição', id: 'nvDesc', ajuda: f.descricao.length + '/160 · aparece no cartão, em até duas linhas.' }, e('textarea', { id: 'nvDesc', value: f.descricao, onChange: mudar('descricao'), maxLength: 160 })),
         ]);
       }
 
-      function Painel({ lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef }) {
+      function Painel({ lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef, local }) {
         const [nova, setNova] = useState(false);
+        const [editar, setEditar] = useState(null);
+        const [remover, setRemover] = useState(null);
+        const [menu, setMenu] = useState(null);
+        useEffect(() => {
+          if (menu === null) return undefined;
+          const fora = (ev) => { if (!ev.target.closest('.ex-menu')) setMenu(null); };
+          const esc = (ev) => { if (ev.key === 'Escape') setMenu(null); };
+          document.addEventListener('mousedown', fora);
+          document.addEventListener('keydown', esc);
+          return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
+        }, [menu]);
         const [avisar, avisos] = window.ExemploUI.useAvisos();
         const [busca, setBusca] = useState('');
         const [filtro, setFiltro] = useState('todas');
@@ -303,11 +333,21 @@
           onClick: (ev) => { ev.stopPropagation(); alternarFav(a.id); },
         }, favoritas.includes(a.id) ? '★' : '☆');
         const teclaAbre = (a) => (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(a); } };
+        const menuCartao = (a) => e('div', { key: 'menu', className: 'ex-menu', onClick: (ev) => ev.stopPropagation() }, [
+          e('button', { key: 'b', type: 'button', className: 'ex-menu-btn', 'aria-label': 'Mais ações de ' + a.name, 'aria-expanded': menu === a.id ? 'true' : 'false', onClick: () => setMenu(menu === a.id ? null : a.id) }, Icon('MoreHorizontal', 16, 'currentColor')),
+          menu === a.id ? e('div', { key: 'm', className: 'ex-menu-lista', role: 'menu' }, [
+            e('button', { key: 'e', type: 'button', role: 'menuitem', onClick: () => { setMenu(null); setEditar(a); } }, [Icon('Pencil', 14, 'currentColor'), 'Editar']),
+            e('button', { key: 'c', type: 'button', role: 'menuitem', onClick: () => { setMenu(null); avisar('Endereço copiado (exemplo).', 'ok'); } }, [Icon('Copy', 14, 'currentColor'), 'Copiar endereço']),
+            e('hr', { key: 'h' }),
+            e('button', { key: 'r', type: 'button', role: 'menuitem', className: 'perigo', onClick: () => { setMenu(null); setRemover(a); } }, [Icon('Trash2', 14, 'currentColor'), 'Remover']),
+          ]) : null,
+        ]);
         const cartao = (a) => e('div', {
           key: a.id, role: 'button', tabIndex: 0, className: 'ex-card' + (a.status === 'offline' ? ' fora' : ''),
           'aria-label': 'Abrir ' + a.name, onClick: () => abrir(a), onKeyDown: teclaAbre(a),
         }, [
           estrela(a),
+          menuCartao(a),
           e('div', { key: 't', className: 'ex-card-topo' }, [icone(a), e('div', { key: 'n', style: { minWidth: 0 } }, [
             e('div', { key: 'n', className: 'ex-nome', title: a.name }, a.name),
             e('div', { key: 'c', className: 'ex-cat' }, categoria(a)),
@@ -340,7 +380,12 @@
             ]),
             e('button', { key: 'n', type: 'button', className: 'exu-btn primario', onClick: () => setNova(true) }, [Icon('Plus', 15, 'currentColor'), 'Nova automação']),
           ]),
-          nova ? e(NovaAutomacao, { key: 'nova', fechar: () => setNova(false), salvar: (f) => { setNova(false); avisar('Exemplo: "' + f.nome + '" seria cadastrada. Nada foi salvo.', 'ok'); } }) : null,
+          nova ? e(FormAutomacao, { key: 'nova', fechar: () => setNova(false), salvar: (f) => { setNova(false); local.criar(f); avisar('"' + f.nome + '" cadastrada (só nesta sessão do exemplo).', 'ok'); } }) : null,
+          editar ? e(FormAutomacao, { key: 'editar', inicial: editar, fechar: () => setEditar(null), salvar: (f) => { local.editar(editar.id, f); setEditar(null); avisar('"' + f.nome + '" salva (só nesta sessão do exemplo).', 'ok'); } }) : null,
+          remover ? e(window.ExemploUI.Modal, {
+            key: 'remover', perigo: true, titulo: 'Remover "' + remover.name + '"?', descricao: 'Ela some do Painel de todos e o Hub para de conferir se está no ar. O container da automação continua rodando.', fechar: () => setRemover(null),
+            rodape: [e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: () => setRemover(null) }, 'Cancelar'), e('button', { key: 'r', type: 'button', className: 'exu-btn primario', onClick: () => { local.remover(remover.id); avisar('"' + remover.name + '" removida (só nesta sessão do exemplo).', 'ok'); setRemover(null); } }, 'Remover')],
+          }) : null,
           avisos,
 
           fora.length ? e('div', { key: 'alerta', className: 'ex-alerta', role: 'status' }, [
@@ -462,6 +507,14 @@
         const [favoritas, setFavoritas] = useState(() => ler('arxhub_exemplo_favoritas', []));
         const [recentes, setRecentes] = useState(() => ler('arxhub_exemplo_recentes', []));
         const areaRef = useRef(null);
+        const [mudancas, setMudancas] = useState({ novas: [], edicoes: {}, removidas: [] });
+        const [avisar, avisos] = window.ExemploUI.useAvisos();
+        const doForm = (f) => ({ name: f.nome.trim(), description: f.descricao.trim(), icon: f.icone, color: f.cor, categories: f.categorias });
+        const local = {
+          criar: (f) => setMudancas((m) => Object.assign({}, m, { novas: [...m.novas, Object.assign({ id: 'nova-' + Date.now(), status: 'online' }, doForm(f))] })),
+          editar: (id, f) => setMudancas((m) => Object.assign({}, m, { edicoes: Object.assign({}, m.edicoes, { [id]: doForm(f) }) })),
+          remover: (id) => setMudancas((m) => Object.assign({}, m, { removidas: [...m.removidas, id] })),
+        };
 
         useEffect(() => {
           let vivo = true, es;
@@ -489,8 +542,7 @@
           setAtiva(a.id);
           setRecentes((r) => { const n = [a.id, ...r.filter((x) => x !== a.id)].slice(0, 6); gravar('arxhub_exemplo_recentes', n); return n; });
           if (abertas.some((x) => x.id === a.id)) return;
-          setAbertas((l) => [...l, { id: a.id, passe: null, recarga: 0 }]);
-          pedirPasse(a.id).then((passe) => setAbertas((l) => l.map((x) => (x.id === a.id ? Object.assign({}, x, { passe }) : x))));
+          setAbertas((l) => [...l, { id: a.id, passe: '', recarga: 0 }]);
         };
         const fechar = (id) => {
           const resto = abertas.filter((x) => x.id !== id);
@@ -506,7 +558,8 @@
           gravar('arxhub_exemplo_tema', t);
         };
 
-        const todas = lista || [];
+        const listaLocal = lista ? [...lista, ...mudancas.novas].filter((a) => !mudancas.removidas.includes(a.id)).map((a) => Object.assign({}, a, mudancas.edicoes[a.id] || {})) : null;
+        const todas = listaLocal || [];
         const porId = (id) => todas.find((a) => a.id === id);
         const no = todas.filter((a) => a.status === 'online').length;
         const fora = todas.length - no - todas.filter((a) => a.status === 'checking').length;
@@ -536,16 +589,17 @@
             onAuxClick: (ev) => { if (ev.button === 1) { ev.preventDefault(); fechar(a.id); } },
           }, [
             e('span', { key: 'p', className: 'ponto', style: { background: COR_STATUS[a.status] || COR_STATUS.checking } }),
-            Icon(a.icon, 14, a.color),
+            Ico(a.icon, 14, a.color),
             e('span', { key: 'r', className: 'rot' }, a.name),
             e('span', { key: 'x', className: 'fechar', role: 'button', 'aria-label': 'Fechar ' + a.name, onClick: (ev) => { ev.stopPropagation(); fechar(a.id); } }, Icon('X', 12, 'currentColor')),
           ]))),
           e('div', { key: 'e', className: 'ex-espaco' }),
           e('div', { key: 'ac', className: 'ex-acoes' }, [
+            e(window.ExemploTopo.AbrirChamado, { key: 'gc', avisar }),
             e('button', { key: 'b', type: 'button', className: 'ex-busca-btn', onClick: () => setPaleta(true), 'aria-label': 'Buscar no Hub' }, [Icon('Search', 15, 'currentColor'), e('span', { key: 's' }, 'Buscar'), e('kbd', { key: 'k' }, 'Ctrl K')]),
-            window.AjudaBotao ? e(window.AjudaBotao, { key: 'aj', aba: aAtiva ? null : pagina }) : null,
-            window.AlertasSino ? e(window.AlertasSino, { key: 'al' }) : null,
-            window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'mac' }) : null,
+            e(window.ExemploTopo.Ajuda, { key: 'aj' }),
+            e(window.ExemploTopo.Alertas, { key: 'al', avisar }),
+            e(window.ExemploTopo.MeusAcessos, { key: 'mac', avisar }),
             e('button', { key: 't', type: 'button', className: 'ex-icone-btn ex-tema', onClick: tema, title: 'Trocar tema', 'aria-label': 'Trocar tema' }, Icon('Eye', 15, 'currentColor')),
             e('a', { key: 'v', className: 'ex-icone-btn ex-voltar', href: '/', title: 'Voltar ao Hub atual', 'aria-label': 'Voltar ao Hub atual' }, Icon('ArrowLeft', 15, 'currentColor')),
             e('span', { key: 's', className: 'ex-saude', title: lista ? no + ' de ' + todas.length + ' no ar' : '' }, [
@@ -558,7 +612,7 @@
         const legado = (k, View) => (montadas[k] && View ? e('div', { key: k, className: 'ex-pagina', hidden: !!ativa || pagina !== k }, e(View)) : null);
         const conteudo = e('main', { key: 'c', className: 'ex-conteudo' }, [
           e('div', { key: 'painel', ref: areaRef, className: 'ex-pagina', hidden: !!ativa || pagina !== 'painel' },
-            e(Painel, { lista, atualizado, abrir, favoritas, alternarFav, recentes, areaRef })),
+            e(Painel, { lista: listaLocal, atualizado, abrir, favoritas, alternarFav, recentes, areaRef, local })),
           legado('chamados', window.ExemploChamados),
           legado('resultados', window.ExemploResultados),
           // cada tela aberta fica montada (escondida) para não perder o que está rodando nela
@@ -568,7 +622,9 @@
         return e('div', { className: 'ex-app' }, [
           topo,
           conteudo,
-          paleta ? e(Paleta, { key: 'k', lista, irPara, abrir, fechar: () => setPaleta(false) }) : null,
+          paleta ? e(Paleta, { key: 'k', lista: listaLocal, irPara, abrir, fechar: () => setPaleta(false) }) : null,
+          e(window.ExemploTopo.AvisoVersao, { key: 'versao' }),
+          avisos,
         ]);
       }
 

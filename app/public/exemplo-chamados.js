@@ -70,15 +70,38 @@
             e('div', { key: 'm', className: 'exu-medidor', role: 'meter', 'aria-valuenow': c.ia.confianca, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Confiança da IA' }, e('div', { style: { width: c.ia.confianca + '%' } })),
             e('div', { key: 'p', style: { fontSize: 12, color: 'var(--muted)', marginTop: 4 } }, 'Confiança de ' + c.ia.confianca + '%'),
           ]) : null,
-          e('section', { key: 'ds', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'Descrição'), e('p', { key: 'p', className: 'exu-texto' }, c.descricao)]),
+          // conversa do chamado, como no GLPI: o pedido e o que a automação escreveu (solução, pergunta da IA ou devolutiva)
+          e('section', { key: 'ds', className: 'exu-bloco' }, [
+            e('h4', { key: 'h' }, 'Conversa no chamado'),
+            e('div', { key: 'c', className: 'exu-conversa' }, [
+              e('div', { key: 'p', className: 'exu-msg' }, [
+                e('div', { key: 'm', className: 'exu-msg-meta' }, [e('b', { key: 'b' }, c.solicitante), ' abriu o chamado · há ' + tempo(c.abertoHaMin)]),
+                e('p', { key: 't' }, c.descricao),
+              ]),
+              c.status === 'concluido' ? e('div', { key: 's', className: 'exu-msg auto ok' }, [
+                e('div', { key: 'm', className: 'exu-msg-meta' }, [Icon('Bot', 13, 'currentColor'), e('b', { key: 'b' }, 'Automação'), ' · Solução' + (c.solucionadoHaMin ? ' · há ' + tempo(c.solucionadoHaMin) : ' · agora'), e('span', { key: 's', className: 'exu-sit concluido' }, [e('i', { key: 'i' }), 'Solucionado'])]),
+                e('p', { key: 't' }, D.respostaSolucao(c)),
+                c.tipo === 'foto_perfil' ? e('div', { key: 'a', className: 'exu-anexo' }, [Icon('FileText', 14, 'currentColor'), 'foto-perfil.png · 1600 x 1600 · 412 KB']) : null,
+              ]) : null,
+              c.status === 'pendencia' ? e('div', { key: 'q', className: 'exu-msg auto pergunta' }, [
+                e('div', { key: 'm', className: 'exu-msg-meta' }, [Icon('Bot', 13, 'currentColor'), e('b', { key: 'b' }, 'IA local'), ' · Acompanhamento · há ' + tempo(Math.max(2, Math.round(c.abertoHaMin / 2))), e('span', { key: 's', className: 'exu-sit pendencia' }, [e('i', { key: 'i' }), 'Pendente'])]),
+                e('p', { key: 't' }, D.perguntaIa(c)),
+              ]) : null,
+              c.status === 'pendencia' ? e('div', { key: 'w', className: 'exu-msg-espera' }, 'Esperando a resposta de ' + c.solicitante + '. Quando chegar, a IA lê de novo e o chamado volta para a fila.') : null,
+              c.status === 'erro' ? e('div', { key: 'e', className: 'exu-msg auto erro' }, [
+                e('div', { key: 'm', className: 'exu-msg-meta' }, [Icon('Bot', 13, 'currentColor'), e('b', { key: 'b' }, 'Automação'), ' · Acompanhamento · agora', e('span', { key: 's', className: 'exu-sit pendencia' }, [e('i', { key: 'i' }), 'Pendente'])]),
+                e('p', { key: 't' }, D.devolutivaErro(c)),
+              ]) : null,
+            ]),
+          ]),
           e('section', { key: 'lt', className: 'exu-bloco' }, [
             e('h4', { key: 'h' }, 'Andamento'),
             e('ol', { key: 'o', className: 'exu-linha-tempo' }, passos.map(([t, d, feito]) => e('li', { key: t, className: feito ? 'feito' : '' }, [t, e('small', { key: 's' }, d)]))),
           ]),
         ]),
         e('div', { key: 'p', className: 'exu-gaveta-pe' }, [
-          e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !PODE_RODAR.includes(c.status), onClick: () => rodar([c.id]) }, [Icon('Activity', 14, 'currentColor'), c.status === 'erro' ? 'Rodar novamente' : 'Rodar']),
-          e('button', { key: 'd', type: 'button', className: 'exu-btn', disabled: ['concluido', 'rodando', 'dispensado'].includes(c.status), onClick: () => dispensar([c.id]) }, 'Dispensar'),
+          rodar ? e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !PODE_RODAR.includes(c.status), onClick: () => rodar([c.id]) }, [Icon('Activity', 14, 'currentColor'), c.status === 'erro' ? 'Rodar novamente' : 'Rodar']) : null,
+          dispensar ? e('button', { key: 'd', type: 'button', className: 'exu-btn', disabled: ['concluido', 'rodando', 'dispensado'].includes(c.status), onClick: () => dispensar([c.id]) }, 'Dispensar') : null,
           e('button', { key: 'g', type: 'button', className: 'exu-btn', disabled: true, title: 'No exemplo os chamados não existem no GLPI' }, [Icon('ExternalLink', 14, 'currentColor'), 'Abrir no GLPI']),
         ]),
       ]),
@@ -89,26 +112,18 @@
   const ler = (k, p) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : p; } catch (err) { return p; } };
   const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (err) { /* sem armazenamento: vale só nesta aba */ } };
 
-  // Janela de configuração do modo automático: quantos por vez e quais tipos entram.
+  // Janela dos tipos que entram no modo automático (o "por vez" fica no contador ao lado da chave).
   function ConfigAuto({ config, salvar, fechar }) {
-    const [porVez, setPorVez] = useState(config.porVez);
     const [tipos, setTipos] = useState(config.tipos);
     const alternarTipo = (t) => setTipos((l) => (l.includes(t) ? l.filter((x) => x !== t) : [...l, t]));
     return e(window.ExemploUI.Modal, {
-      titulo: 'Modo automático', descricao: 'Os chamados prontos dos tipos marcados rodam sozinhos neste computador. Os de "Só manual" nunca entram.',
+      titulo: 'Tipos no modo automático', descricao: 'Os chamados prontos dos tipos marcados rodam sozinhos neste computador. Os de "Só manual" nunca entram.',
       fechar, largura: 600,
       rodape: [
         e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: fechar }, 'Cancelar'),
-        e('button', { key: 's', type: 'button', className: 'exu-btn primario', disabled: !tipos.length, onClick: () => salvar({ porVez, tipos }) }, 'Salvar'),
+        e('button', { key: 's', type: 'button', className: 'exu-btn primario', disabled: !tipos.length, onClick: () => salvar(Object.assign({}, config, { tipos })) }, 'Salvar'),
       ],
     }, [
-      e('div', { key: 'v', className: 'exu-campo' }, [
-        e('label', { key: 'l' }, 'Quantos chamados rodam ao mesmo tempo'),
-        e('div', { key: 's', className: 'exu-seg', role: 'group', 'aria-label': 'Por vez', style: { alignSelf: 'flex-start' } }, [1, 2, 3, 4, 5].map((n) => e('button', {
-          key: n, type: 'button', 'aria-pressed': porVez === n ? 'true' : 'false', onClick: () => setPorVez(n), style: { minWidth: 40 },
-        }, String(n)))),
-        e('p', { key: 'a', className: 'exu-campo-ajuda' }, porVez === 1 ? 'Um por vez: mais lento, mais leve para o SGA e o CRM.' : porVez + ' ao mesmo tempo: mais rápido, cada um abre o seu navegador na automação.'),
-      ]),
       e('div', { key: 't', className: 'exu-campo' }, [
         e('label', { key: 'l' }, 'Tipos que entram no automático (' + tipos.length + ' de ' + Object.keys(D.TIPOS).length + ')'),
         e('div', { key: 'm', className: 'exu-marcas' }, Object.keys(D.TIPOS).map((t) => e('label', { key: t, className: 'exu-marca' }, [
@@ -233,6 +248,7 @@
     const cAberto = aberto ? lista.find((c) => c.id === aberto) : null;
     const prontos = conta((c) => c.status === 'pronto');
     const rodando = conta((c) => c.status === 'rodando');
+    const mudarPorVez = (d) => { const c = Object.assign({}, config, { porVez: Math.min(5, Math.max(1, config.porVez + d)) }); setConfig(c); gravar('arxhub_exemplo_auto', c); };
     const trocarExibir = (v) => { setExibir(v); gravar('arxhub_exemplo_chamados_exibir', v); };
 
     const kpi = (v, rot, n, det) => e('button', {
@@ -295,7 +311,13 @@
           e('label', { key: 'u', className: 'exu-chave', title: 'Roda sozinho os prontos dos tipos escolhidos' }, [
             e('input', { key: 'i', type: 'checkbox', className: 'admin-chave', role: 'switch', checked: auto, onChange: (ev) => setAuto(ev.target.checked) }), 'Automático',
           ]),
-          e('button', { key: 'cfg', type: 'button', className: 'exu-btn', onClick: () => setJanela({ tipo: 'auto' }), title: 'Configurar o modo automático' }, [Icon('Settings', 14, 'currentColor'), config.porVez + ' por vez']),
+          // quantos chamados o automático roda ao mesmo tempo: um contador só, de 1 a 5
+          e('div', { key: 'pv', className: 'exu-contador', role: 'group', 'aria-label': 'Chamados ao mesmo tempo no automático', title: 'Quantos chamados o automático roda ao mesmo tempo' }, [
+            e('button', { key: 'm', type: 'button', disabled: config.porVez <= 1, onClick: () => mudarPorVez(-1), 'aria-label': 'Diminuir' }, '−'),
+            e('span', { key: 'n', 'aria-live': 'polite' }, [e('b', { key: 'b' }, String(config.porVez)), ' por vez']),
+            e('button', { key: 'p', type: 'button', disabled: config.porVez >= 5, onClick: () => mudarPorVez(1), 'aria-label': 'Aumentar' }, '+'),
+          ]),
+          e('button', { key: 'cfg', type: 'button', className: 'exu-btn', onClick: () => setJanela({ tipo: 'auto' }), title: 'Tipos que entram no automático', 'aria-label': 'Tipos que entram no automático' }, Icon('Settings', 14, 'currentColor')),
           e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !prontos, onClick: () => rodar(lista.filter((c) => c.status === 'pronto').map((c) => c.id)) }, [Icon('Activity', 14, 'currentColor'), 'Rodar prontos (' + prontos + ')']),
         ]),
       ]),
@@ -357,11 +379,12 @@
       ]) : null,
 
       cAberto ? e(Gaveta, { key: 'g', c: cAberto, fechar: () => setAberto(null), rodar, dispensar: pedirDispensa }) : null,
-      janela && janela.tipo === 'auto' ? e(ConfigAuto, { key: 'ja', config, fechar: () => setJanela(null), salvar: (c) => { setConfig(c); gravar('arxhub_exemplo_auto', c); setJanela(null); avisar('Automático: até ' + c.porVez + ' por vez, ' + c.tipos.length + ' tipos.', 'ok'); } }) : null,
+      janela && janela.tipo === 'auto' ? e(ConfigAuto, { key: 'ja', config, fechar: () => setJanela(null), salvar: (c) => { setConfig(c); gravar('arxhub_exemplo_auto', c); setJanela(null); avisar('Automático: ' + (c.tipos.length === 1 ? '1 tipo marcado.' : c.tipos.length + ' tipos marcados.'), 'ok'); } }) : null,
       janela && janela.tipo === 'dispensa' ? e(ConfirmarDispensa, { key: 'jd', ids: janela.ids, fechar: () => setJanela(null), confirmar: (m) => dispensar(janela.ids, m) }) : null,
       avisos,
     ]);
   }
 
   window.ExemploChamados = ExemploChamados;
+  window.ExemploGavetaChamado = Gaveta; // a aba Resultados abre o mesmo painel
 })();

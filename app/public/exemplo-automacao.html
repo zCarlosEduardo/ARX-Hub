@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARX Automação de exemplo</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="exemplo.css">
+  <script>
+    (function () {
+      var d = document.documentElement, t = null;
+      try { t = localStorage.getItem('arxhub_exemplo_tema') || localStorage.getItem('arx-tema'); } catch (e) { /* sem armazenamento: tema claro */ }
+      d.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+      window.addEventListener('message', function (ev) {
+        if (ev.data && ev.data.type === 'arx-theme') d.setAttribute('data-theme', ev.data.theme === 'dark' ? 'dark' : 'light');
+      });
+    })();
+  </script>
+  <style>
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); }
+    [hidden] { display: none !important; }
+    .au-grade { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+    .au-lado { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .au-secao + .au-secao { margin-top: 16px; }
+    .au-secao-titulo { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 13px; font-weight: 600; }
+    .au-num { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: var(--primary-fg); font-size: 11.5px; display: inline-flex; align-items: center; justify-content: center; }
+    .au-campos { display: flex; flex-direction: column; gap: 14px; }
+    .au-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .au-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .au-chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+    .au-acoes-chips { display: flex; gap: 10px; font-size: 12px; }
+    .au-acoes-chips button { border: none; background: none; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+    .au-acesso { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+    .au-acesso small { display: block; color: var(--muted); font-size: 12px; }
+    .au-selo { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-fg); white-space: nowrap; }
+    .au-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+    .au-modos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .au-modo { display: flex; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 13px; }
+    .au-modo small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.4; }
+    .au-modo:has(input:checked) { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+    .au-modo input { accent-color: var(--primary); margin-top: 2px; }
+    .au-drop { display: flex; align-items: center; gap: 10px; padding: 16px; border: 1px dashed var(--border-hover); border-radius: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+    .au-drop b { color: var(--text); }
+    .au-resumo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+    .au-resumo li { display: flex; justify-content: space-between; gap: 10px; }
+    .au-resumo li span:first-child { color: var(--muted); }
+    .au-resumo li span:last-child { text-align: right; font-weight: 500; }
+    .au-erros { margin: 0; padding: 10px 12px 10px 28px; border-radius: 10px; background: var(--error-tint); color: var(--error); font-size: 12.5px; line-height: 1.6; }
+    .au-progresso { height: 8px; border-radius: 999px; background: var(--secondary); overflow: hidden; }
+    .au-progresso > div { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s var(--ease); }
+    .au-exec-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+    .au-empresas { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .au-log { margin: 12px 0 0; padding: 12px; border-radius: 8px; background: var(--log-bg); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; line-height: 1.7; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+    .au-log .t { color: var(--muted-soft); }
+    .au-log .erro { color: var(--error); }
+    .au-tela { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .au-tela-barra { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--secondary); font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
+    .au-tela-barra i { width: 8px; height: 8px; border-radius: 50%; background: var(--border-hover); }
+    .au-tela-corpo { height: 180px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--card); }
+    .au-tela-corpo div { height: 12px; border-radius: 4px; background: linear-gradient(90deg, var(--secondary) 25%, var(--hover-bg-soft) 50%, var(--secondary) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+    .au-tabela-escolha { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .au-tabela-escolha .barra { display: flex; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid var(--border); background: var(--hover-bg-soft); flex-wrap: wrap; }
+    .au-tabela-escolha table { margin: 0; }
+    .au-tabela-escolha td, .au-tabela-escolha th { padding: 8px 10px !important; }
+    .au-hist { list-style: none; margin: 0; padding: 0; }
+    .au-hist li { display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; font-size: 13px; }
+    .au-hist li + li { border-top: 1px solid var(--border); }
+    .au-hist small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    @media (max-width: 900px) { .au-grade { grid-template-columns: minmax(0, 1fr); } .au-lado { position: static; } .au-modos { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { .au-tela-corpo div { animation: none; } }
+  </style>
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
+  <script src="icons.js"></script>
+  <script src="exemplo-dados.js"></script>
+  <script src="exemplo-ui.js"></script>
+  <script src="exemplo-automacoes.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    (function () {
+      const e = React.createElement;
+      const { useState, useEffect, useRef } = React;
+      const { Modal, Campo, Ico, useAvisos } = window.ExemploUI;
+      const A = window.ExemploAutomacoes;
+      const chave = new URLSearchParams(location.search).get('a') || 'generica';
+      const DEF = A.DEFS[chave] || A.DEFS.generica;
+      const campos = DEF.secoes.flatMap((s) => s.campos);
+      const hora = () => new Date().toLocaleTimeString('pt-BR');
+      const SIT = { ok: ['concluido', 'Sucesso'], aviso: ['pendencia', 'Aviso'], erro: ['erro', 'Erro'] };
+
+      function inicial() {
+        const v = {};
+        campos.forEach((c) => {
+          if (c.t === 'escolha') v[c.k] = [];
+          else if (c.t === 'acesso') v[c.k] = 'hub';
+          else v[c.k] = c.valor !== undefined ? (Array.isArray(c.valor) ? c.valor.slice() : c.valor) : '';
+        });
+        return v;
+      }
+      function faltando(v) {
+        return campos.filter((c) => c.obrig && (Array.isArray(v[c.k]) ? !v[c.k].length : !String(v[c.k] || '').trim())).map((c) => c.rot);
+      }
+
+      // Escolha em duas etapas (padrão das automações do PowerCRM): primeiro lê a lista, depois a pessoa marca o que quer.
+      function Escolha({ c, valor, mudar }) {
+        const [estado, setEstado] = useState('nada');
+        const [filtro, setFiltro] = useState('');
+        const visiveis = c.linhas.filter((l) => l.join(' ').toLowerCase().includes(filtro.toLowerCase()));
+        if (estado === 'nada') return e('div', { className: 'au-drop' }, [Ico('Database', 16, 'var(--muted)'), e('span', { key: 't' }, 'A lista ainda não foi lida.'), e('button', { key: 'b', type: 'button', className: 'exu-btn pequeno primario', onClick: () => { setEstado('lendo'); setTimeout(() => setEstado('pronto'), 1100); } }, c.botao)]);
+        if (estado === 'lendo') return e('div', { className: 'au-drop' }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Ico('Loader2', 16, 'var(--accent)')), 'Lendo a lista…']);
+        const todas = visiveis.every((l) => valor.includes(l[0]));
+        return e('div', { className: 'au-tabela-escolha' }, [
+          e('div', { key: 'b', className: 'barra' }, [
+            e('label', { key: 'f', className: 'exu-busca', style: { flex: '1 1 160px', height: 30 } }, [Ico('Search', 14, 'var(--muted-soft)'), e('input', { key: 'i', value: filtro, onChange: (ev) => setFiltro(ev.target.value), placeholder: 'Filtrar', 'aria-label': 'Filtrar ' + c.rot })]),
+            e('span', { key: 'n', style: { fontSize: 12, color: 'var(--muted)' } }, valor.length + ' de ' + c.linhas.length + ' marcadas'),
+          ]),
+          e('table', { key: 't', className: 'exr-tab' }, [
+            e('thead', { key: 'h' }, e('tr', null, [e('th', { key: 'm', style: { width: 32 } }, e('input', { type: 'checkbox', checked: todas && visiveis.length > 0, onChange: () => mudar(todas ? valor.filter((x) => !visiveis.some((l) => l[0] === x)) : [...new Set([...valor, ...visiveis.map((l) => l[0])])]), 'aria-label': 'Marcar todas' })), ...c.colunas.map((t) => e('th', { key: t }, t))])),
+            e('tbody', { key: 'b' }, visiveis.map((l) => e('tr', { key: l[0], className: 'exr-clicavel', onClick: () => mudar(valor.includes(l[0]) ? valor.filter((x) => x !== l[0]) : [...valor, l[0]]) }, [
+              e('td', { key: 'm' }, e('input', { type: 'checkbox', checked: valor.includes(l[0]), readOnly: true, tabIndex: -1, 'aria-label': l[0] })), ...l.map((x, i) => e('td', { key: i }, x)),
+            ]))),
+          ]),
+        ]);
+      }
+
+      function CampoAuto({ c, v, mudar, tocado }) {
+        const valor = v[c.k];
+        const set = (x) => mudar(c.k, x);
+        const erro = tocado && c.obrig && (Array.isArray(valor) ? !valor.length : !String(valor || '').trim()) ? 'Obrigatório.' : '';
+        const alternar = (x) => set(valor.includes(x) ? valor.filter((y) => y !== x) : [...valor, x]);
+        if (c.t === 'acesso') {
+          return e('div', { className: 'exu-campo' }, [
+            e('label', { key: 'l' }, 'Login do ' + c.sistema),
+            valor === 'hub' ? e('div', { key: 'a', className: 'au-acesso' }, [
+              e('span', { key: 'i', className: 'ext-avatar' }, 'AL'),
+              e('div', { key: 't' }, [c.sistema === 'SGA' ? 'ana.lima' : 'ana.lima@exemplo.com', e('small', { key: 's' }, 'Senha guardada no cofre do Hub')]),
+              e('span', { key: 'p', className: 'au-selo' }, 'Preenchido pelo Hub'),
+              e('button', { key: 'b', type: 'button', className: 'exu-btn pequeno', onClick: () => set('outro') }, 'Usar outro'),
+            ]) : e('div', { key: 'o', className: 'exu-duas-col' }, [
+              e('input', { key: 'u', className: 'exu-select', style: { backgroundImage: 'none', paddingRight: 10 }, placeholder: c.sistema === 'SGA' ? 'Usuário do SGA' : 'E-mail do PowerCRM', 'aria-label': 'Usuário' }),
+              e('div', { key: 's', style: { display: 'flex', gap: 6 } }, [e('input', { key: 'i', type: 'password', className: 'exu-select', style: { backgroundImage: 'none', paddingRight: 10, flex: 1, minWidth: 0 }, placeholder: 'Senha', autoComplete: 'off', 'aria-label': 'Senha' }), e('button', { key: 'b', type: 'button', className: 'exu-btn pequeno', style: { height: 34 }, onClick: () => set('hub') }, 'Usar o do Hub')]),
+            ]),
+          ]);
+        }
+        let ctrl;
+        if (c.t === 'empresas' || c.t === 'chips') {
+          const ops = c.opcoes || A.EMP;
+          ctrl = e('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
+            e('div', { key: 'c', className: 'au-chips', role: 'group', 'aria-label': c.rot }, ops.map((x) => e('button', { key: x, type: 'button', className: 'au-chip', 'aria-pressed': valor.includes(x) ? 'true' : 'false', onClick: () => alternar(x) }, [valor.includes(x) ? Ico('Check', 13, 'currentColor', 2.25) : null, x]))),
+            e('div', { key: 'a', className: 'au-acoes-chips' }, [e('button', { key: 't', type: 'button', onClick: () => set(ops.slice()) }, 'Marcar todas'), e('button', { key: 'n', type: 'button', onClick: () => set([]) }, 'Limpar'), e('span', { key: 'q', style: { color: 'var(--muted)' } }, valor.length + ' de ' + ops.length)]),
+          ]);
+        } else if (c.t === 'select') ctrl = e('select', { id: c.k, value: valor, onChange: (ev) => set(ev.target.value) }, c.opcoes.map((x) => e('option', { key: x }, x)));
+        else if (c.t === 'seg') ctrl = e('div', { className: 'exu-seg', role: 'group', 'aria-label': c.rot, style: { alignSelf: 'flex-start' } }, c.opcoes.map(([k, t]) => e('button', { key: k, type: 'button', 'aria-pressed': valor === k ? 'true' : 'false', onClick: () => set(k) }, t)));
+        else if (c.t === 'checks') ctrl = e('div', { className: 'au-checks' }, c.opcoes.map((x) => e('label', { key: x, className: 'exu-marca' }, [e('input', { key: 'i', type: 'checkbox', checked: valor.includes(x), onChange: () => alternar(x) }), x])));
+        else if (c.t === 'linhas') {
+          const n = String(valor).split('\n').filter((x) => x.trim()).length;
+          ctrl = e('textarea', { id: c.k, value: valor, onChange: (ev) => set(ev.target.value), style: { height: c.alto ? 150 : 110, fontFamily: c.alto ? 'inherit' : 'var(--font-mono)', fontSize: 13 }, spellCheck: false, 'aria-invalid': !!erro });
+          return e(Campo, { rotulo: [c.rot, e('span', { key: 'n', style: { float: 'right', fontWeight: 400, color: 'var(--muted-soft)' } }, n === 1 ? '1 linha' : n + ' linhas')], id: c.k, erro, ajuda: c.ajuda }, ctrl);
+        } else if (c.t === 'periodo') ctrl = e('div', { className: 'exu-duas-col' }, ['de', 'ate'].map((k) => e('input', { key: k, type: 'month', value: valor[k], 'aria-label': k === 'de' ? 'Mês inicial' : 'Mês final', onChange: (ev) => set(Object.assign({}, valor, { [k]: ev.target.value })), className: 'exu-select', style: { backgroundImage: 'none', paddingRight: 10 } })));
+        else if (c.t === 'modo') {
+          return e('div', { className: 'exu-campo' }, [e('label', { key: 'l' }, 'Modo de execução'), e('div', { key: 'm', className: 'au-modos', role: 'radiogroup' }, [['sem', 'Sem tela', 'Mais rápido. Você acompanha pelo andamento.'], ['tela', 'Tela ao vivo', 'Mostra o navegador da automação enquanto ela trabalha.']].map(([k, t, d]) => e('label', { key: k, className: 'au-modo' }, [
+            e('input', { key: 'i', type: 'radio', name: 'modo', checked: valor === k, onChange: () => set(k) }), e('div', { key: 't' }, [e('b', { key: 'b' }, t), e('small', { key: 's' }, d)]),
+          ])))]);
+        } else if (c.t === 'arquivo') {
+          ctrl = e('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } }, [
+            e('div', { key: 'd', className: 'au-drop' }, valor ? [Ico('Sheet', 18, 'var(--accent)'), e('b', { key: 'n' }, valor), e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno', style: { marginLeft: 'auto' }, onClick: () => set('') }, 'Trocar')]
+              : [Ico('Upload', 18, 'var(--muted)'), e('span', { key: 't' }, ['Arraste o arquivo aqui. ', e('small', { key: 's', style: { display: 'block' } }, c.aceita)]), e('button', { key: 'b', type: 'button', className: 'exu-btn pequeno', style: { marginLeft: 'auto' }, onClick: () => set(c.exemplo) }, 'Usar arquivo de exemplo')]),
+            valor && c.previa ? e('div', { key: 'p', className: 'au-tabela-escolha' }, [
+              e('div', { key: 'b', className: 'barra', style: { fontSize: 12.5, fontWeight: 600 } }, [Ico('Eye', 14, 'currentColor'), c.previa.titulo, e('span', { key: 's', style: { marginLeft: 'auto', fontWeight: 400, color: 'var(--muted)' } }, 'Confira antes de gerar')]),
+              e('div', { key: 't', style: { overflowX: 'auto' } }, e('table', { className: 'exr-tab' }, [e('thead', { key: 'h' }, e('tr', null, c.previa.colunas.map((t) => e('th', { key: t }, t)))), e('tbody', { key: 'b' }, c.previa.linhas.map((l, i) => e('tr', { key: i }, l.map((x, j) => e('td', { key: j }, x)))))])),
+            ]) : null,
+          ]);
+        } else if (c.t === 'escolha') ctrl = e(Escolha, { c, valor, mudar: set });
+        else ctrl = e('input', { id: c.k, value: valor, placeholder: c.placeholder, onChange: (ev) => set(ev.target.value), spellCheck: false, 'aria-invalid': !!erro, style: c.mono ? { fontFamily: 'var(--font-mono)', fontSize: 13 } : null });
+        return e(Campo, { rotulo: c.rot, id: c.k, erro, ajuda: c.ajuda }, ctrl);
+      }
+
+      function Tela() {
+        const [v, setV] = useState(inicial);
+        const [tocado, setTocado] = useState(false);
+        const [teste, setTeste] = useState(true);
+        const [exec, setExec] = useState(null); // { itens, feitos, rodando, parado, log, resultados, inicio }
+        const [filtro, setFiltro] = useState('todos');
+        const [verLog, setVerLog] = useState(true);
+        const [hist, setHist] = useState(false);
+        const [avisar, avisos] = useAvisos();
+        const parar = useRef(false);
+        const logRef = useRef(null);
+        const mudar = (k, x) => setV((o) => Object.assign({}, o, { [k]: x }));
+        const falta = faltando(v);
+        let itens = [];
+        try { itens = DEF.itens(v); } catch (err) { itens = []; }
+        useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [exec && exec.log.length]);
+
+        // execução simulada: cada passo de cada item vira linha de log; o resultado sai da definição
+        const iniciar = (lista) => {
+          setTocado(true);
+          if (falta.length || !lista.length) return;
+          parar.current = false;
+          const estado = { itens: lista, feitos: 0, rodando: true, log: [[hora(), 'Iniciando ' + (lista.length === 1 ? '1 item' : lista.length + ' itens') + (DEF.teste && teste ? ' em modo teste (nada é salvo)' : '')]], resultados: [], inicio: Date.now() };
+          setExec(estado);
+          let i = 0;
+          const proximo = () => {
+            if (parar.current || i >= lista.length) {
+              setExec((x) => Object.assign({}, x, { rodando: false, log: [...x.log, [hora(), parar.current ? 'Parado por você.' : 'Terminado.']] }));
+              if (!parar.current) avisar('Execução terminada.', 'ok');
+              return;
+            }
+            const item = lista[i];
+            const passos = DEF.passos(item);
+            let p = 0;
+            const passo = () => {
+              if (parar.current) return proximo();
+              if (p < passos.length) {
+                const texto = passos[p++];
+                setExec((x) => Object.assign({}, x, { atual: texto, log: [...x.log, [hora(), texto]] }));
+                setTimeout(passo, 280 + Math.random() * 380);
+                return;
+              }
+              const r = DEF.resultado(item, i, v);
+              setExec((x) => Object.assign({}, x, { feitos: x.feitos + 1, resultados: [...x.resultados, Object.assign({ item }, r)], log: [...x.log, [hora(), (r.sit === 'erro' ? 'Erro: ' : '') + item.nome + ': ' + r.texto, r.sit === 'erro']] }));
+              i++;
+              setTimeout(proximo, 120);
+            };
+            passo();
+          };
+          setTimeout(proximo, 300);
+        };
+        const res = exec ? exec.resultados : [];
+        const conta = (s) => res.filter((r) => r.sit === s).length;
+        const mostrados = res.filter((r) => filtro === 'todos' || r.sit === filtro);
+        const colunas = DEF.colunas || (itens[0] && itens[0].empresa ? ['Item', 'Empresa', 'Situação', 'Detalhe'] : ['Item', 'Situação', 'Detalhe']);
+        const celulas = (r) => colunas.map((col) => {
+          if (col === 'Situação') return e('span', { className: 'exu-sit ' + SIT[r.sit][0] }, [e('i', { key: 'i' }), r.texto]);
+          if (col === 'Empresa') return r.item.empresa || '';
+          if (col === 'Sistema') return r.item.sistema || '';
+          if (col === 'Detalhe') return r.detalhe || '';
+          return r.item.nome;
+        });
+        const baixar = () => {
+          const csv = [colunas.join(';'), ...res.map((r) => colunas.map((col) => (col === 'Situação' ? r.texto : col === 'Empresa' ? r.item.empresa || '' : col === 'Sistema' ? r.item.sistema || '' : col === 'Detalhe' ? r.detalhe || '' : r.item.nome)).join(';'))].join('\n');
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
+          a.download = 'resultado-' + chave + '.csv';
+          a.click();
+        };
+        const pct = exec ? Math.round((exec.feitos / exec.itens.length) * 100) : 0;
+        const restante = exec && exec.feitos ? Math.round(((Date.now() - exec.inicio) / exec.feitos) * (exec.itens.length - exec.feitos) / 1000) : null;
+        const empresas = exec ? [...new Set(exec.itens.map((i) => i.empresa).filter(Boolean))] : [];
+        const resumoItens = DEF.secoes.flatMap((s) => s.campos).filter((c) => ['empresas', 'select', 'seg', 'chips', 'escolha'].includes(c.t)).slice(0, 4).map((c) => {
+          const x = v[c.k];
+          const txt = Array.isArray(x) ? (x.length ? (x.length <= 2 ? x.join(', ') : x.length + ' escolhidas') : 'Nenhuma') : c.t === 'seg' ? (c.opcoes.find((o) => o[0] === x) || [])[1] : x;
+          return [c.rot, txt];
+        });
+
+        return e('main', { className: 'exu-tela', style: { maxWidth: 1180 } }, [
+          e('header', { key: 'c', className: 'exu-cab' }, [
+            e('div', { key: 't', style: { display: 'flex', gap: 12, alignItems: 'center' } }, [
+              e('span', { key: 'i', className: 'ex-ic', style: { width: 40, height: 40, borderRadius: 10, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, Ico(DEF.icone, 20, 'currentColor')),
+              e('div', { key: 'x' }, [e('h2', { key: 'h' }, DEF.titulo), e('p', { key: 'p' }, DEF.sub)]),
+            ]),
+            e('div', { key: 'a', className: 'exu-acoes' }, [
+              e('span', { key: 'e', className: 'fp-tag', style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--warn-tint)', color: 'var(--warn)' } }, 'Exemplo: dados fictícios'),
+              e('span', { key: 's', className: 'exu-sit ' + (exec && exec.rodando ? 'rodando' : 'concluido') }, [e('i', { key: 'i' }), exec && exec.rodando ? 'Executando' : 'Pronta']),
+              e('button', { key: 'h', type: 'button', className: 'exu-btn', onClick: () => setHist(true) }, [Ico('History', 14, 'currentColor'), 'Histórico']),
+            ]),
+          ]),
+          e('div', { key: 'g', className: 'au-grade' }, [
+            e('div', { key: 'f', className: 'exu-cartao' }, e('div', { className: 'exu-cartao-corpo' }, DEF.secoes.map((s, i) => e('section', { key: i, className: 'au-secao' }, [
+              e('h3', { key: 'h', className: 'au-secao-titulo' }, [e('span', { key: 'n', className: 'au-num' }, String(i + 1)), s.titulo]),
+              e('div', { key: 'c', className: 'au-campos' }, s.campos.map((c) => e(CampoAuto, { key: c.k, c, v, mudar, tocado }))),
+            ])))),
+            e('aside', { key: 'l', className: 'au-lado' }, [
+              e('div', { key: 'r', className: 'exu-cartao' }, [
+                e('div', { key: 'c', className: 'exu-cartao-cab' }, e('div', null, [e('h3', { key: 'h' }, 'Resumo'), e('p', { key: 'p' }, 'Confira antes de iniciar.')])),
+                e('div', { key: 'b', className: 'exu-cartao-corpo', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+                  e('ul', { key: 'r', className: 'au-resumo' }, [...resumoItens.map(([k, t]) => e('li', { key: k }, [e('span', { key: 'a' }, k), e('span', { key: 'b' }, t)])), e('li', { key: 'i' }, [e('span', { key: 'a' }, 'Itens a processar'), e('span', { key: 'b' }, String(itens.length))])]),
+                  DEF.teste ? e('label', { key: 't', className: 'exu-chave' }, [e('input', { key: 'i', type: 'checkbox', className: 'admin-chave', role: 'switch', checked: teste, onChange: (ev) => setTeste(ev.target.checked) }), 'Modo teste (preenche e não salva)']) : null,
+                  tocado && falta.length ? e('ul', { key: 'e', className: 'au-erros' }, falta.map((f) => e('li', { key: f }, 'Falta: ' + f))) : null,
+                  exec && exec.rodando
+                    ? e('button', { key: 'p', type: 'button', className: 'exu-btn perigo', onClick: () => { parar.current = true; } }, [Ico('Square', 14, 'currentColor'), 'Parar'])
+                    : e('button', { key: 'i', type: 'button', className: 'exu-btn primario', style: { height: 40 }, onClick: () => iniciar(itens) }, [Ico('Play', 14, 'currentColor'), itens.length ? 'Iniciar (' + itens.length + ')' : 'Iniciar']),
+                ]),
+              ]),
+            ]),
+          ]),
+          exec ? e('section', { key: 'x', className: 'exu-cartao' }, [
+            e('div', { key: 'c', className: 'exu-cartao-cab' }, [e('div', { key: 't' }, [e('h3', { key: 'h' }, 'Execução'), e('p', { key: 'p' }, exec.rodando ? exec.atual || 'Começando…' : 'Terminada às ' + hora())]), e('button', { key: 'l', type: 'button', className: 'exu-btn pequeno', onClick: () => setVerLog(!verLog) }, verLog ? 'Esconder log' : 'Ver log')]),
+            e('div', { key: 'b', className: 'exu-cartao-corpo' }, [
+              e('div', { key: 'h', className: 'au-exec-cab' }, [e('b', { key: 'a' }, exec.feitos + ' de ' + exec.itens.length + ' · ' + pct + '%'), e('span', { key: 'b', style: { color: 'var(--muted)' } }, exec.rodando ? (restante != null ? 'cerca de ' + Math.max(1, restante) + ' s restantes' : 'calculando o tempo') : conta('ok') + ' com sucesso, ' + conta('erro') + ' com erro')]),
+              e('div', { key: 'p', className: 'au-progresso', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 }, e('div', { style: { width: pct + '%' } })),
+              empresas.length > 1 ? e('div', { key: 'e', className: 'au-empresas' }, empresas.map((emp) => {
+                const t = exec.itens.filter((i) => i.empresa === emp).length, f = exec.resultados.filter((r) => r.item.empresa === emp).length;
+                return e('span', { key: emp, className: 'exu-sit ' + (f === t ? 'concluido' : f ? 'rodando' : '') }, [e('i', { key: 'i' }), emp + ' ' + f + '/' + t]);
+              })) : null,
+              v.modo === 'tela' && exec.rodando ? e('div', { key: 't', className: 'au-tela', 'aria-label': 'Tela ao vivo (ilustrativa)' }, [
+                e('div', { key: 'b', className: 'au-tela-barra' }, [e('i', { key: 'a' }), e('i', { key: 'b' }), e('i', { key: 'c' }), e('span', { key: 'u' }, (DEF.secoes.some((s) => s.campos.some((c) => c.sistema === 'PowerCRM')) ? 'app.powercrm.com.br' : 'sga.exemplo.com.br/v5') + ' · ao vivo')]),
+                e('div', { key: 'c', className: 'au-tela-corpo' }, [40, 70, 55, 85, 30].map((w, i) => e('div', { key: i, style: { width: w + '%' } }))),
+              ]) : null,
+              verLog ? e('div', { key: 'l', ref: logRef, className: 'au-log', role: 'log' }, exec.log.map((l, i) => e('div', { key: i, className: l[2] ? 'erro' : '' }, [e('span', { key: 't', className: 't' }, l[0] + '  '), l[1]]))) : null,
+            ]),
+          ]) : null,
+          res.length ? e('section', { key: 'r', className: 'exu-cartao' }, [
+            e('div', { key: 'c', className: 'exu-cartao-cab' }, [
+              e('div', { key: 't' }, [e('h3', { key: 'h' }, 'Resultado'), e('p', { key: 'p' }, res.length + ' de ' + exec.itens.length + ' processados' + (DEF.teste && teste ? ' em modo teste' : ''))]),
+              e('div', { key: 'a', className: 'exu-acoes' }, [
+                conta('erro') && !exec.rodando ? e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno', onClick: () => iniciar(res.filter((r) => r.sit === 'erro').map((r) => r.item)) }, 'Rodar de novo só os erros (' + conta('erro') + ')') : null,
+                DEF.arquivoFinal && !exec.rodando ? e('button', { key: 'z', type: 'button', className: 'exu-btn pequeno', onClick: () => avisar('Exemplo: ' + DEF.arquivoFinal + ' seria baixado.', 'ok') }, [Ico('Download', 13, 'currentColor'), DEF.arquivoFinal]) : null,
+                e('button', { key: 'b', type: 'button', className: 'exu-btn pequeno', onClick: baixar }, [Ico('Download', 13, 'currentColor'), 'Baixar resultado (CSV)']),
+              ]),
+            ]),
+            e('div', { key: 'b', className: 'exu-cartao-corpo' }, [
+              e('div', { key: 'k', className: 'exu-kpis', style: { marginBottom: 14 } }, [['ok', 'Sucesso'], ['aviso', 'Aviso'], ['erro', 'Erro']].map(([k, t]) => e('button', { key: k, type: 'button', className: 'exu-kpi' + (filtro === k ? ' marcado' : ''), onClick: () => setFiltro(filtro === k ? 'todos' : k) }, [e('div', { key: 'r', className: 'exu-kpi-rot' }, t), e('div', { key: 'v', className: 'exu-kpi-val' }, String(conta(k)))]))),
+              e('div', { key: 't', style: { overflowX: 'auto' } }, e('table', { className: 'exr-tab' }, [
+                e('thead', { key: 'h' }, e('tr', null, colunas.map((t) => e('th', { key: t }, t)))),
+                e('tbody', { key: 'b' }, mostrados.map((r, i) => e('tr', { key: i }, celulas(r).map((x, j) => e('td', { key: j }, x))))),
+              ])),
+            ]),
+          ]) : null,
+          hist ? e(Modal, { key: 'hist', titulo: 'Histórico de execuções', descricao: 'As últimas execuções desta automação (fictícias).', fechar: () => setHist(false), largura: 560 },
+            e('ul', { className: 'au-hist' }, [['Hoje, 10:42', 'Ana Lima', 12, 1, '2 min 10 s'], ['Ontem, 16:05', 'Bruno Costa', 4, 0, '48 s'], ['18/10, 09:30', 'Ana Lima', 30, 3, '6 min 02 s'], ['16/10, 14:12', 'Carla Nunes', 2, 0, '21 s']].map(([q, quem, n, err, dur], i) => e('li', { key: i }, [
+              e('div', { key: 't' }, [e('b', { key: 'b' }, q + ' · ' + quem), e('small', { key: 's' }, n + (n === 1 ? ' item' : ' itens') + ' em ' + dur)]),
+              e('span', { key: 's', className: 'exu-sit ' + (err ? 'pendencia' : 'concluido') }, [e('i', { key: 'i' }), err ? err + (err === 1 ? ' erro' : ' erros') : 'Sem erros']),
+            ])))) : null,
+          avisos,
+        ]);
+      }
+
+      document.title = 'ARX ' + DEF.titulo + ' (exemplo)';
+      const raiz = document.getElementById('root');
+      if (ReactDOM.createRoot) ReactDOM.createRoot(raiz).render(e(Tela)); else ReactDOM.render(e(Tela), raiz);
+    })();
+  </script>
+</body>
+</html>

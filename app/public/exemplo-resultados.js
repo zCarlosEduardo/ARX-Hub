@@ -152,8 +152,19 @@
     ]);
   }
 
+  // Execução vira um chamado para o mesmo painel lateral da aba Chamados (conversa com a solução ou a devolutiva).
+  function comoChamado(x) {
+    const base = D.MODELOS[x.tipo]();
+    return Object.assign(base, {
+      id: x.chamado, tipo: x.tipo, solicitante: x.solicitante, associacao: x.associacao, confianca: 'alta', pendencias: [], ia: null,
+      status: x.erro ? 'erro' : 'concluido', erro: x.erro ? x.motivo + '.' : null,
+      abertoHaMin: Math.max(5, Math.round((Date.now() - x.data.getTime()) / 60000) - x.hora * 60), solucionadoHaMin: null,
+    });
+  }
+
   function Tratados({ dias, antes, filtros, periodo }) {
     const [modo, setModo] = useState('grafico');
+    const [ver, setVer] = useState(null);
     const [exibir, setExibir] = useState(() => ler('arxhub_exemplo_res_exibir', 'lista'));
     const [ordem, setOrdem] = useState(['taxa', -1]);
     const [pagina, setPagina] = useState(0);
@@ -233,19 +244,19 @@
       ]))),
 
       e(Cartao, {
-        key: 'ch', titulo: 'Chamados atendidos', sub: num(recentes.length) + ' no período, do mais recente para o mais antigo.',
+        key: 'ch', titulo: 'Chamados atendidos', sub: num(recentes.length) + ' no período, do mais recente para o mais antigo. Clique para ver a resposta que foi ao GLPI.',
         acao: e(Seg, { valor: exibir, mudar: (v) => { setExibir(v); gravar('arxhub_exemplo_res_exibir', v); }, rotulo: 'Exibição', opcoes: [['lista', 'Lista'], ['cartoes', 'Cartões']] }),
       }, [
         exibir === 'lista'
           ? e('div', { key: 'l', style: { overflowX: 'auto' } }, e('table', { className: 'exr-tab' }, [
               e('thead', { key: 'h' }, e('tr', null, [e('th', { key: 'c' }, 'Chamado'), e('th', { key: 'q' }, 'Quando'), e('th', { key: 't' }, 'Tipo'), e('th', { key: 'a' }, 'Associação'), e('th', { key: 'o' }, 'Origem'), e('th', { key: 'd', className: 'num' }, 'Duração'), e('th', { key: 's' }, 'Situação')])),
-              e('tbody', { key: 'b' }, fatia.map((x, i) => e('tr', { key: i }, [
+              e('tbody', { key: 'b' }, fatia.map((x, i) => e('tr', { key: i, className: 'exr-clicavel', tabIndex: 0, onClick: () => setVer(comoChamado(x)), onKeyDown: (ev) => { if (ev.key === 'Enter') setVer(comoChamado(x)); } }, [
                 e('td', { key: 'c', style: { fontFamily: 'var(--font-mono)', fontSize: 12 } }, '#' + x.chamado), e('td', { key: 'q' }, dia(x.data) + ' ' + x.hora + 'h'),
                 e('td', { key: 't' }, D.TIPOS[x.tipo].nome), e('td', { key: 'a' }, x.associacao), e('td', { key: 'o' }, x.origem === 'automatico' ? 'Automático' : 'Manual'),
                 e('td', { key: 'd', className: 'num' }, x.segundos + ' s'), e('td', { key: 's' }, sitEx(x)),
               ]))),
             ]))
-          : e('div', { key: 'c', className: 'exc-cartoes' }, fatia.map((x, i) => e('div', { key: i, className: 'exc-cartao', style: { height: 'auto', cursor: 'default' } }, [
+          : e('div', { key: 'c', className: 'exc-cartoes' }, fatia.map((x, i) => e('div', { key: i, className: 'exc-cartao', role: 'button', tabIndex: 0, style: { height: 'auto' }, onClick: () => setVer(comoChamado(x)), onKeyDown: (ev) => { if (ev.key === 'Enter') setVer(comoChamado(x)); } }, [
               e('div', { key: 't', className: 'exc-cartao-topo' }, [e('span', { key: 'n', className: 'exc-id' }, '#' + x.chamado), sitEx(x)]),
               e('h4', { key: 'h' }, D.TIPOS[x.tipo].nome),
               e('p', { key: 'p' }, x.erro ? x.motivo : 'Solicitado por ' + x.solicitante + '.'),
@@ -260,6 +271,7 @@
         ]) : null,
       ]),
       e('p', { key: 'n', style: { margin: 0, fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 } }, [Icon('AlertCircle', 13, 'currentColor'), 'Tempo economizado: cada chamado resolvido conta os minutos que levaria à mão naquele tipo.']),
+      ver && window.ExemploGavetaChamado ? e(window.ExemploGavetaChamado, { key: 'ver', c: ver, fechar: () => setVer(null) }) : null,
     ]);
   }
 
