@@ -67,7 +67,8 @@
     else if (tipo === 'sincronizar_vistoria' && r() < 0.3) { status = 'pendencia'; pendencias.push('Placa, chassi ou ID'); }
     else if (tipo === 'desbloquear_usuario_sga' || (['senha_sistemas', 'cadastro_usuario'].includes(tipo) && r() < 0.4)) { status = 'manual'; confianca = 'media'; }
     else if (r() < 0.08) status = 'erro';
-    const ia = tipo ? { concorda: r() > 0.1, confianca: Math.round((0.78 + r() * 0.21) * 100) } : (r() < 0.3 ? { concorda: false, sugestao: um(tipos), confianca: Math.round((0.6 + r() * 0.2) * 100) } : null);
+    // quando a IA discorda, ela sempre sugere um tipo diferente do da regra
+    const ia = tipo ? (r() > 0.1 ? { concorda: true, confianca: Math.round((0.78 + r() * 0.21) * 100) } : { concorda: false, sugestao: um(tipos.filter((t) => t !== tipo)), confianca: Math.round((0.6 + r() * 0.2) * 100) }) : (r() < 0.3 ? { concorda: false, sugestao: um(tipos), confianca: Math.round((0.6 + r() * 0.2) * 100) } : null);
     chamados.push(Object.assign(base, {
       id: 48210 + i * 7 + entre(0, 6),
       tipo, status, confianca, pendencias, ia,
