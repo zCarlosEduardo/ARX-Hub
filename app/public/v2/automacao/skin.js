@@ -60,7 +60,7 @@
     const cab = wrap && wrap.querySelector('header.page-header');
     if (!wrap || !cab) return;
     // a tela antiga continua no DOM (escondida) para o app.js original não quebrar
-    Array.from(wrap.children).forEach((el) => { if (el !== cab) el.hidden = true; });
+    Array.from(wrap.children).forEach((el) => { if (el !== cab) el.classList.add('v2-escondido'); });
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const DEPTOS = ['Comercial', 'Qualidade', 'Cadastro', 'Financeiro', 'Eventos', 'Assistência'];
     const ORIGEM = { tela: 'Tela', chamado: 'Chamado do GLPI', api: 'API' };
@@ -77,12 +77,12 @@
           <h2>1. Dados da foto</h2>
           <div class="v2f-campo">
             <label for="v2fNome">Nome (primeiro e último) <span id="v2fCN">0/60</span></label>
-            <input id="v2fNome" maxlength="60" autocomplete="off" placeholder="Ester Dias" aria-describedby="v2fEN">
+            <input type="text" id="v2fNome" maxlength="60" autocomplete="off" placeholder="Ester Dias" aria-describedby="v2fEN">
             <p class="v2f-erro" id="v2fEN" hidden></p>
           </div>
           <div class="v2f-campo">
             <label for="v2fDepto">Departamento <span id="v2fCD">0/60</span></label>
-            <input id="v2fDepto" maxlength="60" autocomplete="off" placeholder="Qualidade" aria-describedby="v2fED">
+            <input type="text" id="v2fDepto" maxlength="60" autocomplete="off" placeholder="Qualidade" aria-describedby="v2fED">
             <p class="v2f-erro" id="v2fED" hidden></p>
             <div class="v2f-chips" id="v2fChips" aria-label="Departamentos usados com frequência"></div>
           </div>
