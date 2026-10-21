@@ -149,7 +149,11 @@
     Texto(a),
     e('dl', { key: 'k', className: 'mc-ref-info' }, [
       e('div', { key: 'e' }, [e('dt', { key: 't' }, 'Endereço'), e('dd', { key: 'd', className: 'mono' }, a.endereco || 'Oculto')]),
-      e('div', { key: 'v' }, [e('dt', { key: 't' }, 'Verificado'), e('dd', { key: 'd' }, ha(a.lastCheckedAt) || 'Sem dados')]),
+      // last_checked_at só é gravado quando o status muda: é "desde quando está assim", não a última checagem
+      e('div', { key: 'v' }, [
+        e('dt', { key: 't' }, a.status === 'offline' ? 'Fora do ar' : a.status === 'online' ? 'No ar' : 'Situação'),
+        e('dd', { key: 'd' }, ha(a.lastCheckedAt) || 'Sem dados'),
+      ]),
     ]),
     e('div', { key: 'b', className: 'mc-ref-rodape' }, [Categorias(a) || e('span', { key: 'v' }), BotaoAbrir()]),
   ]);
@@ -272,7 +276,7 @@
 
   const VARIACOES = [
     { chave: 'refinado', nome: 'Refinado 1: original', texto: 'O modelo escolhido, sem menu e sem endereço.', desenhar: Refinado, grade: 'mc-grade' },
-    { chave: 'ref-detalhes', nome: 'Refinado 2: com detalhes', texto: 'Endereço e hora da última verificação em uma ficha abaixo da descrição.', desenhar: RefDetalhes, grade: 'mc-grade' },
+    { chave: 'ref-detalhes', nome: 'Refinado 2: com detalhes', texto: 'Endereço e há quanto tempo está no ar (ou fora) em uma ficha abaixo da descrição.', desenhar: RefDetalhes, grade: 'mc-grade' },
     { chave: 'ref-linha', nome: 'Refinado 3: sistemas no topo', texto: 'Sistemas no alto, ícone ao lado do nome e endereço no rodapé.', desenhar: RefLinha, grade: 'mc-grade' },
     { chave: 'ref-largo', nome: 'Refinado 4: botão largo', texto: 'Abrir ocupa a largura do card, com um botão ao lado para abrir em nova aba.', desenhar: RefLargo, grade: 'mc-grade' },
     { chave: 'ref-horiz', nome: 'Refinado 5: horizontal', texto: 'Ícone grande à esquerda e o conteúdo ao lado. Cards mais largos e mais baixos.', desenhar: RefHorizontal, grade: 'mc-grade mc-grade-larga' },

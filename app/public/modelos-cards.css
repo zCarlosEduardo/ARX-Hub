@@ -146,3 +146,4 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-sans);
 .mc-ref-faixa::before { display: none; }
 .mc-ref-faixa { box-shadow: inset 0 3px 0 var(--c); }
 .mc-ref-faixa:hover { box-shadow: inset 0 3px 0 var(--c), var(--shadow-card-hover); }
+.mc-ref:has(.mc-menu-pop) { z-index: 30; }
