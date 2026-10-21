@@ -909,7 +909,30 @@
     const isDb = (a) => (a.categories || []).includes('db');
     const mainList = visible.filter((a) => !isDb(a));
     const dbList = visible.filter(isDb);
-    const cardGrid = (key, list) => e('div', { key, style: sx('display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px') }, list.map(buildCard));
+    // ---- automação em lista (Painel > Lista): uma linha por automação, abre com clique, Enter ou espaço ----
+    function buildLinha(a) {
+      const meta = STATUS_META[a.status] || STATUS_META.checking;
+      const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
+      return e('div', {
+        key: a.id, className: 'v2-linha', role: 'button', tabIndex: 0, 'aria-label': 'Abrir ' + a.name,
+        onClick: () => openAutomation(a.id),
+        onKeyDown: (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openAutomation(a.id); } },
+      }, [
+        e('span', { key: 'i', className: 'v2-linha-ic', style: { background: a.color + '22' } }, Icon(a.icon, 17, a.color)),
+        e('div', { key: 'n', className: 'v2-linha-nome' }, [e('b', { key: 'b' }, a.name), e('small', { key: 's' }, a.description || 'Sem descrição')]),
+        e('div', { key: 'c', className: 'v2-linha-cats' }, cats.map((c) => e('span', {
+          key: c.key, style: { background: c.color + '22', color: 'color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))' },
+        }, c.label))),
+        e('span', { key: 's', className: 'v2-status ' + (STATUS_META[a.status] ? a.status : 'checking') }, [e('i', { key: 'i', 'aria-hidden': true }), meta.label]),
+        podeGerenciar ? e('button', {
+          key: 'e', type: 'button', className: 'icon-btn v2-linha-editar', title: 'Editar', 'aria-label': 'Editar ' + a.name,
+          onClick: (ev) => { ev.stopPropagation(); openEditModal({ ...a, url: urlReal(a) }); },
+        }, Icon('Pencil', 14)) : null,
+      ]);
+    }
+    const cardGrid = (key, list) => (visaoPainel === 'lista'
+      ? e('div', { key, className: 'v2-lista' }, list.map(buildLinha))
+      : e('div', { key, style: sx('display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px') }, list.map(buildCard)));
     const dbSection = dbList.length ? e('section', { key: 'db', className: 'db-section' }, [
       e('div', { key: 'head', className: 'db-section-head' }, [
         e('div', { key: 'icon', className: 'db-section-icon' }, Icon('Database', 18, 'var(--db-color)')),
@@ -925,7 +948,13 @@
     const panelBody = e('div', { style: sx('padding:28px 24px 96px;max-width:1200px;margin:0 auto') }, [
       e('div', { key: 'head', style: sx('display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px') }, [
         e('div', { key: 't', onDoubleClick: toggleTheme, style: sx('font-weight:600;font-size:19px;user-select:none') }, 'Automações'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5 } }, total + ' automações · ' + online + ' online · ' + offline + ' offline'),
+        e('div', { key: 's', style: sx('display:flex;align-items:center;gap:12px;flex-wrap:wrap') }, [
+          e('span', { key: 't', style: { color: 'var(--muted-soft)', fontSize: 12.5 } }, total + ' automações · ' + online + ' online · ' + offline + ' offline'),
+          e('div', { key: 'v', className: 'exu-seg', role: 'group', 'aria-label': 'Exibição das automações' }, [
+            e('button', { key: 'g', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'false' : 'true', onClick: () => trocarVisao('grade') }, [Icon('LayoutDashboard', 13, 'currentColor'), ' Cartões']),
+            e('button', { key: 'l', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista') }, [Icon('FileText', 13, 'currentColor'), ' Lista']),
+          ]),
+        ]),
       ]),
       !automationsLoaded
         ? e('div', { key: 'loading', style: sx('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 20px;color:var(--muted-soft)') }, [
