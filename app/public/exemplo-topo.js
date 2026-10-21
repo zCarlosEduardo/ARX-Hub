@@ -48,6 +48,18 @@
     ]);
   }
 
+  // Painel que sai do botão flutuante (não cobre a tela: dá para consultar o Hub enquanto escreve o chamado).
+  function PainelFlutuante({ titulo, descricao, fechar, rodape, children }) {
+    return ReactDOM.createPortal(e('div', { className: 'ext-fab-painel', role: 'dialog', 'aria-label': titulo }, [
+      e('div', { key: 'c', className: 'exu-modal-cab' }, [
+        e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [e('h3', { key: 'h' }, titulo), e('p', { key: 'p' }, descricao)]),
+        e('button', { key: 'x', type: 'button', className: 'exu-btn pequeno exu-modal-x', onClick: fechar, 'aria-label': 'Fechar' }, Ico('X', 14, 'currentColor')),
+      ]),
+      e('div', { key: 'b', className: 'exu-modal-corpo' }, children),
+      rodape ? e('div', { key: 'r', className: 'exu-modal-pe' }, rodape) : null,
+    ]), document.body);
+  }
+
   const SIT_CHAMADO = { 1: ['Novo', 'pronto'], 2: ['Em atendimento', 'rodando'], 4: ['Pendente', 'pendencia'], 5: ['Solucionado', 'concluido'] };
   function AbrirChamado({ avisar }) {
     const [aberto, setAberto] = useState(false);
@@ -83,9 +95,16 @@
       e('button', { key: 'e', type: 'button', className: 'exu-btn primario', disabled: estado === 'enviando', onClick: enviar }, estado === 'enviando' ? 'Abrindo…' : 'Abrir chamado'),
     ] : null;
 
+    useEffect(() => {
+      if (!aberto) return undefined;
+      const esc = (ev) => { if (ev.key === 'Escape') fechar(); };
+      document.addEventListener('keydown', esc);
+      return () => document.removeEventListener('keydown', esc);
+    }, [aberto]);
     return e(React.Fragment, null, [
-      e('button', { key: 'b', type: 'button', className: 'exu-btn ext-abrir', onClick: () => setAberto(true), title: 'Abrir chamado no GLPI' }, [Ico('Plus', 15, 'currentColor'), e('span', { key: 't' }, 'Abrir chamado')]),
-      aberto ? e(Modal, { key: 'm', titulo: 'Chamado no GLPI', descricao: 'Abre na entidade Sistemas com o seu usuário do GLPI.', fechar, largura: 600, rodape }, [
+      e('button', { key: 'b', type: 'button', className: 'ext-fab' + (aberto ? ' aberto' : ''), onClick: () => (aberto ? fechar() : setAberto(true)), title: 'Abrir chamado no GLPI', 'aria-label': 'Abrir chamado no GLPI', 'aria-expanded': aberto ? 'true' : 'false' },
+        aberto ? Ico('X', 22, 'currentColor', 2.25) : Ico('Headset', 22, 'currentColor', 2)),
+      aberto ? e(PainelFlutuante, { key: 'm', titulo: 'Chamado no GLPI', descricao: 'Abre na entidade Sistemas com o seu usuário do GLPI.', fechar, rodape }, [
         e('div', { key: 'a', className: 'exu-abas', role: 'tablist' }, [['novo', 'Novo chamado'], ['meus', 'Meus chamados']].map(([k, t]) => e('button', {
           key: k, type: 'button', role: 'tab', className: 'exu-aba', 'aria-selected': aba === k ? 'true' : 'false', onClick: () => setAba(k),
         }, [t, k === 'meus' ? e('span', { key: 'n', className: 'n' }, String(meus.length)) : null]))),
@@ -183,7 +202,6 @@
       { usuario: 'ana.lima', empresas: ['Associação Aurora', 'Associação Boreal', 'Associação Cerrado'] },
       { usuario: 'ana.lima.delta', empresas: ['Associação Delta'] },
     ]);
-    const [trava, setTrava] = useState('15');
     useEffect(() => { cofre.pedirAbrir = () => setAberto(true); return () => { cofre.pedirAbrir = null; }; }, []);
     const destravar = () => {
       if (senha.length < 4) { setErro('A senha mestra tem pelo menos 4 caracteres.'); return; }
@@ -208,16 +226,29 @@
         e('section', { key: 'g', className: 'ext-grupo' }, [e('h4', { key: 'h' }, 'GLPI'), linha('Token pessoal', segredo('glpi', 'a41f'), e('button', { key: 'a', type: 'button', className: 'exu-btn pequeno' }, 'Trocar'))]),
         e('section', { key: 's', className: 'ext-grupo' }, [
           e('h4', { key: 'h' }, ['Logins do SGA ', e('span', { key: 'n', className: 'exu-tipo', style: { marginLeft: 6 } }, String(logins.length))]),
+          e('p', { key: 'a', className: 'exu-campo-ajuda', style: { margin: 0 } }, 'Marque em quais associações cada login vale. Use mais de um login quando uma senha vale só para parte delas.'),
           ...logins.map((l, i) => e('div', { key: i, className: 'ext-login' }, [
-            e('div', { key: 't' }, [e('b', { key: 'b' }, l.usuario), e('div', { key: 'e', className: 'ext-chips' }, l.empresas.map((x) => e('span', { key: x, className: 'exu-tipo' }, x)))]),
-            segredo('sga' + i, '7k' + i),
-            e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => setLogins(logins.filter((_, j) => j !== i)), 'aria-label': 'Remover login ' + l.usuario }, Ico('Trash2', 13, 'currentColor')),
+            e('div', { key: 'c', className: 'ext-login-cab' }, [
+              e('input', { key: 'u', className: 'ext-login-usuario', value: l.usuario, 'aria-label': 'Usuário do SGA', onChange: (ev) => setLogins(logins.map((x, j) => (j === i ? Object.assign({}, x, { usuario: ev.target.value }) : x))) }),
+              segredo('sga' + i, '7k' + i),
+              e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => setLogins(logins.filter((_, j) => j !== i)), 'aria-label': 'Remover login ' + l.usuario }, Ico('Trash2', 13, 'currentColor')),
+            ]),
+            e('div', { key: 'e', className: 'ext-login-assoc', role: 'group', 'aria-label': 'Associações em que ' + l.usuario + ' vale' }, D.ASSOCIACOES.map((a) => {
+              const usada = logins.some((x, j) => j !== i && x.empresas.includes(a));
+              const marcada = l.empresas.includes(a);
+              return e('button', {
+                key: a, type: 'button', 'aria-pressed': marcada ? 'true' : 'false', title: usada && !marcada ? 'Já está em outro login' : '',
+                className: usada && !marcada ? 'usada' : '',
+                onClick: () => setLogins(logins.map((x, j) => (j === i ? Object.assign({}, x, { empresas: marcada ? x.empresas.filter((y) => y !== a) : [...x.empresas, a] }) : x))),
+              }, [marcada ? Ico('Check', 12, 'currentColor', 2.5) : null, a.replace('Associação ', '')]);
+            })),
+            !l.empresas.length ? e('p', { key: 'v', className: 'exu-campo-erro', style: { margin: 0 } }, 'Marque pelo menos uma associação.') : null,
           ])),
-          e('button', { key: 'add', type: 'button', className: 'exu-btn pequeno', onClick: () => setLogins([...logins, { usuario: 'novo.login', empresas: ['Associação Estrela'] }]) }, [Ico('Plus', 13, 'currentColor'), 'Adicionar login do SGA']),
+          e('button', { key: 'add', type: 'button', className: 'exu-btn pequeno', style: { alignSelf: 'flex-start' }, onClick: () => setLogins([...logins, { usuario: 'novo.login', empresas: [] }]) }, [Ico('Plus', 13, 'currentColor'), 'Adicionar login do SGA']),
         ]),
         e('section', { key: 'c', className: 'ext-grupo' }, [e('h4', { key: 'h' }, 'PowerCRM'), linha('E-mail', 'ana.lima@exemplo.com'), linha('Senha', segredo('crm', 'x9'))]),
         e('section', { key: 'p', className: 'ext-grupo' }, [e('h4', { key: 'h' }, 'Novos usuários'), linha('Senha padrão', segredo('padrao', '20'))]),
-        e('section', { key: 'v', className: 'ext-grupo' }, [e('h4', { key: 'h' }, 'Cofre'), linha('Trava sozinho', e('select', { className: 'exu-select', value: trava, onChange: (ev) => setTrava(ev.target.value), 'aria-label': 'Trava sozinho' }, [['5', 'após 5 min parado'], ['15', 'após 15 min parado'], ['60', 'após 1 hora parado']].map(([v, t]) => e('option', { key: v, value: v }, t))))]),
+        e('section', { key: 'v', className: 'ext-grupo' }, [e('h4', { key: 'h' }, 'Cofre'), linha('Trava sozinho', e('span', null, ['após 15 min parado ', e('small', { key: 's', style: { color: 'var(--muted)' } }, '(definido na Administração)')]))]),
       ] : [
         e(Campo, { key: 's', rotulo: 'Senha mestra', id: 'cofreSenha', erro, ajuda: 'No exemplo qualquer senha com 4 caracteres ou mais destrava.' }, e('input', { id: 'cofreSenha', type: 'password', value: senha, autoComplete: 'off', onChange: (ev) => setSenha(ev.target.value), onKeyDown: (ev) => { if (ev.key === 'Enter') destravar(); } })),
         e('p', { key: 'e', className: 'exu-campo-ajuda' }, 'Esqueceu a senha mestra? O cofre precisa ser apagado e os logins cadastrados de novo.'),

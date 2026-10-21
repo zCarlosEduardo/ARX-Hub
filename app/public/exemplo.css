@@ -359,3 +359,21 @@ button.exu-kpi:hover { border-color: var(--border-hover); }
 .ex-cores button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--text); }
 .ex-icones-lista { max-height: 168px; overflow-y: auto; padding: 2px; }
 @media (max-width: 760px) { .ex-form-auto { grid-template-columns: 1fr; } .ex-menu-btn { opacity: 1; } }
+
+/* botão flutuante do chamado no GLPI e o painel dele */
+.ext-fab { position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--primary); color: var(--primary-fg); box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s var(--ease); }
+.ext-fab:hover { transform: scale(1.06); }
+.ext-fab:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 3px; }
+.ext-fab-painel { position: fixed; right: 20px; bottom: 88px; z-index: 55; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 120px); display: flex; flex-direction: column; background: var(--popover); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-pop); animation: modalIn 0.18s var(--ease); transform-origin: bottom right; }
+.ext-fab-painel .exu-modal-corpo { min-height: 0; }
+.ext-fab-painel .exu-duas-col { grid-template-columns: 1fr; }
+.ex-mini { right: auto !important; left: 16px; }
+
+/* Meus acessos: cada login do SGA com as associações em que vale */
+.ext-login { display: flex !important; flex-direction: column; gap: 10px; }
+.ext-login-cab { display: flex; align-items: center; gap: 8px; }
+.ext-login-usuario { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; }
+.ext-login-assoc { display: flex; flex-wrap: wrap; gap: 6px; }
+.ext-login-assoc button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.ext-login-assoc button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.ext-login-assoc button.usada { opacity: 0.55; }

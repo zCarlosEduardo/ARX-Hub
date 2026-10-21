@@ -95,7 +95,10 @@
     const d = c.dados || {};
     const textos = {
       senha_sistemas: 'A senha do SGA do usuário ' + (d['Usuário'] || '') + ' foi redefinida. A senha temporária foi enviada por mensagem privada e o sistema vai pedir a troca no primeiro acesso.',
-      cadastro_usuario: 'O acesso de ' + (d.Nome || 'colaborador') + ' foi criado no SGA e no PowerCRM. Usuário e senha inicial foram enviados ao gestor por mensagem privada.',
+      // SGA: login e senha vão no próprio chamado (o SGA pede a troca no primeiro login).
+      // PowerCRM: o acesso vai por e-mail; quem já tinha acesso com o mesmo e-mail só sai e entra de novo (multitenant).
+      cadastro_usuario: 'O acesso de ' + (d.Nome || 'colaborador') + ' foi criado.\n\nSGA\nUsuário: ' + login(d.Nome || 'colaborador') + '\nSenha: Exemplo@2026\nNo primeiro login o SGA pede para trocar a senha.\n\n' +
+        'PowerCRM\nOs dados de acesso foram enviados para o e-mail cadastrado. Se você já tinha acesso ao PowerCRM com esse mesmo e-mail, basta sair e entrar de novo no sistema: a nova base já aparece na troca de empresa.',
       cadastro_consultor: 'O consultor ' + (d.Consultor || '') + ' foi cadastrado na regional ' + (d.Regional || 'informada') + ' e já pode receber leads.',
       inativacao_consultor: 'O consultor ' + (d.Consultor || '') + ' foi inativado no PowerCRM e no SGA. Os leads em aberto ficaram com o gestor da regional.',
       foto_perfil: 'Segue em anexo a foto de perfil de ' + (d.Nome || '') + ' (' + (d.Departamento || '').toUpperCase() + '), no tamanho certo para o WhatsApp.',

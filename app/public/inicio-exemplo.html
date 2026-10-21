@@ -192,7 +192,7 @@
       const hora = (d) => (d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
       const isDb = (a) => (a.categories || []).includes('db');
       const categoria = (a) => (a.categories || []).map((k) => CATEGORIAS[k] && CATEGORIAS[k].label).filter(Boolean).join(' · ') || 'Geral';
-      const urlTela = (a) => (/foto de perfil/i.test(a.name) ? 'exemplo-foto-perfil.html' : 'exemplo-automacao.html?a=' + window.ExemploAutomacoes.chaveDe(a.name));
+      const urlTela = (a) => (/foto de perfil/i.test(a.name) ? 'exemplo-foto-perfil.html' : 'exemplo-automacao.html?a=' + window.ExemploAutomacoes.chaveDe(a.name) + '&cor=' + encodeURIComponent(a.color || ''));
       const Ico = (...x) => window.ExemploUI.Ico(...x);
 
       function Status({ s }) {
