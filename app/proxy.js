@@ -9,6 +9,8 @@
 // As telas das automações chamam a própria API por caminho absoluto (fetch('/api/start')). Esse pedido chega sem o
 // /a/<id>/, então a automação é descoberta pelo Referer (a página que pediu, /a/<id>/...). Os navegadores mandam o
 // Referer completo para a mesma origem; nenhuma automação muda a Referrer-Policy.
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const https = require('https');
 const { rotaDeInicio } = require('./execucoes');
@@ -36,6 +38,35 @@ function reescreverLocation(location, base, prefixo) {
   return prefixo + caminho + u.search + u.hash;
 }
 
+// Hub de exemplo (/v2/): a tela da automação aberta com ?v2=1 recebe o estilo e o script novos (public/v2/automacao/),
+// servidos aqui mesmo em /__arx-v2/ (mesma origem da automação). Sem o v2, nada muda.
+const PASTA_V2 = path.join(__dirname, 'public', 'v2', 'automacao');
+const ARQUIVOS_V2 = { 'skin.css': 'text/css; charset=utf-8', 'skin.js': 'application/javascript; charset=utf-8' };
+const TAGS_V2 = '<link rel="stylesheet" href="/__arx-v2/skin.css"><script src="/__arx-v2/skin.js" defer></script>';
+
+function servirV2(req, res) {
+  const nome = req.url.slice('/__arx-v2/'.length).split('?')[0];
+  if (!Object.prototype.hasOwnProperty.call(ARQUIVOS_V2, nome)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Não encontrado.');
+  }
+  fs.readFile(path.join(PASTA_V2, nome), (err, corpo) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Não encontrado.');
+    }
+    res.writeHead(200, { 'Content-Type': ARQUIVOS_V2[nome], 'Cache-Control': 'no-cache' });
+    res.end(corpo);
+  });
+}
+
+/** Página HTML sem compressão: põe as tags do v2 antes do </head> (ou no começo, se não houver). */
+const podeInjetar = (resposta) => /text\/html/i.test(resposta.headers['content-type'] || '') && !resposta.headers['content-encoding'];
+function comTagsV2(html) {
+  const i = html.search(/<\/head>/i);
+  return i >= 0 ? html.slice(0, i) + TAGS_V2 + html.slice(i) : TAGS_V2 + html;
+}
+
 /**
  * Repassa o pedido e devolve a resposta em fluxo (SSE, upload e download passam sem ficar em memória).
  * `caminho` começa com "/" e inclui a query; `prefixo` é o que o navegador vê no lugar do endereço real.
@@ -60,6 +91,18 @@ function repassar(req, res, destino, caminho, prefixo, extras = {}) {
       const saida = semSaltoASalto(resposta.headers);
       if (saida.location) saida.location = reescreverLocation(saida.location, base, prefixo);
       if (extras.setCookie) saida['set-cookie'] = [].concat(saida['set-cookie'] || [], extras.setCookie);
+      if (extras.injetarV2 && podeInjetar(resposta)) {
+        // só a página (pequena) fica em memória para receber as tags; o resto continua em fluxo
+        const partes = [];
+        resposta.on('data', (c) => partes.push(c));
+        resposta.on('end', () => {
+          const corpo = Buffer.from(comTagsV2(Buffer.concat(partes).toString('utf8')), 'utf8');
+          saida['content-length'] = String(corpo.length);
+          res.writeHead(resposta.statusCode, saida);
+          res.end(corpo);
+        });
+        return;
+      }
       res.writeHead(resposta.statusCode, saida);
       if (extras.aoResponder) extras.aoResponder(resposta);
       resposta.pipe(res);
@@ -146,11 +189,12 @@ function lerCookie(cabecalho, nome) {
   return null;
 }
 
-/** Tira `passe` da query: ele é do Hub e não vai para a automação. */
+/** Tira `passe` e `v2` da query: são do Hub e não vão para a automação. */
 function semPasse(url) {
-  if (!/[?&]passe=/.test(url)) return url;
+  if (!/[?&](passe|v2)=/.test(url)) return url;
   const u = new URL(url, 'http://x');
   u.searchParams.delete('passe');
+  u.searchParams.delete('v2');
   return u.pathname + u.search;
 }
 
@@ -189,7 +233,8 @@ function criarProxyAutomacoes({ buscarDestino, passes = null, observador = null 
 
     const a = alvo(destino, achado, semPasse(req.url));
     if (!a) return { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
-    return { achado, destino, alvo: a, setCookie, quem: acesso ? acesso.usuario : null };
+    const v2 = achado.porCaminho && req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('v2') === '1';
+    return { achado, destino, alvo: a, setCookie, quem: acesso ? acesso.usuario : null, v2 };
   }
 
   /**
@@ -222,6 +267,7 @@ function criarProxyAutomacoes({ buscarDestino, passes = null, observador = null 
   }
 
   async function atender(req, res) {
+    if (req.url.startsWith('/__arx-v2/')) return servirV2(req, res);
     const r = await resolver(req);
     if (r.status) {
       res.writeHead(r.status, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -233,7 +279,7 @@ function criarProxyAutomacoes({ buscarDestino, passes = null, observador = null 
       res.writeHead(301, { Location: prefixo + '/' + req.url.slice(prefixo.length) });
       return res.end();
     }
-    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo, { setCookie: r.setCookie, aoResponder: observar(req, r) });
+    repassar(req, res, r.alvo.base, r.alvo.caminho, r.alvo.prefixo, { setCookie: r.setCookie, aoResponder: observar(req, r), injetarV2: r.v2 });
   }
 
   async function atenderUpgrade(req, socket, cabeca) {
