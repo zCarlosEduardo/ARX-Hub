@@ -183,22 +183,20 @@ async function createTicket(userToken, dados) {
 }
 
 async function criarNaSessao(sessionToken, { titulo, descricao, categoriaId, requerenteId, atribuidoId }) {
-  {
-    const input = { name: titulo.trim(), content: descricao || '' };
-    if (categoriaId) input.itilcategories_id = Number(categoriaId);
-    if (requerenteId) input._users_id_requester = Number(requerenteId);
-    if (atribuidoId) input._users_id_assign = Number(atribuidoId);
-    if (ENTITY_ID) input.entities_id = Number(ENTITY_ID);
+  const input = { name: titulo.trim(), content: descricao || '' };
+  if (categoriaId) input.itilcategories_id = Number(categoriaId);
+  if (requerenteId) input._users_id_requester = Number(requerenteId);
+  if (atribuidoId) input._users_id_assign = Number(atribuidoId);
+  if (ENTITY_ID) input.entities_id = Number(ENTITY_ID);
 
-    const data = await glpiFetch('/Ticket', {
-      method: 'POST',
-      headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken },
-      body: JSON.stringify({ input }),
-    });
-    const id = Array.isArray(data) ? data[0] && data[0].id : data && data.id;
-    if (!id) throw new Error('GLPI não retornou o id do chamado criado.');
-    return id;
-  }
+  const data = await glpiFetch('/Ticket', {
+    method: 'POST',
+    headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken },
+    body: JSON.stringify({ input }),
+  });
+  const id = Array.isArray(data) ? data[0] && data[0].id : data && data.id;
+  if (!id) throw new Error('GLPI não retornou o id do chamado criado.');
+  return id;
 }
 
 /** Situação do chamado no GLPI (1 novo ... 5 solucionado, 6 fechado), lida com o token informado. */

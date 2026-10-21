@@ -643,7 +643,7 @@
     // com o automático ligado: renova a presença a cada 30 s (se o servidor recusar, desliga); ao desligar/fechar, solta e libera as reservas
     useEffect(() => {
       if (!auto.ativo) return undefined;
-      const atualizarComputadores = () => api('/api/auto').then((x) => setComputadoresAuto((x.computadores || []).map((c) => c.por))).catch(() => {});
+      const atualizarComputadores = () => api('/api/auto').then((x) => setComputadoresAuto((x.computadores || []).map((c) => c.por))).catch(() => { /* sem resposta: mantém a contagem anterior */ });
       const renovar = () => api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome }).then(atualizarComputadores).catch((err) => {
         if (/^HTTP|Failed|NetworkError/.test(err.message)) return; // servidor fora um instante: tenta de novo
         setErroAuto(err.message);
@@ -701,7 +701,7 @@
         fetch('/api/whatsapp/resultado', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Glpi-Token': acessos.userToken },
           body: JSON.stringify({ ticketId: Number(id), ok: r.status === 'concluido' && r.ok !== false, texto: String(r.texto || '').slice(0, 300) }),
-        }).catch(() => {});
+        }).catch(() => { /* aviso ao WhatsApp é melhor esforço: o resultado já está na tela e no GLPI */ });
       }
     }, [resultados, acessos.userToken]); // eslint-disable-line
 
@@ -1169,6 +1169,10 @@
           e('button', { key: 'c', type: 'button', className: 'exu-btn pequeno', style: { alignSelf: 'flex-start' }, onClick: () => copiarTexto(m.texto) }, [Icon('Copy', 13, 'currentColor'), 'Copiar']),
         ])))));
     }
+    // Parar: se o pedido não chegar ao serviço, o aviso vai para o log da própria execução (antes falhava calado)
+    const pararExecucao = (jobId) => fetch(`${SERVICO}/api/parar/${jobId}`, { method: 'POST' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      .catch((err) => setExecucoes((ex) => (ex[jobId] ? { ...ex, [jobId]: { ...ex[jobId], linhas: [...ex[jobId].linhas, 'Não foi possível parar agora (' + err.message + '). Tente de novo.'] } } : ex)));
     const listaExec = Object.values(execucoes).reverse();
     if (listaExec.length) {
       extras.push(e('section', { key: 'execs', className: 'exu-cartao' }, [
@@ -1180,7 +1184,7 @@
               !x.fim ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 13, 'var(--accent)')) : null,
               e('span', { key: 'n', style: { flex: 1, minWidth: 0 } }, x.ids.map((id) => '#' + id).join(', ')),
               e('span', { key: 'st', className: 'exu-sit ' + (!x.fim ? 'rodando' : x.fim.error ? 'erro' : 'concluido') }, [e('i', { key: 'i' }), !x.fim ? 'Em execução' : x.fim.error ? 'Erro' : 'Concluída']),
-              !x.fim ? e('button', { key: 'p', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => fetch(`${SERVICO}/api/parar/${x.jobId}`, { method: 'POST' }).catch(() => {}) }, 'Parar') : null,
+              !x.fim ? e('button', { key: 'p', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => pararExecucao(x.jobId) }, 'Parar') : null,
               e('button', { key: 'v', type: 'button', className: 'exu-btn pequeno', onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !abertoLog })) }, abertoLog ? 'Ocultar log' : 'Ver log'),
             ]),
             abertoLog ? e('pre', { key: 'l', className: 'v2c-log' }, x.linhas.join('\n') || 'Aguardando…') : null,

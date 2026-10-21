@@ -57,7 +57,7 @@
     });
     if (!res.ok) {
       let message = 'Erro na requisição';
-      try { const body = await res.json(); if (body.error) message = body.error; } catch (_) {}
+      try { const body = await res.json(); if (body.error) message = body.error; } catch (_) { /* resposta sem JSON: fica a mensagem genérica */ }
       throw new Error(message);
     }
     if (res.status === 204) return null;
@@ -65,7 +65,7 @@
   }
 
   // Busca de pessoa do GLPI (requerente e atribuído): digita, filtra e escolhe com o teclado.
-  function EscolhaPessoa({ users, valor, mudar }) {
+  function EscolhaPessoa({ users, valor, mudar, id }) {
     const [texto, setTexto] = useState('');
     const [aberta, setAberta] = useState(false);
     const [sel, setSel] = useState(0);
@@ -74,7 +74,7 @@
     const escolher = (u) => { mudar(u ? u.id : ''); setTexto(''); setAberta(false); };
     return e('div', { className: 'ext-escolha' }, [
       e('input', {
-        key: 'i', role: 'combobox', 'aria-expanded': aberta ? 'true' : 'false', autoComplete: 'off', value: aberta ? texto : (atual ? atual.label : ''), placeholder: atual ? atual.label : 'Buscar pessoa',
+        key: 'i', id, role: 'combobox', 'aria-expanded': aberta ? 'true' : 'false', autoComplete: 'off', value: aberta ? texto : (atual ? atual.label : ''), placeholder: atual ? atual.label : 'Buscar pessoa',
         onFocus: () => { setAberta(true); setSel(0); }, onBlur: () => setTimeout(() => setAberta(false), 150),
         onChange: (ev) => { setTexto(ev.target.value); setAberta(true); setSel(0); },
         onKeyDown: (ev) => {
@@ -168,7 +168,7 @@
     const ehAdmin = (window.useEhAdmin || (() => false))();
     const [cfgAuto, setCfgAuto] = useState({ cadastro: 'admins', endereco: 'mascarado', novaAba: true });
     useEffect(() => {
-      api('/api/config-publica').then((c) => c && c.automacoes && setCfgAuto(c.automacoes)).catch(() => {});
+      api('/api/config-publica').then((c) => c && c.automacoes && setCfgAuto(c.automacoes)).catch(() => { /* sem config: valem os padrões */ });
       const aoMudar = (ev) => setCfgAuto(ev.detail);
       window.addEventListener('arx-config-automacoes', aoMudar); // admin.js avisa quando a aba Automações salva
       return () => window.removeEventListener('arx-config-automacoes', aoMudar);
@@ -300,7 +300,7 @@
       const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       root.classList.add('theme-anim');
       root.setAttribute('data-theme', next);
-      try { localStorage.setItem('arx-tema', next); } catch (err) {}
+      try { localStorage.setItem('arx-tema', next); } catch (err) { /* sem armazenamento: o tema vale só nesta aba */ }
       setTimeout(() => root.classList.remove('theme-anim'), 450);
       pushToast('info', next === 'dark' ? 'Modo escuro ativado.' : 'Modo claro ativado.');
     }, [pushToast]);
@@ -1150,7 +1150,16 @@
         leitor.readAsDataURL(f);
       });
     }
-    const campoV2 = (rotulo, filho, extra) => e('div', { className: 'exu-campo' }, [e('label', { key: 'l' }, rotulo), filho, extra || null]);
+    // o rótulo aponta para o campo (htmlFor/id), para o leitor de tela anunciar "Título", "Categoria"...
+    const campoV2 = (rotulo, filho, extra) => {
+      const ligavel = filho && (['input', 'select', 'textarea'].includes(filho.type) || filho.type === EscolhaPessoa);
+      const id = ligavel ? 'v3-campo-' + rotulo.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() : undefined;
+      return e('div', { className: 'exu-campo' }, [
+        e('label', { key: 'l', htmlFor: id }, rotulo),
+        ligavel ? React.cloneElement(filho, { key: 'f', id }) : filho,
+        extra || null,
+      ]);
+    };
 
     let glpiBody;
     if (!glpiToken) {
