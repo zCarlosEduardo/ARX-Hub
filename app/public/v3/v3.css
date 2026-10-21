@@ -1117,6 +1117,7 @@ button.exu-kpi:hover { border-color: var(--border-hover); }
 .v2-linha-editar { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--muted); border-radius: 6px; cursor: pointer; }
 .v2-linha-editar:hover { background: var(--hover-bg); color: var(--text); }
 .v2-linha:not(:hover) .v2-linha-editar { opacity: 0; }
+.v2-linha > .v2-status { justify-self: start; }
 .v2-linha .v2-linha-editar:focus-visible { opacity: 1; }
 
 /* barrinha da automação aberta: recarregar e fechar, no canto de cima onde ficava o botão de opções */
