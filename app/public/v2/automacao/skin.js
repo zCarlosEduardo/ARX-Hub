@@ -47,12 +47,19 @@
     });
   }
 
+  // v3 abre com so=foto: só a Foto de perfil ganha a tela nova; as outras automações ficam como estão
+  const ehFoto = !!(document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento'));
+  if (new URLSearchParams(location.search).get('so') === 'foto' && !ehFoto) {
+    // o proxy injeta o estilo em toda tela aberta com v2=1; aqui ela fica como está
+    document.querySelectorAll('link[href="/__arx-v2/skin.css"]').forEach((l) => l.remove());
+    return;
+  }
   tituloNovo();
   passosDiscretos();
   // telas que montam partes depois (abas, cards que aparecem): aplica de novo
   new MutationObserver(() => passosDiscretos()).observe(document.body, { childList: true, subtree: true });
 
-  if (document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento')) fotoNova();
+  if (ehFoto) fotoNova();
 
   // ------------------------------------------------------------ Gerar foto de perfil
   function fotoNova() {
