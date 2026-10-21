@@ -38,7 +38,7 @@ function reescreverLocation(location, base, prefixo) {
   return prefixo + caminho + u.search + u.hash;
 }
 
-// Hub de exemplo (/v2/): a tela da automação aberta com ?v2=1 recebe o estilo e o script novos (public/v2/automacao/),
+// Layout novo das automações: a tela aberta pelo Hub com ?v2=1 recebe o estilo e o script novos (public/v2/automacao/),
 // servidos aqui mesmo em /__arx-v2/ (mesma origem da automação). Sem o v2, nada muda.
 const PASTA_V2 = path.join(__dirname, 'public', 'v2', 'automacao');
 // nome publicado -> [arquivo, tipo]; icons.js é o do Hub, para o título da automação usar o ícone do cadastro

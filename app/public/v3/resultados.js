@@ -1,4 +1,4 @@
-// v3 (Hub de exemplo): aba Resultados com a tela do Hub de exemplo (exemplo-resultados.js) e os dados REAIS:
+// Aba Resultados do Hub (layout novo, nascido do Hub de exemplo) com os dados reais:
 // totais, tipos, motivos e associações vêm do resumo do banco-central (/api/resultados); a lista de chamados atendidos,
 // o gráfico por dia e por hora vêm das últimas 200 execuções (/api/historico); as manuais, do Hub (/api/execucoes/resumo);
 // a Disponibilidade, do histórico de alertas do monitor (/api/alertas/historico). Expõe window.ResultadosView.

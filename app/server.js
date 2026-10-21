@@ -61,7 +61,8 @@ app.get(['/', '/index.html'], (req, res, next) => {
 
 // O layout novo (antes em /v3/) virou o Hub principal; endereços salvos de /v3/ vão para /. A versão anterior
 // fica em /original/ como reserva.
-app.get(['/v3', '/v3/', '/v3/index.html'], (req, res) => res.redirect(302, '/'));
+// O Hub de exemplo /v2/ foi removido; quem tinha o endereço salvo também cai no principal.
+app.get(['/v3', '/v3/', '/v3/index.html', '/v2', '/v2/', '/v2/index.html'], (req, res) => res.redirect(302, '/'));
 
 // Tutoriais em vídeo do botão "?" (Hub e automações): pasta montada no container, fora do Git (mídia pesada).
 // CORS aberto porque as automações, em outras portas, leem o índice tutoriais.json daqui.
@@ -208,20 +209,6 @@ app.get('/api/automations', asyncHandler(async (req, res) => {
   const quem = await quemVe(req);
   res.set('Cache-Control', 'no-store');
   res.json((await listarAutomacoes()).publica.filter((a) => podeVer(a, quem)));
-}));
-
-// Hub de exemplo (inicio-exemplo.html): lista geral, sem o filtro de grupo e sem o endereço. Abrir a tela continua
-// exigindo o passe no proxy, então automação restrita só abre para quem tem acesso.
-app.get('/api/exemplo/automacoes', asyncHandler(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.json((await listarAutomacoes()).publica.map((a) => {
-    const geral = { ...a };
-    delete geral.endereco;
-    delete geral.grupos;
-    delete geral.container;
-    delete geral.vncPorta;
-    return geral;
-  }));
 }));
 
 // Execuções manuais (rodadas pela tela da automação, registradas pelo proxy) para a aba Resultados.
