@@ -119,7 +119,7 @@
         e('span', { key: 'i', className: 'v2-linha-ic', style: { background: (form.color || '#1E4A9E') + '22' } }, Icon(form.icon || 'Workflow', 18, form.color || '#1E4A9E')),
         e('div', { key: 'n', style: { minWidth: 0, flex: 1 } }, [e('b', { key: 'b' }, form.name || 'Nome da automação'), e('small', { key: 's' }, form.description || 'A descrição aparece aqui, em até duas linhas.')]),
         e('span', { key: 'st', className: 'v2-status online' }, [e('i', { key: 'i' }), 'No ar']),
-      ]), previaCats.length ? e('div', { key: 'k', className: 'v2-linha-cats' }, previaCats.map((c) => e('span', { key: c.key, style: { background: c.color + '22', color: c.color } }, c.label))) : null]),
+      ]), previaCats.length ? e('div', { key: 'k', className: 'v2-linha-cats' }, previaCats.map((c) => e('span', { key: c.key, style: { background: c.color + '22', color: 'color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))' } }, c.label))) : null]),
       campo('Nome', e('input', { value: form.name || '', onChange: (ev) => setCampo('name', ev.target.value), placeholder: 'Ex.: Emissão de boletos', maxLength: 80, 'aria-invalid': !!(tocado && erros.name) }), null, tocado && erros.name),
       campo('URL (vista pelo servidor do Hub)', e('input', { value: form.url || '', onChange: (ev) => setCampo('url', ev.target.value), placeholder: 'http://alterar-senha-sga:4016/', spellCheck: false, style: { fontFamily: 'var(--font-mono)', fontSize: 13 }, 'aria-invalid': !!(tocado && erros.url) }), 'O navegador nunca vê este endereço: a tela abre pelo proxy do Hub.', tocado && erros.url),
       e('div', { key: 'cat', className: 'exu-campo' }, [
@@ -188,8 +188,8 @@
     const [passes, setPasses] = useState({});
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
     // v3: as automações ganham a tela nova (o proxy injeta o estilo com ?v2=1); icone e cor são os do cadastro no Hub,
-    // para o título da automação ficar igual ao cartão; mostrar=tudo deixa à vista o que só aparece durante o uso
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&mostrar=tudo&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
+    // para o título da automação ficar igual ao cartão
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
       (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
@@ -319,6 +319,10 @@
           return;
         }
         if (ev.key === 'Escape') {
+          setGlpiOpen((aberto) => {
+            if (aberto) setTimeout(() => glpiFabRef.current && glpiFabRef.current.focus());
+            return false;
+          });
           setTabsMenuOpen(false);
           setConfirmDialog(null);
           setModalOpen((open) => {
@@ -332,6 +336,24 @@
       window.addEventListener('keydown', onKeydown);
       return () => window.removeEventListener('keydown', onKeydown);
     }, [toggleTheme]);
+
+    useEffect(() => {
+      const setas = (ev) => {
+        const aba = ev.target && ev.target.closest && ev.target.closest('[role="tab"]');
+        const lista = aba && aba.closest('[role="tablist"]');
+        if (!lista) return;
+        const abas = Array.from(lista.querySelectorAll('[role="tab"]')).filter((x) => !x.disabled);
+        const i = abas.indexOf(aba);
+        const destino = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: abas.length - 1 }[ev.key];
+        if (destino === undefined || i < 0) return;
+        ev.preventDefault();
+        const alvo = abas[(destino + abas.length) % abas.length];
+        alvo.focus();
+        alvo.click();
+      };
+      document.addEventListener('keydown', setas);
+      return () => document.removeEventListener('keydown', setas);
+    }, []);
 
     // ---- faixa de abas: mede se transborda (pra esmaecer bordas / mostrar o menu) ----
     const measureTabs = useCallback(() => {
@@ -417,6 +439,10 @@
     function openGlpiWidget() {
       setGlpiOpen(true);
       if (glpiToken && !glpiLookup && !glpiLookupLoading) loadGlpiLookup(glpiToken);
+      setTimeout(() => {
+        const alvo = document.querySelector('.v3-glpi .exu-modal-corpo input, .v3-glpi .exu-modal-corpo select, .v3-glpi .exu-modal-corpo textarea, .v3-glpi input, .v3-glpi select, .v3-glpi textarea') || document.querySelector('.v3-glpi button');
+        if (alvo) alvo.focus();
+      }, 60);
     }
 
     function closeGlpiWidget() {
@@ -811,7 +837,7 @@
           Icon('Search', 15, 'var(--muted-soft)'),
           e('input', {
             key: 'input', ref: searchRef, value: search, onChange: (ev) => setSearch(ev.target.value),
-            placeholder: 'Buscar…',
+            placeholder: 'Buscar…', 'aria-label': 'Buscar automações', type: 'search',
             style: sx('flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13.5px'),
           }),
           e('span', { key: 'kbd', style: sx("font-family:'JetBrains Mono',monospace;font-size:10.5px;background:var(--secondary);border:1px solid var(--border);border-radius:5px;padding:2px 5px;color:var(--muted-soft);flex-shrink:0") }, 'Ctrl K'),
@@ -856,7 +882,7 @@
         e('div', { key: 'info' }, [
           cats.length ? e('div', { key: 'cats', style: sx('display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px') }, cats.map((c) => e('span', {
             key: c.key,
-            style: sx('display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:' + c.color + '22;color:' + c.color),
+            style: sx('display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:' + c.color + '22;color:color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))'),
           }, c.label))) : null,
           e('div', { key: 'name', style: sx("font-weight:600;font-size:14px") }, a.name),
           e('div', { key: 'desc', style: sx('color:var(--muted);font-size:12.5px;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden') }, a.description),
@@ -1009,7 +1035,7 @@
     // Botão do GLPI: pílula na cor primária; no hover expande mostrando
     // "Abrir chamado"; aberto, o ícone vira um X (troca com animação).
     const glpiFab = e('button', {
-      key: 'glpi-fab', ref: glpiFabRef, title: glpiOpen ? 'Fechar' : 'Abrir chamado no GLPI', 'aria-label': 'Abrir chamado no GLPI',
+      key: 'glpi-fab', ref: glpiFabRef, title: glpiOpen ? 'Fechar' : 'Abrir chamado no GLPI', 'aria-label': glpiOpen ? 'Fechar chamado no GLPI' : 'Abrir chamado no GLPI', 'aria-expanded': glpiOpen ? 'true' : 'false',
       className: 'glpi-fab' + (glpiOpen ? ' open' : ''), onClick: toggleGlpiWidget,
     }, [
       e('span', { key: glpiOpen ? 'x' : 'headset', className: 'glpi-fab-icon' }, glpiOpen ? Icon('X', 18, 'currentColor', 2) : Icon('Headset', 19, 'currentColor')),

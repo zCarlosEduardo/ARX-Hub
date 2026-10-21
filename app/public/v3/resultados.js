@@ -184,7 +184,9 @@
     const motivos = (res.motivosErro || []).slice().sort((a, b) => b.total - a.total);
     const assocs = (res.associacoes || []).map((a) => ({ a: a.nome, total: a.total, ok: a.concluido, erros: a.erro, taxa: (a.taxaErro || 0) * 100 }))
       .sort((x, y) => (ordem[0] === 'a' ? String(x.a).localeCompare(String(y.a), 'pt-BR') : x[ordem[0]] - y[ordem[0]]) * ordem[1]);
-    const th = (k, tx, cls) => e('th', { key: k, className: 'ordenavel ' + (cls || ''), onClick: () => setOrdem([k, ordem[0] === k ? -ordem[1] : -1]), 'aria-sort': ordem[0] === k ? (ordem[1] > 0 ? 'ascending' : 'descending') : 'none' }, tx + (ordem[0] === k ? (ordem[1] > 0 ? ' ↑' : ' ↓') : ''));
+    // ordenar pelo teclado: o título da coluna é um botão (Enter ou espaço); aria-sort fica no th
+    const th = (k, tx, cls) => e('th', { key: k, className: 'ordenavel ' + (cls || ''), 'aria-sort': ordem[0] === k ? (ordem[1] > 0 ? 'ascending' : 'descending') : 'none' },
+      e('button', { type: 'button', className: 'v3-ordenar', onClick: () => setOrdem([k, ordem[0] === k ? -ordem[1] : -1]) }, [tx, ordem[0] === k ? e('span', { key: 's', 'aria-hidden': 'true' }, ordem[1] > 0 ? ' ↑' : ' ↓') : null]));
     const mt = man && man.totais ? man.totais : null;
     const recentes = ex;
     const porPag = exibir === 'lista' ? 10 : 9;
@@ -265,13 +267,13 @@
           : exibir === 'lista'
             ? e('div', { key: 'l', style: { overflowX: 'auto' } }, e('table', { className: 'exr-tab' }, [
                 e('thead', { key: 'h' }, e('tr', null, [e('th', { key: 'c' }, 'Chamado'), e('th', { key: 'q' }, 'Quando'), e('th', { key: 't' }, 'Tipo'), e('th', { key: 'a' }, 'Associação'), e('th', { key: 'o' }, 'Aprovado por'), e('th', { key: 'd', className: 'num' }, 'Duração'), e('th', { key: 's' }, 'Situação')])),
-                e('tbody', { key: 'b' }, fatia.map((x) => e('tr', { key: x.id, className: 'exr-clicavel', tabIndex: 0, onClick: () => abrir(x), onKeyDown: (ev) => { if (ev.key === 'Enter') abrir(x); } }, [
+                e('tbody', { key: 'b' }, fatia.map((x) => e('tr', { key: x.id, className: 'exr-clicavel', tabIndex: 0, onClick: () => abrir(x), onKeyDown: (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(x); } } }, [
                   e('td', { key: 'c', style: { fontFamily: 'var(--font-mono)', fontSize: 12 } }, '#' + x.glpiTicketId), e('td', { key: 'q' }, quando(x)),
                   e('td', { key: 't' }, x.titulo || x.tipo), e('td', { key: 'a' }, nomeAssoc(x)), e('td', { key: 'o' }, x.aprovadoPor ? x.aprovadoPor.replace(/^\(Sistemas\)\s*/, '') : 'Não informado'),
                   e('td', { key: 'd', className: 'num' }, durExec(x)), e('td', { key: 's' }, [sitExec(x), x.modoTeste && x.status !== 'teste' ? ' (teste)' : null]),
                 ]))),
               ]))
-            : e('div', { key: 'c', className: 'exc-cartoes' }, fatia.map((x) => e('div', { key: x.id, className: 'exc-cartao', role: 'button', tabIndex: 0, style: { height: 'auto' }, onClick: () => abrir(x), onKeyDown: (ev) => { if (ev.key === 'Enter') abrir(x); } }, [
+            : e('div', { key: 'c', className: 'exc-cartoes' }, fatia.map((x) => e('div', { key: x.id, className: 'exc-cartao', role: 'button', tabIndex: 0, style: { height: 'auto' }, onClick: () => abrir(x), onKeyDown: (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(x); } } }, [
                 e('div', { key: 't', className: 'exc-cartao-topo' }, [e('span', { key: 'n', className: 'exc-id' }, '#' + x.glpiTicketId), sitExec(x)]),
                 e('h4', { key: 'h' }, x.titulo || x.tipo),
                 e('p', { key: 'p' }, String(x.resultado || 'Sem texto').split('\n')[0]),
@@ -363,11 +365,15 @@
       }, [
         e('div', { key: 'l', className: 'exd-lista' }, linhas.map((l, li) => e('div', { key: l.chave || l.nome, className: 'exd-linha' }, [
           e('div', { key: 'n', className: 'exd-nome' }, [e('b', { key: 'b', title: l.nome }, l.nome), e(Sit, { key: 's', tipo: l.agora === 'online' ? 'concluido' : l.agora === 'offline' ? 'erro' : 'pendencia', texto: l.agora === 'online' ? 'No ar' : l.agora === 'offline' ? 'Fora do ar' : 'Sem retorno' })]),
-          e('div', { key: 'f', className: 'exd-faixa' }, diasFaixa.map((d, i) => {
+          // a faixa é uma parada só no teclado, com o resumo dos dias; o detalhe de cada alerta está na lista "Quedas e alertas"
+          e('div', {
+            key: 'f', className: 'exd-faixa', tabIndex: 0, role: 'img',
+            'aria-label': (() => { const n = diasFaixa.filter((d) => l.chave && doDia(l.chave, d).length).length; return l.nome + ': ' + (n ? n + (n === 1 ? ' dia com alerta' : ' dias com alerta') : 'nenhum dia com alerta') + ' de ' + diasFaixa.length; })(),
+          }, diasFaixa.map((d, i) => {
             const inc = l.chave ? doDia(l.chave, d) : [];
             return e('div', {
-              key: i, className: 'exd-dia' + corDia(inc), tabIndex: 0, 'aria-label': diaLongo(d) + ': ' + (inc.length ? inc.length + (inc.length === 1 ? ' alerta' : ' alertas') : 'sem alerta'),
-              onMouseEnter: () => setFoco(li + ':' + i), onMouseLeave: () => setFoco(null), onFocus: () => setFoco(li + ':' + i), onBlur: () => setFoco(null),
+              key: i, className: 'exd-dia' + corDia(inc), 'aria-hidden': 'true',
+              onMouseEnter: () => setFoco(li + ':' + i), onMouseLeave: () => setFoco(null),
             }, foco === li + ':' + i ? e('div', { className: 'exd-dica' + (i < diasFaixa.length / 4 ? ' esq' : i > (diasFaixa.length * 3) / 4 ? ' dir' : '') }, [
               e('b', { key: 'b', style: { display: 'block', marginBottom: 4 } }, diaLongo(d)),
               inc.length ? inc.map((q) => e('div', { key: q.id }, hora(q.iniciadoEm) + ' · ' + duracao(q.duracaoSeg / 60) + ' · ' + q.titulo)) : e('div', { key: 's' }, 'Sem alerta'),

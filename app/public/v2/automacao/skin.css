@@ -99,8 +99,8 @@ details.v2f-tec .log { margin-top: 10px; }
 .v2a-acoes button b { font-size: 13px; font-weight: 600; }
 .v2a-acoes button small { font-size: 11.5px; color: var(--muted); }
 .v2a-acoes button:hover { border-color: var(--border-hover); }
-.v2a-acoes button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.v2a-acoes button[data-acao="bloquear"][aria-checked="true"] { border-color: var(--error); background: var(--error-tint); box-shadow: inset 0 0 0 1px var(--error); }
+.v2a-acoes button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.v2a-acoes button[data-acao="bloquear"][aria-pressed="true"] { border-color: var(--error); background: var(--error-tint); box-shadow: inset 0 0 0 1px var(--error); }
 .v2a #v2aEmpresas .empresa-checklist { max-height: 220px; overflow-y: auto; }
 .v2a #v2aIniciar { margin-top: 4px; align-items: center; }
 .v2a #v2aIniciar .primary-btn { margin: 0; }
@@ -128,10 +128,6 @@ details.v2f-tec .log { margin-top: 10px; }
 .v2p-painel > .card, .v2p-painel > section { margin: 0; }
 .v2p-andamento .v2f-passos { margin: 4px 0 12px; }
 .v2p-andamento details.v2f-tec { margin-top: 4px; }
-/* validação: o que só aparece durante o uso ganha contorno tracejado; os cartões, também um selo */
-.v3-validar .v3-revelado { outline: 1px dashed var(--border-hover); outline-offset: 3px; }
-.v3-validar .card.v3-revelado { position: relative; outline: none; border-style: dashed; }
-.v3-validar .card.v3-revelado::after { content: 'Aparece durante o uso'; position: absolute; top: 12px; right: 14px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--hover-bg); padding: 2px 8px; border-radius: 999px; pointer-events: none; }
 
 /* logins que vieram do Hub: os campos somem e fica só o selo (com "Usar outro login") */
 .v3-hub-oculto { display: none !important; }
@@ -139,3 +135,9 @@ details.v2f-tec .log { margin-top: 10px; }
 .v3-hub-acesso[hidden] { display: none !important; }
 .v3-hub-acesso .v3-hub-ok { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-strong); color: var(--on-accent); font-size: 11px; }
 .v3-hub-acesso .link-btn { margin-left: auto; font-weight: 500; }
+
+/* acessibilidade: texto pequeno do botão de ação marcado herda a cor do texto (4,46:1 no fundo de erro); botão
+   desabilitado sem a mãozinha */
+.v2a-acoes button[aria-pressed="true"] small { color: var(--text); opacity: 0.8; }
+.v2f-btn[aria-disabled="true"] { opacity: 0.5; cursor: default; pointer-events: none; }
+.v2a-acoes button:focus-visible, .v2f-aba:focus-visible, .v2f-chip:focus-visible, .v2f-btn:focus-visible, .v3-hub-acesso .link-btn:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }

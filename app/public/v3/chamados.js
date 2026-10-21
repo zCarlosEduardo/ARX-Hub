@@ -271,6 +271,31 @@
       return () => window.removeEventListener('keydown', tecla);
     }, [onFechar]);
 
+    // painel é um diálogo: o foco entra no Fechar, o Tab não sai para a tela de trás e, ao fechar, volta para quem abriu
+    const gavetaRef = useRef(null);
+    useEffect(() => {
+      const antes = document.activeElement;
+      const g = gavetaRef.current;
+      const fechar = g && g.querySelector('.exu-gaveta-cab [aria-label="Fechar"]');
+      if (fechar) fechar.focus();
+      const prender = (ev) => {
+        if (ev.key !== 'Tab' || !g || document.querySelector('.exu-modal-fundo')) return; // janela por cima cuida do próprio foco
+        const focaveis = Array.from(g.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'))
+          .filter((x) => x.offsetParent !== null);
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (!g.contains(document.activeElement)) { ev.preventDefault(); primeiro.focus(); }
+        else if (ev.shiftKey && document.activeElement === primeiro) { ev.preventDefault(); ultimo.focus(); }
+        else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+      };
+      document.addEventListener('keydown', prender);
+      return () => {
+        document.removeEventListener('keydown', prender);
+        if (antes && antes.focus && document.contains(antes)) antes.focus();
+      };
+    }, []);
+
     const c = d.chamado;
     const linha = [];
     if (c) {
@@ -340,7 +365,7 @@
 
     return ReactDOM.createPortal(e(React.Fragment, null, [
       e('div', { key: 'f', className: 'exu-gaveta-fundo', onClick: onFechar }),
-      e('aside', { key: 'g', className: 'exu-gaveta v3c-gaveta', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Chamado #' + item.id }, [
+      e('aside', { key: 'g', ref: gavetaRef, className: 'exu-gaveta v3c-gaveta', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Chamado #' + item.id }, [
         e('div', { key: 'c', className: 'exu-gaveta-cab' }, [
           e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [
             e('div', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
@@ -1083,7 +1108,7 @@
       e('span', { key: 't', className: 'exu-tipo' + (item.tipo ? '' : ' vazio') }, item.tipoNome || 'Sem automação'),
       item.ia && !item.ia.concorda ? e('span', { key: 'ia', className: 'exc-ia', title: 'A IA local sugere outro tipo' }, [Icon('Bot', 12, 'currentColor'), 'IA']) : null,
     ];
-    const abrirCom = (item) => ({ onClick: () => setAberto(item.id), onKeyDown: (ev) => { if (ev.key === 'Enter') setAberto(item.id); }, tabIndex: 0 });
+    const abrirCom = (item) => ({ onClick: () => setAberto(item.id), onKeyDown: (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === ev.currentTarget) { ev.preventDefault(); setAberto(item.id); } }, tabIndex: 0 });
     const vazio = e('div', { key: 'v', className: 'exc-vazio' }, [
       Icon('Inbox', 30, 'var(--muted-soft)', 1.3),
       q || tipoSel || catSel ? 'Nenhum chamado com esses filtros.' : visao === 'disponiveis' ? 'Nenhum chamado disponível para rodar.' : 'Nada nesta visão.',
