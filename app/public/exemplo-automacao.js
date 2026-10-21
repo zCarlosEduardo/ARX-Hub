@@ -199,6 +199,7 @@
 
   function Campo({ c, v, set, tocado, avisar, hub }) {
     const [outro, setOutro] = useState(false);
+    const [resposta, setResposta] = useState(''); // antes de qualquer return: a ordem dos hooks não pode mudar
     const valor = v[c.k];
     // com login no Hub: nada de campos de login, "Lembrar" nem textos sobre login
     if (hub && !outro) {
@@ -216,7 +217,6 @@
     const rot = (r) => (r ? e('label', { key: 'l', htmlFor: c.k }, r) : null);
     const ajuda = c.ajuda ? e(Ajuda, { key: 'a', texto: c.ajuda }) : null;
     const errEl = erro ? e('p', { key: 'e', className: 'au-erro' }, erro) : null;
-    const [resposta, setResposta] = useState('');
     const botaoExtra = c.botao ? e('button', { key: 'b', type: 'button', className: 'exu-btn', style: { flex: 'none' }, onClick: () => { setResposta('…'); setTimeout(() => setResposta(c.botao.resposta), 800); } }, c.botao.rot) : null;
     const respEl = resposta ? e('div', { key: 'r', className: 'au-resposta' }, resposta === '…' ? 'Consultando…' : [Ico('Check', 14, 'currentColor'), resposta]) : null;
 
