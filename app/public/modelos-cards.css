@@ -1,0 +1,70 @@
+/* Vitrine de modelos de card (modelos-cards.html). Só tokens do Hub (v3/v3.css). */
+body { background: var(--bg); color: var(--text); font-family: var(--font-sans); margin: 0; }
+.mc-tela { max-width: 1200px; margin: 0 auto; padding: 28px 24px 96px; display: flex; flex-direction: column; gap: 28px; }
+.mc-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mc-cab h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.mc-cab .mc-desc { margin-top: 4px; }
+.mc-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.mc-botao { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font: 600 12.5px var(--font-sans); text-decoration: none; cursor: pointer; }
+.mc-botao:hover { background: var(--hover-bg); }
+.mc-indice { display: flex; gap: 6px; flex-wrap: wrap; }
+.mc-indice a { padding: 6px 11px; border-radius: 999px; background: var(--secondary); color: var(--text); font-size: 12.5px; font-weight: 500; text-decoration: none; }
+.mc-indice a:hover { background: var(--hover-bg); text-decoration: underline; }
+.mc-aviso { color: var(--muted); font-size: 13.5px; }
+.mc-nota { color: var(--muted); font-size: 12px; }
+.mc-modelo { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 16px; }
+.mc-modelo-cab h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.mc-modelo-cab .mc-desc { margin-top: 2px; }
+.mc-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.mc-grade-estreita { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.mc-lista { display: flex; flex-direction: column; gap: 6px; }
+
+/* peças comuns */
+.mc-card { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
+.mc-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-card-hover); }
+.mc-card h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
+.mc-desc { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mc-1linha { -webkit-line-clamp: 1; }
+.mc-linha { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.mc-titulo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mc-icone { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+.mc-cats { display: flex; flex-wrap: wrap; gap: 5px; }
+.mc-cat { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 600; }
+.mc-rodape { margin-top: auto; display: flex; flex-direction: column; }
+.mc-entre { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.mc-abrir { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--secondary); color: var(--text); font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.mc-abrir:hover { background: var(--hover-bg); border-color: var(--border-hover); }
+.mc-botao:focus-visible, .mc-abrir:focus-visible, .mc-indice a:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
+
+/* 2. lista compacta */
+.mc-compacto { flex-direction: row; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; }
+.mc-compacto .mc-texto { flex: 1; min-width: 0; }
+.mc-compacto .mc-abrir { padding: 6px 12px; }
+
+/* 3. faixa colorida */
+.mc-faixa { border-left-width: 4px; }
+
+/* 4. com números */
+.mc-kpis { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mc-kpis div { background: var(--hover-bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.mc-kpis dt { color: var(--muted); font-size: 11px; }
+.mc-kpis dd { margin: 2px 0 0; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* 5. ícone em destaque */
+.mc-icone-grande { align-items: center; text-align: center; padding-top: 28px; }
+.mc-icone-grande .mc-icone { border-radius: 16px; }
+.mc-icone-grande .mc-canto { position: absolute; top: 10px; right: 10px; }
+.mc-icone-grande .mc-abrir { margin-top: auto; align-self: stretch; }
+
+/* 6. cabeçalho colorido */
+.mc-cabecalho { padding: 0; gap: 0; overflow: hidden; }
+.mc-topo { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
+.mc-icone-cheio { width: 36px; height: 36px; }
+.mc-corpo { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+@media (max-width: 640px) {
+  .mc-tela { padding: 20px 16px 72px; }
+  .mc-compacto { flex-wrap: wrap; }
+  .mc-compacto .mc-texto { flex-basis: calc(100% - 50px); }
+}
+.mc-kpis dd.mc-sem { font-size: 12.5px; font-weight: 500; color: var(--muted); padding-top: 3px; }
