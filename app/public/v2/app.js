@@ -260,17 +260,31 @@
 
     useEffect(() => {
       refresh();
-      let es;
-      try {
-        es = new EventSource('/api/events');
-        // o SSE só avisa que mudou: a lista vem de /api/automations com o token (cada um vê os seus grupos)
-        es.onmessage = () => refresh();
-      } catch (err) {}
+      let es = null;
+      // o SSE só avisa que mudou: a lista vem de /api/automations com o token (cada um vê os seus grupos).
+      // Aba escondida solta a conexão: o navegador abre no máximo 6 por endereço e cada aba do Hub segura as suas;
+      // com várias abas abertas, as outras páginas do Hub deixavam de carregar.
+      const abrir = () => {
+        if (es || document.hidden) return;
+        try {
+          es = new EventSource('/api/events');
+          es.onmessage = () => refresh();
+        } catch (err) { es = null; }
+      };
+      const fechar = () => { if (es) { es.close(); es = null; } };
+      const aoMudarVisibilidade = () => {
+        if (document.hidden) return fechar();
+        abrir();
+        refresh(); // os avisos de enquanto estava escondida se perderam
+      };
+      abrir();
+      document.addEventListener('visibilitychange', aoMudarVisibilidade);
       // Safety-net poll in case the SSE connection is ever blocked (e.g. a proxy buffering it).
-      const t = setInterval(refresh, 15000);
+      const t = setInterval(() => { if (!document.hidden) refresh(); }, 15000);
       return () => {
         clearInterval(t);
-        if (es) es.close();
+        document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+        fechar();
       };
     }, [refresh]);
 

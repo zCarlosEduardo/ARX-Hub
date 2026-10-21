@@ -262,6 +262,22 @@
       return Promise.resolve();
     }
 
+    // Aba escondida solta o canal: o navegador abre no máximo 6 conexões por endereço e cada aba do Hub segura
+    // as suas; com várias abas abertas, as outras páginas do Hub deixavam de carregar.
+    let pausado = false;
+    function pausar() {
+      if (pausado) return;
+      pausado = true;
+      canal.fechar();
+    }
+    function retomar() {
+      if (!pausado) return;
+      pausado = false;
+      if (!tokenAtual) return;
+      canal.abrir();
+      buscar(); // os avisos de enquanto estava fechado se perderam
+    }
+
     /** Reage ao Hub: token novo, trocado ou removido. */
     function reagir() {
       const token = (hub.ler() || {}).userToken || '';
@@ -278,7 +294,7 @@
       }
       avisar();
       if (token) {
-        canal.abrir();
+        if (!pausado) canal.abrir();
         buscar();
       }
     }
@@ -294,6 +310,8 @@
       iniciar,
       buscar,
       garantir,
+      pausar,
+      retomar,
       estado: () => s,
       assinar(fn) {
         ouvintes.add(fn);
@@ -318,6 +336,10 @@
     const criarFonte = typeof window.EventSource === 'function' ? (url) => new window.EventSource(url) : null;
     api.store = criar({ hub: window.ArxAcessosHub, storage: storageReal, buscarApi: apiReal, criarFonte, urlEventos: `${SERVICO}/api/eventos` });
     if (!window.CHAMADOS_CACHE_MANUAL) api.store.iniciar();
+    if (typeof document !== 'undefined') {
+      if (document.hidden) api.store.pausar(); // aberta em segundo plano
+      document.addEventListener('visibilitychange', () => (document.hidden ? api.store.pausar() : api.store.retomar()));
+    }
   }
   window.ChamadosCache = api;
 })();
