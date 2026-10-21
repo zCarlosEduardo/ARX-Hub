@@ -29,6 +29,45 @@
     caixa.innerHTML = '<span class="v2-icone">' + SVG(icone) + '</span>';
     titulo.parentNode.insertBefore(caixa, titulo);
     caixa.appendChild(titulo);
+    iconeDoHub(caixa.querySelector('.v2-icone'));
+  }
+
+  // v3 manda o ícone e a cor do cadastro no Hub (?icone=&cor=): o título fica igual ao cartão do Painel. O desenho vem do
+  // icons.js do próprio Hub (servido pelo proxy), lido com um React de mentira que só guarda a árvore; o SVG é montado com
+  // createElementNS e só com nomes de ícone que existem e cor #RRGGBB, então nada do link vira HTML.
+  function iconeDoHub(alvo) {
+    const q = new URLSearchParams(location.search);
+    const nome = q.get('icone') || '';
+    const cor = /^#[0-9a-fA-F]{6}$/.test(q.get('cor') || '') ? q.get('cor') : null;
+    if (!alvo || !/^[A-Za-z0-9]{1,40}$/.test(nome)) return;
+    const reactAntes = window.React;
+    const iconsAntes = window.Icons;
+    const falso = { createElement: (type, props, ...filhos) => ({ type, props: props || {}, filhos: filhos.flat() }), cloneElement: (el) => el };
+    window.React = falso;
+    const s = document.createElement('script');
+    s.src = '/__arx-v2/icons.js';
+    s.onload = () => {
+      const I = window.Icons;
+      let arvore = null;
+      try {
+        if (I && I.NAMES.includes(nome)) arvore = I.Icon(nome, 22, cor || 'currentColor');
+      } finally {
+        window.React = reactAntes;
+        window.Icons = iconsAntes;
+      }
+      if (!arvore) return;
+      const ATTR = { strokeWidth: 'stroke-width', strokeLinecap: 'stroke-linecap', strokeLinejoin: 'stroke-linejoin' };
+      const montar = (n) => {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', n.type);
+        Object.keys(n.props).forEach((k) => { if (k !== 'key' && k !== 'style' && k !== 'children') el.setAttribute(ATTR[k] || k, String(n.props[k])); });
+        (n.filhos || []).forEach((f) => { if (f && typeof f === 'object') el.appendChild(montar(f)); });
+        return el;
+      };
+      alvo.replaceChildren(montar(arvore));
+      if (cor) { alvo.style.background = cor + '1f'; alvo.style.color = cor; alvo.style.boxShadow = 'inset 0 0 0 1px ' + cor + '33'; }
+    };
+    s.onerror = () => { window.React = reactAntes; window.Icons = iconsAntes; };
+    document.head.appendChild(s);
   }
 
   // "1. Empresa e login" -> selo pequeno com o número + título

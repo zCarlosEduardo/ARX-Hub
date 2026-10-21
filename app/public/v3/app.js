@@ -187,8 +187,10 @@
     // '' = não deu para pegar (sem token): a tela abre sem passe e só funciona se a automação for de todo mundo.
     const [passes, setPasses] = useState({});
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
-    // v3: a Foto de perfil e as Alt. Status ganham a tela nova (o proxy injeta o estilo com ?v2=1; so=v3 deixa as outras como estão)
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&mostrar=tudo' + (passe ? '&passe=' + encodeURIComponent(passe) : '');
+    // v3: as automações ganham a tela nova (o proxy injeta o estilo com ?v2=1); icone e cor são os do cadastro no Hub,
+    // para o título da automação ficar igual ao cartão; mostrar=tudo deixa à vista o que só aparece durante o uso
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&mostrar=tudo&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
+      (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
       pedirPasse(a.id).then((passe) => { if (janela) janela.location = comPasse(a, passe); });

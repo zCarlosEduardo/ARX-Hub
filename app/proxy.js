@@ -41,7 +41,12 @@ function reescreverLocation(location, base, prefixo) {
 // Hub de exemplo (/v2/): a tela da automação aberta com ?v2=1 recebe o estilo e o script novos (public/v2/automacao/),
 // servidos aqui mesmo em /__arx-v2/ (mesma origem da automação). Sem o v2, nada muda.
 const PASTA_V2 = path.join(__dirname, 'public', 'v2', 'automacao');
-const ARQUIVOS_V2 = { 'skin.css': 'text/css; charset=utf-8', 'skin.js': 'application/javascript; charset=utf-8' };
+// nome publicado -> [arquivo, tipo]; icons.js é o do Hub, para o título da automação usar o ícone do cadastro
+const ARQUIVOS_V2 = {
+  'skin.css': [path.join(PASTA_V2, 'skin.css'), 'text/css; charset=utf-8'],
+  'skin.js': [path.join(PASTA_V2, 'skin.js'), 'application/javascript; charset=utf-8'],
+  'icons.js': [path.join(__dirname, 'public', 'icons.js'), 'application/javascript; charset=utf-8'],
+};
 const TAGS_V2 = '<link rel="stylesheet" href="/__arx-v2/skin.css"><script src="/__arx-v2/skin.js" defer></script>';
 
 function servirV2(req, res) {
@@ -50,12 +55,13 @@ function servirV2(req, res) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Não encontrado.');
   }
-  fs.readFile(path.join(PASTA_V2, nome), (err, corpo) => {
+  const [arquivo, tipo] = ARQUIVOS_V2[nome];
+  fs.readFile(arquivo, (err, corpo) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Não encontrado.');
     }
-    res.writeHead(200, { 'Content-Type': ARQUIVOS_V2[nome], 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': tipo, 'Cache-Control': 'no-cache' });
     res.end(corpo);
   });
 }
