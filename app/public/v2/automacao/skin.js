@@ -50,18 +50,196 @@
   // v3 abre com so=v3: só a Foto de perfil e as Alt. Status ganham a tela nova; as outras automações ficam como estão
   const ehFoto = !!(document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento'));
   const ehAltStatus = !!(document.getElementById('acaoGlobal') && document.getElementById('cpfsInput') && document.getElementById('resultsTable'));
-  if (new URLSearchParams(location.search).get('so') === 'v3' && !ehFoto && !ehAltStatus) {
-    // o proxy injeta o estilo em toda tela aberta com v2=1; aqui ela fica como está
-    document.querySelectorAll('link[href="/__arx-v2/skin.css"]').forEach((l) => l.remove());
-    return;
-  }
+  const params = new URLSearchParams(location.search);
+  const ehV3 = params.get('so') === 'v3';
+  // telas montadas pelo React (Cadastro de voluntário e de colaborador, em Python): mover ou editar nós que o React
+  // controla quebra a tela; nelas fica só o estilo
+  if (document.getElementById('root')) return;
   tituloNovo();
   passosDiscretos();
   // telas que montam partes depois (abas, cards que aparecem): aplica de novo
   new MutationObserver(() => passosDiscretos()).observe(document.body, { childList: true, subtree: true });
 
   if (ehFoto) fotoNova();
-  if (ehAltStatus) altStatusNova();
+  else if (ehAltStatus) altStatusNova();
+  else if (ehV3) layoutPadrao();
+  if (ehV3) acessosDoHubDiscretos();
+  // v3: o que só aparece durante o uso fica à vista (com selo) para validar o layout
+  if (ehV3 && params.get('mostrar') === 'tudo') {
+    document.documentElement.classList.add('v3-validar');
+    revelarTudo();
+    setTimeout(revelarTudo, 1500); // telas que escondem de novo depois de ler /api/opcoes
+  }
+
+  // Logins que vieram do Hub (o app.js põe o selo "Preenchido pelo Hub" ao lado do campo, via ArxAcessos.marcarCampo):
+  // usuário e senha somem e fica só "Acesso do Hub", com "Usar outro login" para quem precisar trocar. Sem o selo
+  // (cofre travado, login sem a empresa) os campos voltam, para digitar.
+  function acessosDoHubDiscretos() {
+    const grupos = []; // { campos, ocultos, chip, forcado }
+    const ehTexto = (el) => el && el.tagName === 'INPUT' && /^(text|email|)$/i.test(el.getAttribute('type') || '');
+    const temSeloDoHub = (campo) => {
+      const selo = campo.parentNode && campo.parentNode.querySelector(':scope > .arx-acesso-hub');
+      return !!selo && /pelo Hub/i.test(selo.textContent);
+    };
+    // o que esconder de um campo: ele, o rótulo e o invólucro quando o invólucro só tem o campo (rótulo, olho, selo)
+    function partes(campo) {
+      const pai = campo.parentElement;
+      const soDoCampo = pai && !pai.classList.contains('card') && pai.querySelectorAll('input, select, textarea').length === 1 && pai.children.length <= 4;
+      if (soDoCampo) return [pai];
+      const rotulo = (campo.id && document.querySelector('label[for="' + campo.id + '"]')) || (campo.previousElementSibling && campo.previousElementSibling.tagName === 'LABEL' ? campo.previousElementSibling : null);
+      const selo = pai && pai.querySelector(':scope > .arx-acesso-hub');
+      return [rotulo, campo, selo].filter(Boolean);
+    }
+    function grupoDe(campo) {
+      // começa no pai: o próprio campo pode ter "cred" na classe (cred-senha)
+      const cartao = campo.parentElement.closest('.card, .painel-sistema, .cred-row, [class*="cred"]') || document.body;
+      const todos = Array.from(cartao.querySelectorAll('input'));
+      const i = todos.indexOf(campo);
+      // senha marcada: o usuário é o campo de texto logo antes; usuário marcado: a senha é o campo logo depois
+      const par = ehTexto(campo) ? todos.slice(i + 1).find((x) => x.type === 'password') : todos.slice(0, i).reverse().find(ehTexto);
+      return [par, campo].filter(Boolean).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    }
+    function aplicar() {
+      document.querySelectorAll('.arx-acesso-hub').forEach((selo) => {
+        const campo = selo.previousElementSibling;
+        if (!campo || campo.tagName !== 'INPUT' || campo.dataset.v3Hub || !/pelo Hub/i.test(selo.textContent)) return;
+        const campos = grupoDe(campo);
+        campos.forEach((c) => { c.dataset.v3Hub = '1'; });
+        const ocultos = campos.flatMap(partes);
+        const chip = document.createElement('div');
+        chip.className = 'v3-hub-acesso';
+        chip.innerHTML = '<span class="v3-hub-ok" aria-hidden="true">✓</span><span>Acesso do Hub</span><button type="button" class="link-btn">Usar outro login</button>';
+        const grupo = { campos, ocultos, chip, forcado: false };
+        chip.querySelector('button').onclick = () => { grupo.forcado = true; mostrar(grupo, true); campos[0].focus(); };
+        ocultos[0].parentNode.insertBefore(chip, ocultos[0]);
+        grupos.push(grupo);
+        mostrar(grupo, false);
+      });
+      // o selo sumiu (cofre travado, login trocado): os campos voltam
+      grupos.forEach((g) => { if (!g.forcado && !g.campos.some(temSeloDoHub)) mostrar(g, true); });
+    }
+    function mostrar(g, campos) {
+      g.ocultos.forEach((el) => el.classList.toggle('v3-hub-oculto', !campos));
+      g.chip.hidden = campos;
+    }
+    let agendado = false;
+    new MutationObserver(() => {
+      if (agendado) return;
+      agendado = true;
+      setTimeout(() => { agendado = false; aplicar(); }, 30);
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    aplicar();
+  }
+
+  function revelarTudo() {
+    // fora: tela ao vivo, janelas por cima, arquivo (tem zona própria), abas alternativas e mensagens vazias
+    const fora = '.pip, .pip-frame, .modal-overlay, input[type="file"], .panel-tab, .tab-panel, .error, .ok-msg, #modoProdutos';
+    document.querySelectorAll('.wrap .hidden').forEach((el) => {
+      if (el.matches(fora) || el.closest('.pip, .modal-overlay, #modoProdutos')) return;
+      el.classList.remove('hidden');
+      el.classList.add('v3-revelado');
+    });
+    ['resultsCard', 'historicoCard', 'mensagensCard'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && el.style.display === 'none') { el.style.display = ''; el.classList.add('v3-revelado'); }
+    });
+  }
+
+  // ------------------------------------------------------------ demais automações do kit (v3)
+  // Mesmo padrão da Foto e das Alt. Status, sem recriar nada: abas (Executar, Resultado, Histórico), os cartões do
+  // formulário como estão, Andamento com passos e o log em "Detalhes técnicos". Os nós originais são movidos.
+  function layoutPadrao() {
+    const wrap = document.querySelector('.wrap');
+    const cab = wrap && wrap.querySelector('header.page-header');
+    if (!wrap || !cab) return;
+    const $ = (id) => document.getElementById(id);
+    const res = $('resultsCard');
+    const extrasRes = [$('mensagensCard')].filter(Boolean);
+    const hist = $('historicoCard');
+    const abas = [['exec', 'Executar']];
+    if (res) abas.push(['res', 'Resultado']);
+    if (hist) abas.push(['hist', 'Histórico']);
+
+    const v2 = document.createElement('div');
+    v2.className = 'v2f v2p';
+    if (abas.length > 1) {
+      v2.innerHTML = '<div class="v2f-abas" role="tablist">' + abas.map(([k, t], i) =>
+        '<button type="button" class="v2f-aba" role="tab" aria-selected="' + (i ? 'false' : 'true') + '" data-aba="' + k + '">' + t + (k === 'exec' ? '' : ' <span class="n" id="v2pN' + k + '">0</span>') + '</button>').join('') + '</div>';
+    }
+    const painel = (k) => { const p = document.createElement('div'); p.className = 'v2p-painel'; p.setAttribute('data-painel', k); if (k !== 'exec') p.hidden = true; v2.appendChild(p); return p; };
+    const exec = painel('exec');
+    const pRes = res ? painel('res') : null;
+    const pHist = hist ? painel('hist') : null;
+    cab.insertAdjacentElement('afterend', v2);
+    // tudo o que vinha depois do cabeçalho vai para "Executar", menos resultado e histórico (e a tela ao vivo, fora do .wrap)
+    Array.from(wrap.children).forEach((el) => { if (el !== cab && el !== v2) exec.appendChild(el); });
+    if (pRes) { pRes.appendChild(res); extrasRes.forEach((el) => pRes.appendChild(el)); }
+    if (pHist) pHist.appendChild(hist);
+
+    function irPara(aba) {
+      v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x.getAttribute('data-aba') === aba ? 'true' : 'false'));
+      v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = p.getAttribute('data-painel') !== aba; });
+    }
+    v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => irPara(b.getAttribute('data-aba'))));
+    // o botão "Histórico de execuções" do cabeçalho abria o cartão; o app.js continua carregando, e a aba aparece
+    if (pHist) {
+      Array.from(cab.querySelectorAll('button')).filter((b) => /hist[óo]rico/i.test(b.textContent))
+        .forEach((b) => b.addEventListener('click', () => setTimeout(() => irPara('hist'))));
+    }
+
+    // contagem nas abas: linhas da tabela (ou itens) que o app.js preenche
+    const contar = (cartao, id) => {
+      const alvo = $(id);
+      if (!cartao || !alvo) return;
+      const atualizar = () => {
+        const corpo = cartao.querySelector('tbody') || cartao.querySelector('ul, ol, .lista, .historico-lista') || cartao;
+        alvo.textContent = corpo.querySelectorAll(':scope > tr, :scope > li, :scope > .item, :scope > .historico-item').length;
+      };
+      new MutationObserver(atualizar).observe(cartao, { childList: true, subtree: true });
+      atualizar();
+    };
+    contar(res, 'v2pNres');
+    contar(hist, 'v2pNhist');
+
+    // Andamento: passos pelo texto de andamento do app.js e o log recolhido
+    const texto = $('progressText');
+    const cartao = texto && texto.closest('.card');
+    const log = cartao && cartao.querySelector('.log');
+    if (!cartao) return;
+    cartao.classList.add('v2p-andamento');
+    const passos = document.createElement('ol');
+    passos.className = 'v2f-passos';
+    passos.hidden = true;
+    passos.innerHTML = '<li data-p="0"><i></i>Conferindo os dados e os logins</li><li data-p="1"><i></i>Executando</li><li data-p="2"><i></i>Concluído</li>';
+    if (log) {
+      const det = document.createElement('details');
+      det.className = 'v2f-tec';
+      det.innerHTML = '<summary>Detalhes técnicos da execução</summary>';
+      log.parentNode.insertBefore(det, log);
+      det.appendChild(log);
+      det.parentNode.insertBefore(passos, det);
+    } else {
+      cartao.appendChild(passos);
+    }
+    function passo(p, erro) {
+      passos.hidden = false;
+      passos.querySelectorAll('li').forEach((li) => {
+        const i = Number(li.getAttribute('data-p'));
+        li.className = erro && i === p ? 'erro' : i < p || p === 3 ? 'feito' : i === p ? 'agora' : '';
+        li.querySelector('i').textContent = li.className === 'feito' ? '✓' : li.className === 'erro' ? '!' : '';
+      });
+    }
+    let atual = -1;
+    new MutationObserver(() => {
+      const t = texto.textContent.trim();
+      if (!t || /^Aguardando/i.test(t)) { passos.hidden = true; atual = -1; return; }
+      if (/^Iniciando/i.test(t)) atual = 0;
+      else if (/^(Conclu|Parad)/i.test(t)) { atual = 3; if (pRes) irPara('res'); }
+      else if (/^(Erro|Conexão perdida)/i.test(t)) { passo(Math.max(0, atual), true); return; }
+      else atual = 1;
+      passo(atual);
+    }).observe(texto, { childList: true, characterData: true, subtree: true });
+  }
 
   // ------------------------------------------------------------ Alt. Status Usuário e Alt. Status Voluntário
   // Mesmo padrão da Foto: abas, dois cartões (o que fazer e resumo ao vivo), passos e detalhes técnicos recolhidos.
@@ -84,8 +262,7 @@
     v2.className = 'v2f v2a';
     v2.innerHTML = `
       <div class="v2f-abas" role="tablist">
-        <button type="button" class="v2f-aba" role="tab" aria-selected="true" data-aba="uma">Uma pessoa</button>
-        <button type="button" class="v2f-aba" role="tab" aria-selected="false" data-aba="varias">Várias pessoas</button>
+        <button type="button" class="v2f-aba" role="tab" aria-selected="true" data-aba="exec">Executar</button>
         <button type="button" class="v2f-aba" role="tab" aria-selected="false" data-aba="res">Resultado <span class="n" id="v2aN">0</span></button>
       </div>
       <section data-painel="exec" class="v2f-grade">
@@ -98,12 +275,7 @@
               <button type="button" role="radio" data-acao="ativar"><b>Ativar e desbloquear</b><small>Ativa no SGA e desbloqueia no PowerCRM</small></button>
             </div>
           </div>
-          <div class="v2f-campo" data-modo="uma">
-            <label for="v2aAlvo">CPF, nome ou ${pessoa} <span id="v2aTipo"></span></label>
-            <input type="text" id="v2aAlvo" autocomplete="off" maxlength="120" placeholder="000.000.000-00 ou CARLOS EDUARDO">
-            <p class="v2f-ajuda">Pelo CPF a busca é exata. Pelo nome, confira o resultado: nomes parecidos podem trazer mais de uma pessoa.</p>
-          </div>
-          <div data-modo="varias" id="v2aVarias" hidden></div>
+          <div class="v2f-campo" id="v2aVarias"><label>CPFs, nomes ou ${pessoa}s</label></div>
           <div class="v2f-campo" id="v2aEmpresas"></div>
           <div id="v2aIniciar" class="v2f-botoes"></div>
           <ol class="v2f-passos" id="v2aPassos" hidden>
@@ -158,25 +330,13 @@
     Array.from(wrap.children).forEach((el) => { if (el !== cab && el !== v2) el.classList.add('v2-escondido'); });
     passosDiscretos(v2);
 
-    // abas: "Uma pessoa" escreve no campo de lista original; "Várias pessoas" mostra a lista e a planilha originais
-    const alvo = $('v2aAlvo');
-    let modo = 'uma';
+    // abas: Executar (lista colada ou planilha, os campos originais) e Resultado; uma pessoa só é uma lista de uma linha
     function irPara(aba) {
       v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x.getAttribute('data-aba') === aba ? 'true' : 'false'));
       v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = (aba === 'res') !== (p.getAttribute('data-painel') === 'res'); });
-      if (aba === 'res') return;
-      modo = aba;
-      v2.querySelectorAll('[data-modo]').forEach((el) => { el.hidden = el.getAttribute('data-modo') !== modo; });
-      if (modo === 'uma') {
-        const manual = document.querySelector('.tab-btn[data-tab="manual"]');
-        if (manual && !manual.classList.contains('active')) manual.click();
-        cpfs.value = alvo.value.trim();
-      }
-      atualizar();
+      if (aba !== 'res') atualizar();
     }
     v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => irPara(b.getAttribute('data-aba'))));
-    alvo.addEventListener('input', () => { cpfs.value = alvo.value.trim(); atualizar(); });
-    alvo.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('startBtn').click(); } });
 
     // ação: dois botões grandes ligados ao select original
     v2.querySelectorAll('[data-acao]').forEach((b) => b.addEventListener('click', () => {
@@ -186,17 +346,14 @@
     }));
 
     // resumo ao vivo (a "prévia" desta automação): ação, quem, empresas e sistemas
-    const tipoDe = (t) => { const d = t.replace(/\D/g, ''); return /^[\d.\-\s]+$/.test(t) && d.length === 11 ? 'CPF' : /\s/.test(t) ? 'Nome' : t ? 'Usuário' : ''; };
     const visivel = (el) => el && !el.classList.contains('hidden');
     function atualizar() {
       v2.querySelectorAll('[data-acao]').forEach((b) => b.setAttribute('aria-checked', b.getAttribute('data-acao') === acao.value ? 'true' : 'false'));
-      const t = alvo.value.trim();
-      $('v2aTipo').textContent = tipoDe(t);
       const ativa = document.querySelector('.tab-btn.active[data-tab]');
-      const planilha = modo === 'varias' && ativa && ativa.getAttribute('data-tab') === 'planilha';
+      const planilha = ativa && ativa.getAttribute('data-tab') === 'planilha';
       const arquivo = $('planilhaInput') && $('planilhaInput').files[0];
       const linhas = cpfs.value.split('\n').map((x) => x.trim()).filter(Boolean);
-      const quem = planilha ? (arquivo ? 'Planilha ' + arquivo.name : 'Nenhuma planilha escolhida') : modo === 'uma' ? (t ? tipoDe(t) + ': ' + (tipoDe(t) === 'CPF' ? t.replace(/\D/g, '').replace(/^(\d{3})\d{6}(\d{2})$/, '$1.***.***-$2') : t) : 'Não informado') : linhas.length === 1 ? '1 pessoa' : linhas.length ? linhas.length + ' pessoas' : 'Não informado';
+      const quem = planilha ? (arquivo ? 'Planilha ' + arquivo.name : 'Nenhuma planilha escolhida') : linhas.length === 1 ? '1 pessoa' : linhas.length ? linhas.length + ' pessoas' : 'Não informado';
       let emp;
       if (ehUsuario) {
         const marcadas = Array.from(checklist.querySelectorAll('input:checked')).map((cb) => (cb.closest('label') || cb).textContent.trim());
@@ -246,7 +403,7 @@
       $('v2aResVazio').hidden = n > 0;
     }).observe(tbody, { childList: true });
 
-    irPara('uma');
+    irPara('exec');
   }
 
   // ------------------------------------------------------------ Gerar foto de perfil

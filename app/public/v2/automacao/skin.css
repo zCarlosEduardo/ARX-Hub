@@ -24,8 +24,10 @@ header.page-header { align-items: center; gap: 12px 20px; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent) !important; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .empresa-checklist .checkbox-label:has(input:checked), .cred-empresas-grid .checkbox-label:has(input:checked) { background: var(--accent-soft); color: var(--accent-fg); font-weight: 600; }
-.primary-btn { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; box-shadow: 0 6px 16px -8px var(--accent); }
-.primary-btn:hover:not(:disabled) { filter: brightness(1.06); }
+/* verde forte do kit com o texto feito para ele (--on-accent): claro 5,0:1 (branco no #15803d), escuro 6,5:1
+   (verde-escuro no #22c55e); sem sombra colorida, só a sombra neutra do kit ao passar o mouse */
+.primary-btn { background: var(--accent-strong) !important; border-color: var(--accent-strong) !important; color: var(--on-accent) !important; box-shadow: none; }
+.primary-btn:hover:not(:disabled) { filter: brightness(0.94); }
 .progress-row { font-weight: 500; }
 
 /* ---------------- Gerar foto de perfil: tela nova inteira ---------------- */
@@ -51,13 +53,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .v2f-btn { height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .v2f-btn:hover:not(:disabled) { background: var(--hover-bg); }
 .v2f-btn:disabled { opacity: 0.5; cursor: default; }
-.v2f-btn.primario { background: var(--accent); border-color: var(--accent); color: #fff; }
-.v2f-btn.primario:hover:not(:disabled) { filter: brightness(1.06); background: var(--accent); }
+.v2f-btn.primario { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--on-accent); }
+.v2f-btn.primario:hover:not(:disabled) { filter: brightness(0.94); background: var(--accent-strong); }
 .v2f-passos { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .v2f-passos li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
 .v2f-passos li i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-hover); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; color: #fff; }
 .v2f-passos li.feito { color: var(--text); }
-.v2f-passos li.feito i { border-color: var(--accent); background: var(--accent); }
+.v2f-passos li.feito i { border-color: var(--accent-strong); background: var(--accent-strong); color: var(--on-accent); }
 .v2f-passos li.agora i { border-color: var(--accent); border-top-color: transparent; animation: spin 0.8s linear infinite; }
 .v2f-passos li.erro { color: var(--error); }
 .v2f-passos li.erro i { border-color: var(--error); background: var(--error); }
@@ -117,3 +119,23 @@ details.v2f-tec .log { margin-top: 10px; }
 .v2a #resultsTable td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .v2a-vazio { color: var(--muted); font-size: 13px; text-align: center; padding: 32px; }
 @media (max-width: 640px) { .v2a-acoes { grid-template-columns: 1fr; } }
+
+/* ---------------- Demais automações do kit (v3): abas, Andamento e validação do layout ---------------- */
+.v2p { display: flex; flex-direction: column; gap: 16px; }
+.v2p-painel { display: flex; flex-direction: column; gap: 16px; }
+.v2p-painel[hidden] { display: none !important; }
+.v2p-painel > .grid, .v2p-painel > main { margin: 0; }
+.v2p-painel > .card, .v2p-painel > section { margin: 0; }
+.v2p-andamento .v2f-passos { margin: 4px 0 12px; }
+.v2p-andamento details.v2f-tec { margin-top: 4px; }
+/* validação: o que só aparece durante o uso ganha contorno tracejado; os cartões, também um selo */
+.v3-validar .v3-revelado { outline: 1px dashed var(--border-hover); outline-offset: 3px; }
+.v3-validar .card.v3-revelado { position: relative; outline: none; border-style: dashed; }
+.v3-validar .card.v3-revelado::after { content: 'Aparece durante o uso'; position: absolute; top: 12px; right: 14px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--hover-bg); padding: 2px 8px; border-radius: 999px; pointer-events: none; }
+
+/* logins que vieram do Hub: os campos somem e fica só o selo (com "Usar outro login") */
+.v3-hub-oculto { display: none !important; }
+.v3-hub-acesso { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-fg); font-size: 13px; font-weight: 600; }
+.v3-hub-acesso[hidden] { display: none !important; }
+.v3-hub-acesso .v3-hub-ok { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-strong); color: var(--on-accent); font-size: 11px; }
+.v3-hub-acesso .link-btn { margin-left: auto; font-weight: 500; }
