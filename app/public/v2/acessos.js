@@ -1,5 +1,6 @@
 // Meus acessos: guarda os logins (só no navegador) e entrega às automações abertas no Hub.
 // Expõe window.ArxAcessosHub e window.MeusAcessosBotao (usado no cabeçalho do app.js).
+// v2 (Hub de exemplo): cópia do acessos.js do Hub com as janelas e o editor no layout novo; a lógica do cofre é a mesma.
 //
 // - Um lugar só para os acessos do Hub: token do GLPI (aba Chamados), logins
 //   do SGA (cada um com as empresas em que funciona), PowerCRM e senha padrão
@@ -487,6 +488,16 @@
   let modoCofre = null;
   let adiouCriacao = false;
 
+  // ---------- v2: janelas e editor no layout novo (mesma lógica do cofre e dos acessos do Hub atual) ----------
+  function Olho({ valor, onChange, rotulo, extra }) {
+    const [ver, setVer] = useState(false);
+    return e('div', { className: 'v2a-senha' }, [
+      e('input', Object.assign({ key: 'i', className: 'v2-input', type: ver ? 'text' : 'password', autoComplete: 'new-password', value: valor || '', onChange: (ev) => onChange(ev.target.value), 'aria-label': rotulo }, extra || {})),
+      e('button', { key: 'b', type: 'button', className: 'v2a-olho', onClick: () => setVer(!ver), 'aria-label': ver ? 'Ocultar' : 'Mostrar', title: ver ? 'Ocultar' : 'Mostrar' }, Icon('Eye', 14, 'currentColor')),
+    ]);
+  }
+  const campoV2 = (rotulo, filho, key, ajuda) => e('div', { key: key || rotulo, className: 'exu-campo' }, [e('label', { key: 'l' }, rotulo), filho, ajuda ? e('p', { key: 'a', className: 'exu-campo-ajuda' }, ajuda) : null]);
+
   function CofreModal({ modo }) {
     const [senha, setSenha] = useState('');
     const [nova, setNova] = useState('');
@@ -531,47 +542,46 @@
 
     const titulos = { criar: 'Proteger meus acessos', destravar: 'Destravar meus acessos', trocar: 'Trocar a senha mestra' };
     const textos = {
-      criar: 'Crie uma senha mestra. Seus logins e o token ficam guardados neste navegador CIFRADOS com ela (nada em texto puro). ' + descricaoSessao() + ' Anote a senha mestra: não há como recuperá-la.',
-      destravar: 'Digite a senha mestra para liberar os logins e o token. ' + descricaoSessao(),
+      criar: 'Crie uma senha mestra. Seus logins e o token ficam guardados neste navegador cifrados com ela (nada em texto puro). Anote a senha mestra: não há como recuperá-la.',
+      destravar: 'Digite a senha mestra para liberar os logins e o token.',
       trocar: 'Informe a senha mestra atual e a nova.',
     };
-    const campoSenha = (rotulo, valor, onChange, extra) =>
-      campo(rotulo, inp(valor, onChange, { type: 'password', autoComplete: 'new-password', onKeyDown: (ev) => ev.key === 'Enter' && enviar(), ...extra }), rotulo);
+    const campoSenha = (rotulo, valor, onChange, extra) => campoV2(rotulo, e(Olho, { valor, onChange, rotulo, extra: Object.assign({ onKeyDown: (ev) => ev.key === 'Enter' && enviar() }, extra || {}) }), rotulo);
 
     const corpo = apagando
-      ? [
-          e('div', { key: 'a', style: { color: 'var(--text)', fontSize: 13.5, lineHeight: 1.55 } }, 'Sem a senha mestra não dá para abrir o cofre. Para recomeçar, é preciso APAGAR os acessos guardados e digitá-los de novo (logins do SGA, PowerCRM, senha padrão e token do GLPI). Isso não afeta o servidor, só este navegador.'),
-          e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
-            e('button', { key: 'ok', type: 'button', style: { ...S.btnPrim, background: 'var(--error)', flex: 1 }, onClick: () => { cofre.apagar(); fecharCofre(); abrirEditor(); } }, 'Apagar e recomeçar'),
-            e('button', { key: 'c', type: 'button', style: S.btnSec, onClick: () => setApagando(false) }, 'Voltar'),
-          ]),
-        ]
+      ? [e('p', { key: 'a', className: 'v2a-texto' }, 'Sem a senha mestra não dá para abrir o cofre. Para recomeçar, é preciso apagar os acessos guardados e digitá-los de novo (logins do SGA, PowerCRM, senha padrão e token do GLPI). Isso não afeta o servidor, só este navegador.')]
       : [
-          e('div', { key: 't', style: { color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.55 } }, textos[modo]),
+          e('p', { key: 't', className: 'v2a-texto' }, textos[modo]),
+          e('p', { key: 's', className: 'v2a-texto suave' }, descricaoSessao() + ' O tempo é definido na Administração.'),
           modo === 'criar' ? campoSenha('Senha mestra (mínimo ' + cofre.MIN_SENHA + ' caracteres)', senha, setSenha, { autoFocus: true }) : null,
           modo === 'criar' ? campoSenha('Repita a senha mestra', confirmar, setConfirmar) : null,
           modo === 'destravar' ? campoSenha('Senha mestra', senha, setSenha, { autoFocus: true }) : null,
           modo === 'trocar' ? campoSenha('Senha mestra atual', senha, setSenha, { autoFocus: true }) : null,
           modo === 'trocar' ? campoSenha('Nova senha mestra', nova, setNova) : null,
           modo === 'trocar' ? campoSenha('Repita a nova senha mestra', confirmar, setConfirmar) : null,
-          ocupado && cofre.motor === 'reserva' ? e('div', { key: 'lento', className: 'cofre-lento', style: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 } }, 'Calculando a chave de segurança. Neste endereço (sem HTTPS) isso leva alguns segundos.') : null,
-          erro ? e('div', { key: 'err', className: 'cofre-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-          e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
-            e('button', { key: 'ok', type: 'button', className: 'cofre-ok', disabled: ocupado, style: { ...S.btnPrim, flex: 1, opacity: ocupado ? 0.7 : 1 }, onClick: enviar },
-              ocupado ? 'Aguarde…' : modo === 'criar' ? 'Criar cofre e proteger' : modo === 'destravar' ? 'Destravar' : 'Trocar senha'),
-            e('button', { key: 'c', type: 'button', className: 'cofre-agora-nao', style: S.btnSec, onClick: () => { if (modo === 'criar') adiouCriacao = true; fecharCofre(); } }, modo === 'criar' ? 'Agora não' : modo === 'destravar' ? 'Agora não' : 'Cancelar'),
-          ]),
-          modo === 'destravar' ? e('button', { key: 'esq', type: 'button', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => setApagando(true) }, 'Esqueci a senha mestra') : null,
-          modo === 'criar' ? e('div', { key: 'av', style: { color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.5 } }, 'Se escolher "Agora não", o que você digitar vale só nesta sessão: nada será gravado no navegador sem o cofre.') : null,
+          ocupado && cofre.motor === 'reserva' ? e('p', { key: 'lento', className: 'v2a-texto suave cofre-lento' }, 'Calculando a chave de segurança. Neste endereço (sem HTTPS) isso leva alguns segundos.') : null,
+          erro ? e('p', { key: 'err', className: 'exu-campo-erro cofre-erro' }, erro) : null,
+          modo === 'destravar' ? e('button', { key: 'esq', type: 'button', className: 'v2a-link', onClick: () => setApagando(true) }, 'Esqueci a senha mestra') : null,
+          modo === 'criar' ? e('p', { key: 'av', className: 'v2a-texto suave' }, 'Se escolher "Agora não", o que você digitar vale só nesta sessão: nada será gravado no navegador sem o cofre.') : null,
+        ];
+    const rodape = apagando
+      ? [
+          e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: () => setApagando(false) }, 'Voltar'),
+          e('button', { key: 'ok', type: 'button', className: 'exu-btn primario v2a-perigo', onClick: () => { cofre.apagar(); fecharCofre(); abrirEditor(); } }, 'Apagar e recomeçar'),
+        ]
+      : [
+          e('button', { key: 'c', type: 'button', className: 'exu-btn cofre-agora-nao', onClick: () => { if (modo === 'criar') adiouCriacao = true; fecharCofre(); } }, modo === 'trocar' ? 'Cancelar' : 'Agora não'),
+          e('button', { key: 'ok', type: 'button', className: 'exu-btn primario cofre-ok', disabled: ocupado, onClick: enviar }, ocupado ? 'Aguarde…' : modo === 'criar' ? 'Criar cofre e proteger' : modo === 'destravar' ? 'Destravar' : 'Trocar senha'),
         ];
 
-    return e('div', { className: 'cofre-fundo', onMouseDown: fecharSe, style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 } },
-      e('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': titulos[modo], style: { width: '100%', maxWidth: 460, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: '0 24px 60px -12px rgba(0,0,0,0.2)', color: 'var(--text)', padding: 22, display: 'flex', flexDirection: 'column', gap: 14 } }, [
-        e('div', { key: 'h', style: { display: 'flex', alignItems: 'center', gap: 10 } }, [
-          e('span', { key: 'i', className: 'glpi-head-icon' }, iconeChave(15)),
-          e('div', { key: 't', style: { fontWeight: 600, fontSize: 15.5 } }, titulos[modo]),
+    return e('div', { className: 'exu-modal-fundo cofre-fundo', onMouseDown: fecharSe, style: { zIndex: 90 } },
+      e('div', { className: 'exu-modal' + (apagando ? ' perigo' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': titulos[modo], style: { maxWidth: 460 } }, [
+        e('div', { key: 'h', className: 'exu-modal-cab' }, [
+          e('span', { key: 'i', className: apagando ? 'exu-modal-icone' : 'v2a-icone' }, apagando ? Icon('AlertCircle', 18, 'var(--error)') : iconeChave(16)),
+          e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, e('h3', null, apagando ? 'Apagar os acessos guardados?' : titulos[modo])),
         ]),
-        ...corpo,
+        e('div', { key: 'b', className: 'exu-modal-corpo' }, corpo),
+        e('div', { key: 'r', className: 'exu-modal-pe' }, rodape),
       ]));
   }
 
@@ -649,12 +659,19 @@
       };
     }, []);
 
+    const moldurar = (filhos) => (moldura === 'card'
+      ? e('div', { className: 'acessos-editor exu-cartao v2a-cartao' }, e('div', { className: 'exu-cartao-corpo', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, filhos))
+      : e('div', { className: 'acessos-editor', style: { display: 'flex', flexDirection: 'column', gap: 16 } }, filhos));
+
     // cofre travado: o formulário só faz sentido depois de destravar (senão se sobrescreveria o que está guardado)
     if (estadoDoCofre === 'travado') {
-      return e('div', { className: 'acessos-editor', style: moldura === 'card' ? { maxWidth: 560, margin: '30px auto 0', ...S.card, gap: 14, padding: 22 } : { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-        e('div', { key: 't', style: { fontWeight: 600, fontSize: 15 } }, 'Seus acessos estão travados'),
-        e('div', { key: 's', style: { color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.55 } }, 'Os logins e o token ficam cifrados neste navegador. Digite a senha mestra para liberar.'),
-        e('button', { key: 'b', type: 'button', className: 'btn-primary', style: { ...S.btnPrim, alignSelf: 'flex-start' }, onClick: () => abrirCofre('destravar') }, 'Destravar acessos'),
+      return moldurar([
+        e('div', { key: 't', className: 'ext-travado' }, [
+          Icon('Lock', 28, 'var(--muted)'),
+          e('b', { key: 'b' }, 'Seus acessos estão travados'),
+          e('p', { key: 'p' }, 'Os logins e o token ficam cifrados neste navegador. Digite a senha mestra para liberar.'),
+          e('button', { key: 'd', type: 'button', className: 'exu-btn primario', onClick: () => abrirCofre('destravar') }, 'Destravar acessos'),
+        ]),
       ]);
     }
 
@@ -683,7 +700,7 @@
       setErro(null);
       const logins = a.sgas.filter((l) => l.usuario || l.senha);
       if (logins.some((l) => !l.usuario || !l.senha)) return setErro('Cada login do SGA precisa de usuário e senha.');
-      if (todas.length && logins.some((l) => l.empresas && !l.empresas.length)) return setErro('Cada login do SGA precisa de ao menos uma empresa marcada.');
+      if (todas.length && logins.some((l) => l.empresas && !l.empresas.length)) return setErro('Cada login do SGA precisa de ao menos uma associação marcada.');
       if ((a.crm.usuario || a.crm.senha) && !(a.crm.usuario && a.crm.senha)) return setErro('Informe o usuário e a senha do PowerCRM (ou deixe os dois vazios).');
       if (exigirChamados) {
         if (!a.userToken) return setErro('Informe o token do GLPI.');
@@ -711,47 +728,44 @@
       if (aoSalvar) aoSalvar(salvo);
     }
 
-    const conteudo = [
-      e('div', { key: 'h' }, [
-        moldura === 'card' ? e('div', { key: 't', style: { fontWeight: 600, fontSize: 16 } }, exigirChamados ? 'Acessos para rodar os chamados' : 'Meus acessos') : null,
-        e('div', { key: 's', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: moldura === 'card' ? 4 : 0, lineHeight: 1.5 } },
-          'Os dados ficam salvos somente neste navegador, cifrados com a sua senha mestra. As automações abertas no Hub recebem os logins do SGA, do PowerCRM e a senha padrão. O token do GLPI não sai deste navegador. Na aba Chamados, o titular do token é quem aprova, e o chamado fica atribuído a essa pessoa.'),
+    const grupo = (k, titulo, filhos) => e('section', { key: k, className: 'ext-grupo' }, [e('h4', { key: 'h' }, titulo), ...filhos]);
+    return moldurar([
+      moldura === 'card' ? e('div', { key: 'cab', className: 'exu-cab', style: { marginBottom: 4 } }, e('div', null, [e('h2', { key: 'h' }, exigirChamados ? 'Acessos para rodar os chamados' : 'Meus acessos'), e('p', { key: 'p' }, 'Antes de ver os chamados, informe os acessos que as automações usam.')])) : null,
+      e('p', { key: 'i', className: 'v2a-texto suave' }, 'Ficam só neste navegador, cifrados com a sua senha mestra. As automações abertas no Hub recebem os logins do SGA, do PowerCRM e a senha padrão. O token do GLPI não sai deste navegador: na aba Chamados, o titular do token é quem aprova, e o chamado fica atribuído a essa pessoa.'),
+      grupo('glpi', 'GLPI', [
+        campoV2(exigirChamados ? 'Token de usuário do GLPI' : 'Token de usuário do GLPI (aba Chamados)', e(Olho, { valor: a.userToken, rotulo: 'Token do GLPI', onChange: (v) => mudar((x) => ((x.userToken = v.trim()), x)), extra: { placeholder: 'Minhas configurações, Chaves de acesso remoto' } }), 'tk',
+          inicial.nomeGlpi && a.userToken === inicial.userToken ? 'Conferido no GLPI: ' + inicial.nomeGlpi + '.' : 'É conferido no GLPI ao salvar.'),
       ]),
-      campo(exigirChamados ? 'Token de usuário do GLPI' : 'Token de usuário do GLPI (aba Chamados)', inp(a.userToken, (v) => mudar((x) => ((x.userToken = v.trim()), x)), { type: 'password', autoComplete: 'new-password', placeholder: 'Minhas configurações → Chaves de acesso remoto' }), 'tk'),
-      e('div', { key: 'sga-t', style: { ...S.label, marginBottom: -6 } }, 'Logins do SGA (cada um com as empresas em que funciona)'),
-      ...a.sgas.map((l, i) =>
-        e('div', { key: 'sga' + i, className: 'acessos-login', style: { border: '1px solid var(--border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg)' } }, [
-          e('div', { key: 'r', className: 'acessos-linha', style: { display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' } }, [
-            campo('Usuário do SGA', inp(l.usuario, (v) => mudar((x) => ((x.sgas[i].usuario = v), x)), { autoComplete: 'off' }), 'su'),
-            campo('Senha do SGA', inp(l.senha, (v) => mudar((x) => ((x.sgas[i].senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'ss'),
-            a.sgas.length > 1
-              ? e('button', { key: 'rm', type: 'button', style: { ...S.link, color: 'var(--error)', marginBottom: 10 }, onClick: () => mudar((x) => ((x.sgas = x.sgas.filter((_, j) => j !== i)), x)) }, 'Remover')
-              : e('span', { key: 'rm' }),
+      grupo('sga', ['Logins do SGA ', e('span', { key: 'n', className: 'exu-tipo', style: { marginLeft: 6 } }, String(a.sgas.length))], [
+        e('p', { key: 'a', className: 'exu-campo-ajuda', style: { margin: 0 } }, 'Marque em quais associações cada login vale. Use mais de um login quando uma senha vale só para parte delas: cada associação fica com um login só.'),
+        ...a.sgas.map((l, i) => e('div', { key: 'sga' + i, className: 'ext-login acessos-login' }, [
+          e('div', { key: 'c', className: 'v2a-login-cab' }, [
+            e('input', { key: 'u', className: 'v2-input', value: l.usuario, placeholder: 'Usuário do SGA', autoComplete: 'off', 'aria-label': 'Usuário do SGA', onChange: (ev) => { const v = ev.target.value; mudar((x) => ((x.sgas[i].usuario = v), x)); } }),
+            e(Olho, { key: 's', valor: l.senha, rotulo: 'Senha do SGA', onChange: (v) => mudar((x) => ((x.sgas[i].senha = v), x)), extra: { placeholder: 'Senha do SGA' } }),
+            a.sgas.length > 1 ? e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno perigo', 'aria-label': 'Remover este login', title: 'Remover este login', onClick: () => mudar((x) => ((x.sgas = x.sgas.filter((_, j) => j !== i)), x)) }, Icon('Trash2', 13, 'currentColor')) : null,
           ]),
           chips.length
-            ? e('div', { key: 'emp', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, chips.map((emp) => {
+            ? e('div', { key: 'e', className: 'ext-login-assoc', role: 'group', 'aria-label': 'Associações deste login' }, chips.map((emp) => {
                 const sel = (l.empresas || todas).includes(emp.chave);
-                return e('button', { key: emp.chave, type: 'button', style: S.chip(sel), onClick: () => alternarEmpresa(i, emp.chave) }, emp.nome);
+                return e('button', { key: emp.chave, type: 'button', 'aria-pressed': sel ? 'true' : 'false', onClick: () => alternarEmpresa(i, emp.chave) }, [sel ? e('span', { key: 'c', 'aria-hidden': 'true' }, '✓') : null, emp.nome]);
               }))
-            : e('div', { key: 'emp', style: { fontSize: 12, color: 'var(--muted)' } }, carregando ? 'Carregando as empresas…' : 'Falha ao carregar a lista de empresas. Este login vale para todas.'),
-        ])
-      ),
-      e('button', { key: 'sga-add', type: 'button', style: { ...S.link, alignSelf: 'flex-start' }, onClick: () => mudar((x) => (x.sgas.push({ usuario: '', senha: '', empresas: [] }), x)) }, '+ Adicionar outro login do SGA'),
-      e('div', { key: 'crm', className: 'acessos-linha', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } }, [
-        campo('Usuário (e-mail) do PowerCRM', inp(a.crm.usuario, (v) => mudar((x) => ((x.crm.usuario = v), x)), { autoComplete: 'off' }), 'cu'),
-        campo('Senha do PowerCRM', inp(a.crm.senha, (v) => mudar((x) => ((x.crm.senha = v), x)), { type: 'password', autoComplete: 'new-password' }), 'cs'),
+            : e('p', { key: 'e', className: 'exu-campo-ajuda', style: { margin: 0 } }, carregando ? 'Carregando as associações…' : 'Falha ao carregar a lista de associações. Este login vale para todas.'),
+          l.empresas && !l.empresas.length && chips.length ? e('p', { key: 'v', className: 'exu-campo-erro', style: { margin: 0 } }, 'Marque pelo menos uma associação.') : null,
+        ])),
+        e('button', { key: 'add', type: 'button', className: 'exu-btn pequeno', style: { alignSelf: 'flex-start' }, onClick: () => mudar((x) => (x.sgas.push({ usuario: '', senha: '', empresas: [] }), x)) }, [Icon('Plus', 13, 'currentColor'), 'Adicionar login do SGA']),
       ]),
-      campo('Senha padrão dos novos usuários no SGA (Cadastro de usuário)', inp(a.senhaPadrao, (v) => mudar((x) => ((x.senhaPadrao = v), x)), { type: 'password', autoComplete: 'new-password' }), 'sp'),
-      erro ? e('div', { key: 'err', className: 'acessos-erro', style: { color: 'var(--error)', fontSize: 12.5 } }, erro) : null,
-      e('div', { key: 'b', style: { display: 'flex', gap: 10 } }, [
-        e('button', { key: 'ok', type: 'button', className: 'btn-primary acessos-salvar', style: { ...S.btnPrim, flex: 1, opacity: testando ? 0.7 : 1 }, disabled: testando, onClick: salvarForm },
-          testando ? 'Conferindo o token…' : exigirChamados ? 'Salvar e ver os chamados' : 'Salvar'),
-        aoCancelar ? e('button', { key: 'c', type: 'button', className: 'btn-outline', style: S.btnSec, onClick: aoCancelar }, 'Cancelar') : null,
+      grupo('crm', 'PowerCRM', [e('div', { key: 'c', className: 'exu-duas-col' }, [
+        campoV2('Usuário (e-mail)', e('input', { className: 'v2-input', value: a.crm.usuario, autoComplete: 'off', onChange: (ev) => { const v = ev.target.value; mudar((x) => ((x.crm.usuario = v), x)); } }), 'cu'),
+        campoV2('Senha', e(Olho, { valor: a.crm.senha, rotulo: 'Senha do PowerCRM', onChange: (v) => mudar((x) => ((x.crm.senha = v), x)) }), 'cs'),
+      ])]),
+      grupo('novos', 'Novos usuários', [campoV2('Senha padrão dos novos usuários no SGA (Cadastro de usuário)', e(Olho, { valor: a.senhaPadrao, rotulo: 'Senha padrão', onChange: (v) => mudar((x) => ((x.senhaPadrao = v), x)) }), 'sp')]),
+      cofre ? grupo('cofre', 'Cofre', [e('p', { key: 'p', className: 'v2a-texto suave', style: { margin: 0 } }, descricaoSessao() + ' O tempo é definido na Administração.')]) : null,
+      erro ? e('div', { key: 'err', className: 'exc-aviso acessos-erro', style: { background: 'var(--error-tint)' } }, [Icon('AlertCircle', 16, 'var(--error)'), erro]) : null,
+      e('div', { key: 'b', className: 'v2a-acoes' }, [
+        aoCancelar ? e('button', { key: 'c', type: 'button', className: 'exu-btn btn-outline', onClick: aoCancelar }, 'Cancelar') : null,
+        e('button', { key: 'ok', type: 'button', className: 'exu-btn primario acessos-salvar', disabled: testando, onClick: salvarForm }, testando ? 'Conferindo o token…' : exigirChamados ? 'Salvar e ver os chamados' : 'Salvar'),
       ]),
-    ];
-
-    if (moldura === 'card') return e('div', { className: 'acessos-editor', style: { maxWidth: 560, margin: '30px auto 0', ...S.card, gap: 14, padding: 22 } }, conteudo);
-    return e('div', { className: 'acessos-editor', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, conteudo);
+    ]);
   }
 
   // ---------- modal (raiz própria, aberta de qualquer lugar) ----------
@@ -766,25 +780,17 @@
       document.addEventListener('keydown', tecla);
       return () => document.removeEventListener('keydown', tecla);
     }, []);
-    return e('div', {
-      className: 'acessos-modal-fundo',
-      onMouseDown: (ev) => {
-        if (ev.target === ev.currentTarget) fecharEditor();
-      },
-      style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', zIndex: 78, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
-    }, e('div', {
-      role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Meus acessos',
-      style: { width: '100%', maxWidth: 600, maxHeight: '88vh', overflowY: 'auto', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: '0 24px 60px -12px rgba(0,0,0,0.16)', animation: 'modalIn 0.15s ease both', color: 'var(--text)' },
-    }, [
-      e('div', { key: 'cab', style: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', borderBottom: '1px solid var(--border)' } }, [
-        e('span', { key: 'i', className: 'glpi-head-icon' }, iconeChave(15)),
-        e('div', { key: 't', style: { fontWeight: 600, fontSize: 15.5, flex: 1 } }, 'Meus acessos'),
-        estadoCofre === 'aberto' ? e('button', { key: 'tr', type: 'button', className: 'cofre-trocar', style: S.link, onClick: () => abrirCofre('trocar') }, 'Trocar senha mestra') : null,
-        estadoCofre === 'aberto' ? e('button', { key: 'tv', type: 'button', className: 'cofre-travar', style: { ...S.link, marginRight: 8 }, onClick: () => { travarCofre(); fecharEditor(); } }, 'Travar agora') : null,
-        e('button', { key: 'x', type: 'button', className: 'icon-btn', title: 'Fechar', onClick: fecharEditor, style: { width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', borderRadius: 7 } }, Icon('X', 13)),
-      ]),
-      e('div', { key: 'corpo', style: { padding: 20 } }, e(EditorAcessos, { moldura: 'nenhuma', aoSalvar: fecharEditor, aoCancelar: fecharEditor })),
-    ]));
+    return e('div', { className: 'exu-modal-fundo acessos-modal-fundo', onMouseDown: (ev) => { if (ev.target === ev.currentTarget) fecharEditor(); }, style: { zIndex: 78 } },
+      e('div', { className: 'exu-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Meus acessos', style: { maxWidth: 640, maxHeight: '86vh' } }, [
+        e('div', { key: 'cab', className: 'exu-modal-cab' }, [
+          e('span', { key: 'i', className: 'v2a-icone' }, iconeChave(16)),
+          e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [e('h3', { key: 'h' }, 'Meus acessos'), e('p', { key: 'p' }, 'Logins entregues às automações abertas no Hub.')]),
+          estadoCofre === 'aberto' ? e('button', { key: 'tr', type: 'button', className: 'exu-btn pequeno cofre-trocar', onClick: () => abrirCofre('trocar') }, 'Trocar senha mestra') : null,
+          estadoCofre === 'aberto' ? e('button', { key: 'tv', type: 'button', className: 'exu-btn pequeno cofre-travar', onClick: () => { travarCofre(); fecharEditor(); } }, [Icon('Lock', 13, 'currentColor'), 'Travar agora']) : null,
+          e('button', { key: 'x', type: 'button', className: 'exu-btn pequeno exu-modal-x', title: 'Fechar', 'aria-label': 'Fechar', onClick: fecharEditor }, Icon('X', 14)),
+        ]),
+        e('div', { key: 'corpo', className: 'exu-modal-corpo' }, e(EditorAcessos, { moldura: 'nenhuma', aoSalvar: fecharEditor, aoCancelar: fecharEditor })),
+      ]));
   }
 
   function desenharModal() {
@@ -821,19 +827,18 @@
     const [travado, setTravado] = useState(estadoCofre === 'travado');
     useEffect(() => aoMudarCofre((s) => setTravado(s === 'travado')), []);
     const falta = faltando(a);
-    // o pontinho aparece quando falta o que as automações usam (SGA ou PowerCRM)
+    // o ponto mostra a situação: verde (pronto), amarelo (falta SGA ou PowerCRM), cinza (travado)
     const alerta = falta.includes('login do SGA') || falta.includes('PowerCRM');
     return e('button', {
       type: 'button',
-      className: 'btn-outline meus-acessos-btn',
+      className: 'exu-btn meus-acessos-btn v2a-botao',
       onClick: () => (travado ? abrirCofre('destravar') : abrirEditor()),
       title: travado ? 'Meus acessos travados: digite a senha mestra para liberar' : falta.length ? 'Meus acessos · falta configurar: ' + falta.join(', ') : 'Meus acessos: logins entregues às automações abertas no Hub (salvos só neste navegador)',
       'aria-label': 'Meus acessos',
-      style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', background: 'var(--secondary)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, fontWeight: 600, fontSize: 12.5, cursor: 'pointer', flexShrink: 0, fontFamily: 'inherit', whiteSpace: 'nowrap' },
     }, [
-      e('span', { key: 'i', style: { display: 'flex' } }, iconeChave(15)),
+      e('span', { key: 'i', style: { display: 'flex' } }, travado ? Icon('Lock', 15, 'currentColor') : iconeChave(15)),
       e('span', { key: 't', className: 'meus-acessos-label' }, travado ? 'Acessos travados' : 'Meus acessos'),
-      alerta && !travado ? e('span', { key: 'p', className: 'meus-acessos-pendente', 'aria-hidden': 'true', style: { position: 'absolute', top: -3, right: -3, width: 9, height: 9, borderRadius: '50%', background: 'var(--warn)', border: '2px solid var(--card)' } }) : null,
+      e('i', { key: 'p', className: 'v2a-ponto ' + (travado ? 'travado' : alerta ? 'falta' : 'ok'), 'aria-hidden': 'true' }),
     ]);
   }
 

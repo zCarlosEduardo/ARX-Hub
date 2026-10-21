@@ -49,3 +49,25 @@
   .v2-linha { grid-template-columns: 34px minmax(0, 1fr) 96px; }
   .v2-linha-cats, .v2-linha-editar { display: none; }
 }
+
+/* Meus acessos e cofre (acessos.js da v2) */
+.v2a-senha { position: relative; display: flex; }
+.v2a-senha .v2-input { padding-right: 38px; }
+.v2a-olho { position: absolute; right: 4px; top: 4px; width: 28px; height: 28px; border: none; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.v2a-olho:hover { background: var(--hover-bg); color: var(--text); }
+.v2a-texto { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text); }
+.v2a-texto.suave { color: var(--muted); font-size: 12.5px; }
+.v2a-link { align-self: flex-start; border: none; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.v2a-icone { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-fg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+:root[data-theme="dark"] .v2a-icone { color: var(--accent); }
+.exu-btn.primario.v2a-perigo { background: var(--error); border-color: var(--error); color: #fff; }
+.v2a-cartao { max-width: 640px; margin: 28px auto 0; }
+.v2a-login-cab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.v2a-acoes { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+.v2a-botao { position: relative; height: 32px; font-size: 12.5px; font-weight: 600; }
+.v2a-ponto { width: 7px; height: 7px; border-radius: 50%; }
+.v2a-ponto.ok { background: var(--accent); }
+.v2a-ponto.falta { background: var(--warn); }
+.v2a-ponto.travado { background: var(--muted-soft); }
+.ext-login-assoc button span { font-size: 11px; }
+@media (max-width: 640px) { .v2a-login-cab { grid-template-columns: 1fr; } }
