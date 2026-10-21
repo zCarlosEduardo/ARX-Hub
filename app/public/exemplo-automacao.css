@@ -1,8 +1,8 @@
-/* Telas de exemplo das automações. --au é a cor da automação (vem do cartão do Hub) e dá vida à tela:
+/* Telas de exemplo das automações. --au é o verde do Hub (o mesmo do layout atual) e dá vida à tela:
    ícone, números dos passos, marcações, botão de iniciar, progresso e abas. O resto são os tokens do styles.css. */
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); }
 [hidden] { display: none !important; }
-:root { --au: #1E4A9E; --au-fg: #ffffff; --au-suave: color-mix(in srgb, var(--au) 12%, transparent); --au-borda: color-mix(in srgb, var(--au) 45%, var(--border)); }
+:root { --au: var(--accent); --au-fg: #ffffff; --au-suave: color-mix(in srgb, var(--au) 12%, transparent); --au-borda: color-mix(in srgb, var(--au) 45%, var(--border)); }
 
 .au-tela { max-width: 1180px; margin: 0 auto; padding: 24px 24px 120px; display: flex; flex-direction: column; gap: 16px; }
 .au-cab { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 4px; }

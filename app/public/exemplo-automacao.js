@@ -13,15 +13,6 @@
   const ROT_SIT = { ok: 'Sucesso', aviso: 'Aviso', erro: 'Erro' };
 
   if (window.self !== window.top) document.documentElement.classList.add('no-hub');
-  // cor da automação (do cartão do Hub): texto branco ou escuro conforme o brilho
-  (function aplicarCor() {
-    const cor = /^#[0-9a-f]{6}$/i.test(params.get('cor') || '') ? params.get('cor') : '#1E4A9E';
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(cor.slice(i, i + 2), 16));
-    const claro = (0.299 * r + 0.587 * g + 0.114 * b) > 170;
-    document.documentElement.style.setProperty('--au', cor);
-    document.documentElement.style.setProperty('--au-fg', claro ? '#111111' : '#ffffff');
-  })();
-
   // Login de Meus acessos: com o cofre do Hub aberto, a automação recebe os logins e não mostra os campos de login.
   // Fora do Hub, ou com o cofre travado, os campos aparecem para digitar (como nas automações reais).
   function useLoginHub() {
