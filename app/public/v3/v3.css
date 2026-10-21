@@ -140,3 +140,14 @@
 .v3a-conferido.ok { color: var(--accent-fg); font-weight: 600; }
 /* Chamados: gaveta com rodapé de ações */
 .v3c-gaveta .exu-gaveta-pe { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Abrir chamado: anexos (fotos e documentos) */
+.v3-anexos { display: flex; flex-direction: column; gap: 8px; }
+.v3-anexo-zona { cursor: pointer; position: relative; justify-content: center; }
+.v3-anexo-zona.arrastando, .v3-anexo-zona:hover { border-color: var(--accent); background: var(--accent-soft); }
+.v3-anexo-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.v3-anexo-zona:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.v3-anexo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.v3-anexo-lista li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.v3-anexo-lista img, .v3-anexo-icone { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--hover-bg-soft); }
+.v3-anexo-lista b { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-anexo-lista small { font-size: 11.5px; color: var(--muted); }

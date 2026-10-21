@@ -47,9 +47,10 @@
     });
   }
 
-  // v3 abre com so=foto: só a Foto de perfil ganha a tela nova; as outras automações ficam como estão
+  // v3 abre com so=v3: só a Foto de perfil e as Alt. Status ganham a tela nova; as outras automações ficam como estão
   const ehFoto = !!(document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento'));
-  if (new URLSearchParams(location.search).get('so') === 'foto' && !ehFoto) {
+  const ehAltStatus = !!(document.getElementById('acaoGlobal') && document.getElementById('cpfsInput') && document.getElementById('resultsTable'));
+  if (new URLSearchParams(location.search).get('so') === 'v3' && !ehFoto && !ehAltStatus) {
     // o proxy injeta o estilo em toda tela aberta com v2=1; aqui ela fica como está
     document.querySelectorAll('link[href="/__arx-v2/skin.css"]').forEach((l) => l.remove());
     return;
@@ -60,6 +61,193 @@
   new MutationObserver(() => passosDiscretos()).observe(document.body, { childList: true, subtree: true });
 
   if (ehFoto) fotoNova();
+  if (ehAltStatus) altStatusNova();
+
+  // ------------------------------------------------------------ Alt. Status Usuário e Alt. Status Voluntário
+  // Mesmo padrão da Foto: abas, dois cartões (o que fazer e resumo ao vivo), passos e detalhes técnicos recolhidos.
+  // Os campos ORIGINAIS são movidos (não recriados): o app.js da automação continua lendo e preenchendo os mesmos
+  // elementos (logins do Hub, empresas, planilha, iniciar, parar, tela ao vivo e resultado).
+  function altStatusNova() {
+    const wrap = document.querySelector('.wrap');
+    const cab = wrap && wrap.querySelector('header.page-header');
+    if (!wrap || !cab) return;
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const acao = $('acaoGlobal');
+    const cpfs = $('cpfsInput');
+    const checklist = $('empresaChecklist'); // Usuário: várias empresas
+    const select = $('empresaSelect'); // Voluntário: uma empresa
+    const ehUsuario = !!checklist;
+    const pessoa = ehUsuario ? 'usuário' : 'voluntário';
+
+    const v2 = document.createElement('div');
+    v2.className = 'v2f v2a';
+    v2.innerHTML = `
+      <div class="v2f-abas" role="tablist">
+        <button type="button" class="v2f-aba" role="tab" aria-selected="true" data-aba="uma">Uma pessoa</button>
+        <button type="button" class="v2f-aba" role="tab" aria-selected="false" data-aba="varias">Várias pessoas</button>
+        <button type="button" class="v2f-aba" role="tab" aria-selected="false" data-aba="res">Resultado <span class="n" id="v2aN">0</span></button>
+      </div>
+      <section data-painel="exec" class="v2f-grade">
+        <div class="card" id="v2aEsq">
+          <h2>1. Quem e o que fazer</h2>
+          <div class="v2f-campo">
+            <label>Ação</label>
+            <div class="v2a-acoes" role="radiogroup" aria-label="Ação">
+              <button type="button" role="radio" data-acao="bloquear"><b>Bloquear e inativar</b><small>Inativa no SGA e bloqueia no PowerCRM</small></button>
+              <button type="button" role="radio" data-acao="ativar"><b>Ativar e desbloquear</b><small>Ativa no SGA e desbloqueia no PowerCRM</small></button>
+            </div>
+          </div>
+          <div class="v2f-campo" data-modo="uma">
+            <label for="v2aAlvo">CPF, nome ou ${pessoa} <span id="v2aTipo"></span></label>
+            <input type="text" id="v2aAlvo" autocomplete="off" maxlength="120" placeholder="000.000.000-00 ou CARLOS EDUARDO">
+            <p class="v2f-ajuda">Pelo CPF a busca é exata. Pelo nome, confira o resultado: nomes parecidos podem trazer mais de uma pessoa.</p>
+          </div>
+          <div data-modo="varias" id="v2aVarias" hidden></div>
+          <div class="v2f-campo" id="v2aEmpresas"></div>
+          <div id="v2aIniciar" class="v2f-botoes"></div>
+          <ol class="v2f-passos" id="v2aPassos" hidden>
+            <li data-p="0"><i></i>Conferindo os dados e os logins</li>
+            <li data-p="1"><i></i>Executando nos sistemas, uma empresa por vez</li>
+            <li data-p="2"><i></i>Concluído: veja a aba Resultado</li>
+          </ol>
+        </div>
+        <section class="card">
+          <h2>2. Resumo</h2>
+          <dl class="v2a-resumo" id="v2aResumo"></dl>
+          <div id="v2aSistemas"></div>
+          <details class="v2f-tec" id="v2aSobre"><summary>Sobre os logins guardados</summary></details>
+        </section>
+      </section>
+      <section data-painel="exec" class="card" id="v2aAndamento">
+        <h2>3. Andamento</h2>
+        <details class="v2f-tec" id="v2aTec"><summary>Detalhes técnicos da execução</summary></details>
+      </section>
+      <section data-painel="res" id="v2aRes" hidden>
+        <div class="card v2a-vazio" id="v2aResVazio">O resultado aparece aqui quando a execução terminar.</div>
+      </section>`;
+    cab.insertAdjacentElement('afterend', v2);
+
+    // move os campos originais para os lugares novos (os ids e os ouvintes do app.js vão junto)
+    const mover = (el, destino) => { if (el && destino) destino.appendChild(el); };
+    const empresas = $('v2aEmpresas');
+    if (ehUsuario) {
+      mover($('empresaSelecionarTodas') && $('empresaSelecionarTodas').closest('.field-head'), empresas);
+      mover(checklist, empresas);
+    } else {
+      mover(document.querySelector('label[for="empresaSelect"]'), empresas);
+      mover(select, empresas);
+    }
+    mover($('empresaHint'), empresas);
+    const abasOriginais = document.querySelector('.tabs');
+    mover(abasOriginais, $('v2aVarias'));
+    mover($('tab-manual'), $('v2aVarias'));
+    mover($('tab-planilha'), $('v2aVarias'));
+    mover($('startBtn'), $('v2aIniciar'));
+    mover($('formError'), $('v2aIniciar'));
+    const sobre = $('painelPowercrm') && $('painelPowercrm').parentNode.querySelector('#painelPowercrm ~ p.hint');
+    mover($('painelSga'), $('v2aSistemas'));
+    mover($('painelPowercrm'), $('v2aSistemas'));
+    if (sobre) { sobre.classList.add('v2f-ajuda'); mover(sobre, $('v2aSobre')); } else $('v2aSobre').remove();
+    const progresso = document.querySelector('.progress-row');
+    $('v2aAndamento').insertBefore(progresso, $('v2aTec'));
+    mover($('log'), $('v2aTec'));
+    const resultados = $('resultsCard');
+    mover(resultados, $('v2aRes'));
+    // o que sobrou da tela antiga (cartões vazios, rótulo e dica da ação) some; o PiP e os scripts ficam
+    Array.from(wrap.children).forEach((el) => { if (el !== cab && el !== v2) el.classList.add('v2-escondido'); });
+    passosDiscretos(v2);
+
+    // abas: "Uma pessoa" escreve no campo de lista original; "Várias pessoas" mostra a lista e a planilha originais
+    const alvo = $('v2aAlvo');
+    let modo = 'uma';
+    function irPara(aba) {
+      v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x.getAttribute('data-aba') === aba ? 'true' : 'false'));
+      v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = (aba === 'res') !== (p.getAttribute('data-painel') === 'res'); });
+      if (aba === 'res') return;
+      modo = aba;
+      v2.querySelectorAll('[data-modo]').forEach((el) => { el.hidden = el.getAttribute('data-modo') !== modo; });
+      if (modo === 'uma') {
+        const manual = document.querySelector('.tab-btn[data-tab="manual"]');
+        if (manual && !manual.classList.contains('active')) manual.click();
+        cpfs.value = alvo.value.trim();
+      }
+      atualizar();
+    }
+    v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => irPara(b.getAttribute('data-aba'))));
+    alvo.addEventListener('input', () => { cpfs.value = alvo.value.trim(); atualizar(); });
+    alvo.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('startBtn').click(); } });
+
+    // ação: dois botões grandes ligados ao select original
+    v2.querySelectorAll('[data-acao]').forEach((b) => b.addEventListener('click', () => {
+      acao.value = b.getAttribute('data-acao');
+      acao.dispatchEvent(new Event('change', { bubbles: true }));
+      atualizar();
+    }));
+
+    // resumo ao vivo (a "prévia" desta automação): ação, quem, empresas e sistemas
+    const tipoDe = (t) => { const d = t.replace(/\D/g, ''); return /^[\d.\-\s]+$/.test(t) && d.length === 11 ? 'CPF' : /\s/.test(t) ? 'Nome' : t ? 'Usuário' : ''; };
+    const visivel = (el) => el && !el.classList.contains('hidden');
+    function atualizar() {
+      v2.querySelectorAll('[data-acao]').forEach((b) => b.setAttribute('aria-checked', b.getAttribute('data-acao') === acao.value ? 'true' : 'false'));
+      const t = alvo.value.trim();
+      $('v2aTipo').textContent = tipoDe(t);
+      const ativa = document.querySelector('.tab-btn.active[data-tab]');
+      const planilha = modo === 'varias' && ativa && ativa.getAttribute('data-tab') === 'planilha';
+      const arquivo = $('planilhaInput') && $('planilhaInput').files[0];
+      const linhas = cpfs.value.split('\n').map((x) => x.trim()).filter(Boolean);
+      const quem = planilha ? (arquivo ? 'Planilha ' + arquivo.name : 'Nenhuma planilha escolhida') : modo === 'uma' ? (t ? tipoDe(t) + ': ' + (tipoDe(t) === 'CPF' ? t.replace(/\D/g, '').replace(/^(\d{3})\d{6}(\d{2})$/, '$1.***.***-$2') : t) : 'Não informado') : linhas.length === 1 ? '1 pessoa' : linhas.length ? linhas.length + ' pessoas' : 'Não informado';
+      let emp;
+      if (ehUsuario) {
+        const marcadas = Array.from(checklist.querySelectorAll('input:checked')).map((cb) => (cb.closest('label') || cb).textContent.trim());
+        emp = !marcadas.length ? 'Nenhuma marcada' : marcadas.length <= 3 ? marcadas.join(', ') : marcadas.length + ' empresas';
+      } else {
+        emp = select.selectedOptions[0] ? select.selectedOptions[0].textContent : 'Não informado';
+      }
+      const sistemas = [
+        visivel($('painelSga')) && $('executarSga') && $('executarSga').checked ? 'SGA' : null,
+        visivel($('painelPowercrm')) && $('executarPowercrm') && $('executarPowercrm').checked ? 'PowerCRM' : null,
+      ].filter(Boolean);
+      const linha = (k, v, cls) => '<dt>' + k + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(v) + '</dd>';
+      $('v2aResumo').innerHTML = linha('Ação', acao.value === 'ativar' ? 'Ativar e desbloquear' : 'Bloquear e inativar', acao.value === 'ativar' ? 'ok' : 'perigo') +
+        linha('Quem', quem) + linha(ehUsuario ? 'Empresas' : 'Empresa', emp) + linha('Sistemas', sistemas.length ? sistemas.join(' e ') : 'Nenhum marcado');
+    }
+    document.addEventListener('change', atualizar, true);
+    document.addEventListener('input', atualizar, true);
+    // o app.js mostra os painéis de sistema e monta a lista de empresas depois de ler /api/opcoes
+    new MutationObserver(atualizar).observe($('v2aSistemas'), { attributes: true, subtree: true, attributeFilter: ['class'] });
+    new MutationObserver(atualizar).observe(ehUsuario ? checklist : select, { childList: true, subtree: true });
+
+    // passos pelo texto de andamento do app.js; ao terminar com resultado, abre a aba Resultado
+    const progressoTexto = $('progressText');
+    function passo(p, erro) {
+      const lista = $('v2aPassos');
+      lista.hidden = false;
+      lista.querySelectorAll('li').forEach((li) => {
+        const i = Number(li.getAttribute('data-p'));
+        li.className = erro && i === p ? 'erro' : i < p || p === 3 ? 'feito' : i === p ? 'agora' : '';
+        li.querySelector('i').textContent = li.className === 'feito' ? '✓' : li.className === 'erro' ? '!' : '';
+      });
+    }
+    let atual = -1;
+    new MutationObserver(() => {
+      const t = progressoTexto.textContent;
+      if (/^Iniciando/.test(t)) atual = 0;
+      else if (/^(Processando|Reconectado)/.test(t)) atual = 1;
+      else if (/^Concluído/.test(t)) { atual = 3; if (resultados.querySelector('tbody tr')) irPara('res'); }
+      else if (/^Erro/.test(t)) { passo(Math.max(0, atual), true); return; }
+      else return;
+      passo(atual);
+    }).observe(progressoTexto, { childList: true, characterData: true, subtree: true });
+    const tbody = resultados.querySelector('tbody');
+    new MutationObserver(() => {
+      const n = tbody.querySelectorAll('tr').length;
+      $('v2aN').textContent = n;
+      $('v2aResVazio').hidden = n > 0;
+    }).observe(tbody, { childList: true });
+
+    irPara('uma');
+  }
 
   // ------------------------------------------------------------ Gerar foto de perfil
   function fotoNova() {
