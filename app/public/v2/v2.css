@@ -71,3 +71,23 @@
 .v2a-ponto.travado { background: var(--muted-soft); }
 .ext-login-assoc button span { font-size: 11px; }
 @media (max-width: 640px) { .v2a-login-cab { grid-template-columns: 1fr; } }
+
+/* Resultados (resultados.js e disponibilidade.js da v2) */
+.v2r-tela { max-width: 1280px; }
+.v2r-corpo { display: flex; flex-direction: column; gap: 16px; }
+.v2r-filtros { padding: 2px 0; }
+.v2r-filtros .exu-select { max-width: 260px; }
+.v2r-em { margin-left: auto; font-size: 12px; color: var(--muted-soft); }
+.v2r-teste { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--border); font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.v2r-teste.ligado { border-color: var(--warn); background: var(--warn-tint); color: var(--warn); }
+.v2r-teste input { accent-color: var(--warn); }
+.v2r-kpi { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); min-width: 0; }
+.v2r-kpi-rot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.v2r-kpi-ic { width: 28px; height: 28px; border-radius: 8px; background: var(--secondary); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.v2r-kpi-val { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.v2r-kpi-sub { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.v2r-tela .res-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+.v2r-tela .res-tabela th { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 0 10px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.v2r-tela .res-tabela td { padding: 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.v2r-tela .res-tabela tr:last-child td { border-bottom: none; }
+.v2r-tela .res-tabela tbody tr:hover td { background: var(--hover-bg-soft); }

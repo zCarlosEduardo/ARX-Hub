@@ -30,13 +30,14 @@
   };
 
   const S = {
-    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fadeInUp 0.3s ease both', minWidth: 0 },
-    titulo: { fontWeight: 600, fontSize: 14 },
-    sub: { color: 'var(--muted-soft)', fontSize: 12, marginTop: 2 },
-    input: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 9px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit' },
-    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14, boxShadow: 'var(--shadow-card)', minWidth: 0 },
+    titulo: { fontWeight: 600, fontSize: 14.5 },
+    sub: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.5 },
+    input: { height: 34, background: 'var(--field-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' },
+    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, padding: '0 12px', background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 500, fontSize: 13, cursor: 'pointer' },
+    link: { background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 },
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor, whiteSpace: 'nowrap' }),
-    chip: (sel) => ({ padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
+    chip: (sel) => ({ height: 30, padding: '0 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'var(--card)', color: sel ? 'var(--accent-fg)' : 'var(--muted)' }),
   };
   const PERIODOS = [
     { id: '7', rotulo: '7 dias', dias: 7 },
@@ -71,13 +72,10 @@
 
   // ---------- peças ----------
   function Numero({ rotulo, valor, sub, icone, cor }) {
-    return e('div', { className: 'res-kpi', style: { ...S.card, gap: 6 } }, [
-      e('div', { key: 'r', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-        e('div', { key: 'l', style: { fontSize: 12, color: 'var(--muted)', fontWeight: 600 } }, rotulo),
-        icone ? e('span', { key: 's', style: { display: 'flex' } }, Icon(icone, 15, cor || 'var(--muted-soft)')) : null,
-      ]),
-      e('div', { key: 'v', style: { fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', color: cor || 'var(--text)' } }, valor),
-      e('div', { key: 'su', style: { fontSize: 12, color: 'var(--muted-soft)', lineHeight: 1.4 } }, sub),
+    return e('div', { className: 'res-kpi v2r-kpi' }, [
+      e('div', { key: 'r', className: 'v2r-kpi-rot' }, [e('span', { key: 'l' }, rotulo), icone ? e('span', { key: 's', className: 'v2r-kpi-ic', style: cor ? { color: cor } : null }, Icon(icone, 14, 'currentColor')) : null]),
+      e('div', { key: 'v', className: 'v2r-kpi-val', style: cor ? { color: cor } : null }, valor),
+      e('div', { key: 'su', className: 'v2r-kpi-sub' }, sub),
     ]);
   }
 
@@ -137,16 +135,14 @@
   const cabecalhoCard = (titulo, sub) => e('div', { key: 'h' }, [e('div', { key: 'a', style: S.titulo }, titulo), e('div', { key: 'b', style: S.sub }, sub)]);
 
   // ---------- tela ----------
-  function DisponibilidadeView() {
+  function DisponibilidadeView({ filtro: filtroDeFora }) {
     const [salvo] = useState(() => ler(KEY, null) || {});
-    const [periodo, setPeriodo] = useState(PERIODOS.some((p) => p.id === salvo.periodo) ? salvo.periodo : '30');
-    const [datas, setDatas] = useState({ desde: salvo.desde || diasAtras(30), ate: salvo.ate || hoje() });
     const [soErros, setSoErros] = useState(!!salvo.soErros);
     const [chaveSel, setChaveSel] = useState('');
     const [estado, setEstado] = useState({ carregando: true, dados: null, erro: null });
 
-    const p = PERIODOS.find((x) => x.id === periodo);
-    const filtro = p && p.dias ? { desde: diasAtras(p.dias), ate: hoje() } : datas;
+    // v2: o período vem do cabeçalho da aba Resultados
+    const filtro = filtroDeFora;
     const datasOk = /^\d{4}-\d{2}-\d{2}$/.test(filtro.desde) && /^\d{4}-\d{2}-\d{2}$/.test(filtro.ate) && filtro.desde <= filtro.ate;
 
     const buscar = useCallback(async () => {
@@ -169,31 +165,19 @@
       buscar();
     }, [buscar]);
     useEffect(() => {
-      gravar(KEY, { periodo, desde: datas.desde, ate: datas.ate, soErros });
-    }, [periodo, datas.desde, datas.ate, soErros]);
+      gravar(KEY, { ...salvo, soErros });
+    }, [soErros]);
 
     const { dados, carregando, erro } = estado;
 
-    const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
-      e('div', { key: 't' }, [
-        e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Disponibilidade'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
-          `Quedas e voltas das automações e integrações · ${dataBr(filtro.desde)} a ${dataBr(filtro.ate)}${estado.em ? ' · atualizado ' + estado.em.toLocaleTimeString('pt-BR') : ''}`),
+    const cabecalho = e('div', { key: 'head', className: 'exu-barra v2r-filtros' }, [
+      e('label', { key: 'er', className: 'v2r-teste' + (soErros ? ' ligado' : ''), title: 'Oculta os avisos (token sem permissão, erro de login etc.) e mantém apenas o que parou' }, [
+        e('input', { key: 'c', type: 'checkbox', checked: soErros, onChange: (ev) => setSoErros(ev.target.checked) }), e('span', { key: 't' }, 'Só quedas (erros)'),
       ]),
-      e('div', { key: 'f', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-        ...PERIODOS.map((x) => e('button', { key: x.id, style: S.chip(periodo === x.id), onClick: () => setPeriodo(x.id) }, x.rotulo)),
-        periodo === 'datas'
-          ? e('span', { key: 'd', style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' } }, [
-              e('input', { key: 'a', type: 'date', className: 'field-input', value: datas.desde, max: datas.ate, onChange: (ev) => setDatas((d) => ({ ...d, desde: ev.target.value })), style: S.input, 'aria-label': 'De' }),
-              'a',
-              e('input', { key: 'b', type: 'date', className: 'field-input', value: datas.ate, min: datas.desde, onChange: (ev) => setDatas((d) => ({ ...d, ate: ev.target.value })), style: S.input, 'aria-label': 'Até' }),
-            ])
-          : null,
-        e('button', { key: 'er', style: S.chip(soErros), onClick: () => setSoErros((v) => !v), title: 'Oculta os avisos (token sem permissão, erro de login etc.) e mantém apenas o que parou' }, 'Só quedas (erros)'),
-        e('button', { key: 'rf', style: S.btnSec, disabled: carregando, onClick: buscar }, [
-          e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
-          e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
-        ]),
+      e('span', { key: 'em', className: 'v2r-em' }, estado.em ? 'Atualizado às ' + estado.em.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''),
+      e('button', { key: 'rf', type: 'button', className: 'exu-btn', disabled: carregando, onClick: buscar }, [
+        e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14, 'currentColor')),
+        e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
       ]),
     ]);
 
@@ -263,7 +247,7 @@
     else if (!dados) corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando o histórico…']);
     else corpo = painel(dados);
 
-    return e('div', { style: { padding: '8px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo]);
+    return e('div', { className: 'v2r-corpo' }, [cabecalho, corpo]);
   }
 
   window.DisponibilidadeView = DisponibilidadeView;

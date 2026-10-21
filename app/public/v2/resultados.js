@@ -29,16 +29,16 @@
     }
   };
 
-  // mesmo visual dos cards da aba Chamados
+  // v2: cartões, números e botões no layout novo
   const S = {
-    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, animation: 'fadeInUp 0.3s ease both', minWidth: 0 },
-    titulo: { fontWeight: 600, fontSize: 14 },
-    sub: { color: 'var(--muted-soft)', fontSize: 12, marginTop: 2 },
-    input: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 9px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit' },
-    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14, boxShadow: 'var(--shadow-card)', minWidth: 0 },
+    titulo: { fontWeight: 600, fontSize: 14.5 },
+    sub: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.5 },
+    input: { height: 34, background: 'var(--field-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' },
+    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, padding: '0 12px', background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 500, fontSize: 13, cursor: 'pointer' },
     link: { background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 },
     tag: (cor) => ({ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cor + '22', color: cor, whiteSpace: 'nowrap' }),
-    chip: (sel) => ({ padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
+    chip: (sel) => ({ height: 30, padding: '0 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'var(--card)', color: sel ? 'var(--accent-fg)' : 'var(--muted)' }),
   };
   const NOMES_TIPO = { fechamento: 'Fechamento p/ cobrança', cadastro_consultor: 'Cadastro de consultor', cadastro_usuario: 'Cadastro de usuário', inativacao_consultor: 'Inativação de consultor', ativacao_consultor: 'Ativação de consultor', desbloquear_usuario_sga: 'Desbloqueio de usuário do SGA', bloqueio_acesso: 'Bloqueio de acesso', cadastro_modelo: 'Cadastro de modelo (FIPE)', erro_exportar_modelo: 'Modelo não encontrado (exportar card)', senha_crm: 'Senha do CRM (resposta padrão)', senha_sistemas: 'Senha de sistemas (resposta padrão)', alterar_senha_sga: 'Alterar senha do SGA', foto_perfil: 'Foto de perfil', sincronizar_vistoria: 'Sincronizar vistoria' };
   const COR_TIPO = { fechamento: '#F5A524', cadastro_consultor: '#6DBE6A', cadastro_usuario: '#3B82F6', inativacao_consultor: '#F5514D', ativacao_consultor: '#10B981', desbloquear_usuario_sga: '#0EA5E9', bloqueio_acesso: '#8B5CF6', cadastro_modelo: '#0EA5A4', erro_exportar_modelo: '#EC4899', senha_crm: '#64748B', senha_sistemas: '#64748B', alterar_senha_sga: '#06B6D4', foto_perfil: '#D946EF', sincronizar_vistoria: '#F97316' };
@@ -96,18 +96,18 @@
   const pctVar = (x) => (x === null || x === undefined ? '' : ` (${sinal(x)}${Math.abs(x * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)`);
 
   function Numero({ rotulo, valor, sub, selo, icone, variacao }) {
-    return e('div', { className: 'res-kpi', style: { ...S.card, gap: 6 } }, [
-      e('div', { key: 'r', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-        e('div', { key: 'l', style: { fontSize: 12, color: 'var(--muted)', fontWeight: 600 } }, rotulo),
+    return e('div', { className: 'res-kpi v2r-kpi' }, [
+      e('div', { key: 'r', className: 'v2r-kpi-rot' }, [
+        e('span', { key: 'l' }, rotulo),
         selo
           ? e('span', { key: 's', style: { ...S.tag('#d97706'), background: 'var(--warn-tint)', color: 'var(--warn)' } }, selo)
           : icone
-            ? e('span', { key: 's', style: { display: 'flex' } }, Icon(icone, 15, 'var(--muted-soft)'))
+            ? e('span', { key: 's', className: 'v2r-kpi-ic' }, Icon(icone, 14, 'currentColor'))
             : null,
       ]),
-      e('div', { key: 'v', style: { fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' } }, valor),
+      e('div', { key: 'v', className: 'v2r-kpi-val' }, valor),
       variacao ? e('div', { key: 'va' }, variacao) : null,
-      e('div', { key: 'su', style: { fontSize: 12, color: 'var(--muted-soft)', lineHeight: 1.4 } }, sub),
+      e('div', { key: 'su', className: 'v2r-kpi-sub' }, sub),
     ]);
   }
 
@@ -183,13 +183,10 @@
     ]);
   }
 
-  function ResultadosView() {
-    const [salvo] = useState(() => ler(KEY_PERIODO, null) || {});
+  function ResultadosView({ filtro: filtroDeFora }) {
     const [origem, setOrigemEstado] = useState(() => (ORIGENS.some(([k]) => k === ler(KEY_ORIGEM, 'todas')) ? ler(KEY_ORIGEM, 'todas') : 'todas'));
     const setOrigem = (o) => { setOrigemEstado(o); gravar(KEY_ORIGEM, o); };
     const [manual, setManual] = useState({ dados: null, erro: null });
-    const [periodo, setPeriodo] = useState(PERIODOS.some((p) => p.id === salvo.periodo) ? salvo.periodo : '12');
-    const [datas, setDatas] = useState({ desde: salvo.desde || inicioSemanas(12), ate: salvo.ate || hoje() });
     const [incluirTeste, setIncluirTeste] = useState(false); // sempre começa desligado
     const [estado, setEstado] = useState({ carregando: true, dados: null, erro: null });
     const [todasAssoc, setTodasAssoc] = useState(false);
@@ -207,8 +204,8 @@
         .catch(() => {});
     }, []);
 
-    const p = PERIODOS.find((x) => x.id === periodo);
-    const filtro = p && p.semanas ? { desde: inicioSemanas(p.semanas), ate: hoje() } : datas;
+    // v2: o período vem de cima (escolhido uma vez para Chamados tratados e Disponibilidade)
+    const filtro = filtroDeFora;
     const datasOk = /^\d{4}-\d{2}-\d{2}$/.test(filtro.desde) && /^\d{4}-\d{2}-\d{2}$/.test(filtro.ate) && filtro.desde <= filtro.ate;
 
     const buscar = useCallback(async () => {
@@ -247,45 +244,30 @@
     useEffect(() => {
       buscarManuais();
     }, [buscarManuais]);
-    useEffect(() => {
-      gravar(KEY_PERIODO, { periodo, desde: datas.desde, ate: datas.ate });
-    }, [periodo, datas.desde, datas.ate]);
 
     const { dados, carregando, erro } = estado;
 
-    const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
-      e('div', { key: 't' }, [
-        e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Resultados'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } },
-          `Chamados do GLPI tratados pelas automações · ${dataBr(filtro.desde)} a ${dataBr(filtro.ate)}${estado.em ? ' · atualizado ' + estado.em.toLocaleTimeString('pt-BR') : ''}`),
+    // v2: filtros numa linha só, acima dos gráficos
+    const cabecalho = e('div', { key: 'head', className: 'exu-barra v2r-filtros' }, [
+      e('select', { key: 'fa', className: 'exu-select', value: assocSel, onChange: (ev) => setAssocSel(ev.target.value), 'aria-label': 'Filtrar por associação' }, [
+        e('option', { key: '', value: '' }, 'Todas as associações'),
+        ...listaAssoc.map((a) => e('option', { key: a.id, value: String(a.id) }, a.nome)),
       ]),
-      e('div', { key: 'f', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-        ...PERIODOS.map((x) => e('button', { key: x.id, style: S.chip(periodo === x.id), onClick: () => setPeriodo(x.id) }, x.rotulo)),
-        periodo === 'datas'
-          ? e('span', { key: 'd', style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' } }, [
-              e('input', { key: 'a', type: 'date', className: 'field-input', value: datas.desde, max: datas.ate, onChange: (ev) => setDatas((d) => ({ ...d, desde: ev.target.value })), style: S.input, 'aria-label': 'De' }),
-              'a',
-              e('input', { key: 'b', type: 'date', className: 'field-input', value: datas.ate, min: datas.desde, onChange: (ev) => setDatas((d) => ({ ...d, ate: ev.target.value })), style: S.input, 'aria-label': 'Até' }),
-            ])
-          : null,
-        e('select', { key: 'fa', className: 'field-input', value: assocSel, onChange: (ev) => setAssocSel(ev.target.value), style: { ...S.input, maxWidth: '100%' }, 'aria-label': 'Filtrar por associação' }, [
-          e('option', { key: '', value: '' }, 'Todas as associações'),
-          ...listaAssoc.map((a) => e('option', { key: a.id, value: String(a.id) }, a.nome)),
-        ]),
-        e('select', { key: 'ft', className: 'field-input', value: tipoSel, onChange: (ev) => setTipoSel(ev.target.value), style: { ...S.input, maxWidth: '100%' }, 'aria-label': 'Filtrar por tipo de chamado' }, [
-          e('option', { key: '', value: '' }, 'Todos os tipos'),
-          ...Object.entries((dados && dados.nomesTipos) || NOMES_TIPO).map(([k, v]) => e('option', { key: k, value: k }, v)),
-        ]),
-        e('label', { key: 'mt', style: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, padding: '6px 11px', borderRadius: 8, cursor: 'pointer', border: '1px dashed ' + (incluirTeste ? 'var(--warn)' : 'var(--border)'), background: incluirTeste ? 'var(--warn-tint)' : 'transparent', color: incluirTeste ? 'var(--warn)' : 'var(--muted)' } }, [
-          e('input', { key: 'c', type: 'checkbox', checked: incluirTeste, onChange: (ev) => setIncluirTeste(ev.target.checked) }),
-          e('span', { key: 't' }, 'Incluir modo teste'),
-        ]),
-        e('select', { key: 'fo', className: 'field-input', value: origem, onChange: (ev) => setOrigem(ev.target.value), style: { ...S.input, maxWidth: '100%' }, 'aria-label': 'Origem das execuções' },
-          ORIGENS.map(([k, v]) => e('option', { key: k, value: k }, v))),
-        e('button', { key: 'rf', style: S.btnSec, disabled: carregando, onClick: () => { buscar(); buscarManuais(); } }, [
-          e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
-          e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
-        ]),
+      e('select', { key: 'ft', className: 'exu-select', value: tipoSel, onChange: (ev) => setTipoSel(ev.target.value), 'aria-label': 'Filtrar por tipo de chamado' }, [
+        e('option', { key: '', value: '' }, 'Todos os tipos'),
+        ...Object.entries((dados && dados.nomesTipos) || NOMES_TIPO).map(([k, v]) => e('option', { key: k, value: k }, v)),
+      ]),
+      e('select', { key: 'fo', className: 'exu-select', value: origem, onChange: (ev) => setOrigem(ev.target.value), 'aria-label': 'Origem das execuções' },
+        ORIGENS.map(([k, v]) => e('option', { key: k, value: k }, v))),
+      e('label', { key: 'mt', className: 'v2r-teste' + (incluirTeste ? ' ligado' : '') }, [
+        e('input', { key: 'c', type: 'checkbox', checked: incluirTeste, onChange: (ev) => setIncluirTeste(ev.target.checked) }),
+        e('span', { key: 't' }, 'Incluir modo teste'),
+      ]),
+      (assocSel || tipoSel) ? e('button', { key: 'lf', type: 'button', className: 'exu-btn pequeno', onClick: () => { setAssocSel(''); setTipoSel(''); } }, 'Limpar filtros') : null,
+      e('span', { key: 'em', className: 'v2r-em' }, estado.em ? 'Atualizado às ' + estado.em.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''),
+      e('button', { key: 'rf', type: 'button', className: 'exu-btn', disabled: carregando, onClick: () => { buscar(); buscarManuais(); } }, [
+        e('span', { key: 'i', style: { display: 'flex', animation: carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14, 'currentColor')),
+        e('span', { key: 't' }, carregando ? 'Buscando…' : 'Atualizar'),
       ]),
     ]);
 
@@ -507,23 +489,93 @@
       ]);
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, corpo, verRes && window.VerChamado ? e(window.VerChamado, { key: 'ver', item: verRes, userToken: (ler('arxhub_chamados_acessos_v2', null) || {}).userToken, onFechar: () => setVerRes(null) }) : null]);
+    return e('div', { className: 'v2r-corpo' }, [cabecalho, corpo, verRes && window.VerChamado ? e(window.VerChamado, { key: 'ver', item: verRes, userToken: (ler('arxhub_chamados_acessos_v2', null) || {}).userToken, onFechar: () => setVerRes(null) }) : null]);
   }
 
   // A aba Resultados tem duas visões: os chamados tratados (esta tela) e a disponibilidade das automações (disponibilidade.js).
+  // v2: cabeçalho único com o seletor de período (atalhos e datas) e as duas visões em abas.
   const KEY_VISAO = 'arxhub_resultados_visao';
+  const KEY_PERIODO_V2 = 'arxhub_v2_periodo';
+  const dia = 86400000;
+  const iso = (d) => isoLocal(d);
+  const ATALHOS = [
+    ['hoje', 'Hoje', () => [hoje(), hoje()]],
+    ['ontem', 'Ontem', () => { const d = new Date(Date.now() - dia); return [iso(d), iso(d)]; }],
+    ['7d', 'Últimos 7 dias', () => [iso(new Date(Date.now() - 6 * dia)), hoje()]],
+    ['30d', 'Últimos 30 dias', () => [iso(new Date(Date.now() - 29 * dia)), hoje()]],
+    ['mes', 'Este mês', () => { const d = new Date(); return [iso(new Date(d.getFullYear(), d.getMonth(), 1)), hoje()]; }],
+    ['mesp', 'Mês passado', () => { const d = new Date(); return [iso(new Date(d.getFullYear(), d.getMonth() - 1, 1)), iso(new Date(d.getFullYear(), d.getMonth(), 0))]; }],
+    ['4s', '4 semanas', () => [inicioSemanas(4), hoje()]],
+    ['12s', '12 semanas', () => [inicioSemanas(12), hoje()]],
+    ['26s', '26 semanas', () => [inicioSemanas(26), hoje()]],
+    ['90d', 'Últimos 90 dias', () => [iso(new Date(Date.now() - 89 * dia)), hoje()]],
+  ];
+  function intervaloDe(p) {
+    if (p.chave === 'datas') return [p.desde, p.ate];
+    const a = ATALHOS.find((x) => x[0] === p.chave) || ATALHOS[7];
+    return a[2]();
+  }
+
+  function SeletorPeriodo({ periodo, mudar }) {
+    const [aberto, setAberto] = useState(false);
+    const [desde, ate] = intervaloDe(periodo);
+    const [rasc, setRasc] = useState({ desde, ate });
+    const caixa = React.useRef(null);
+    useEffect(() => {
+      if (!aberto) return undefined;
+      setRasc({ desde, ate });
+      const fora = (ev) => { if (caixa.current && !caixa.current.contains(ev.target)) setAberto(false); };
+      const esc = (ev) => { if (ev.key === 'Escape') setAberto(false); };
+      document.addEventListener('mousedown', fora);
+      document.addEventListener('keydown', esc);
+      return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
+    }, [aberto]);
+    const valido = /^\d{4}-\d{2}-\d{2}$/.test(rasc.desde) && /^\d{4}-\d{2}-\d{2}$/.test(rasc.ate) && rasc.desde <= rasc.ate;
+    const rotulo = periodo.chave === 'datas' ? 'Personalizado' : (ATALHOS.find((x) => x[0] === periodo.chave) || ATALHOS[7])[1];
+    return e('div', { ref: caixa, className: 'exr-periodo' }, [
+      e('button', { key: 'b', type: 'button', className: 'exu-btn', onClick: () => setAberto(!aberto), 'aria-expanded': aberto ? 'true' : 'false' }, [
+        Icon('History', 14, 'currentColor'), rotulo, e('span', { key: 'd', style: { color: 'var(--muted)', fontWeight: 400 } }, desde === ate ? dataBr(desde) : dataBr(desde) + ' a ' + dataBr(ate)), Icon('ChevronDown', 14, 'currentColor'),
+      ]),
+      aberto ? e('div', { key: 'p', className: 'exr-periodo-pop', role: 'dialog', 'aria-label': 'Escolher período' }, [
+        e('div', { key: 'a', className: 'exr-atalhos' }, ATALHOS.map(([k, t]) => e('button', { key: k, type: 'button', 'aria-pressed': periodo.chave === k ? 'true' : 'false', onClick: () => { mudar({ chave: k }); setAberto(false); } }, t))),
+        e('div', { key: 'd', className: 'exr-datas' }, [
+          e('b', { key: 't', style: { fontSize: 13 } }, 'Personalizado'),
+          e('label', { key: 'de' }, ['De', e('input', { key: 'i', type: 'date', value: rasc.desde, max: hoje(), onChange: (ev) => setRasc({ ...rasc, desde: ev.target.value }) })]),
+          e('label', { key: 'ate' }, ['Até', e('input', { key: 'i', type: 'date', value: rasc.ate, max: hoje(), onChange: (ev) => setRasc({ ...rasc, ate: ev.target.value }) })]),
+          !valido ? e('span', { key: 'e', className: 'exu-campo-erro' }, 'A data inicial precisa ser antes da final.') : null,
+          e('button', { key: 'ok', type: 'button', className: 'exu-btn primario pequeno', disabled: !valido, onClick: () => { mudar({ chave: 'datas', desde: rasc.desde, ate: rasc.ate }); setAberto(false); } }, 'Aplicar'),
+        ]),
+      ]) : null,
+    ]);
+  }
+
   function ResultadosComVisoes() {
     const [visao, setVisao] = useState(() => (ler(KEY_VISAO, 'chamados') === 'disponibilidade' ? 'disponibilidade' : 'chamados'));
+    const [periodo, setPeriodoEstado] = useState(() => {
+      const p = ler(KEY_PERIODO_V2, null);
+      return p && (p.chave === 'datas' ? p.desde && p.ate : ATALHOS.some((x) => x[0] === p.chave)) ? p : { chave: '12s' };
+    });
+    const setPeriodo = (p) => { setPeriodoEstado(p); gravar(KEY_PERIODO_V2, p); };
     const escolher = (v) => {
       setVisao(v);
       gravar(KEY_VISAO, v);
     };
-    const chip = (id, rotulo, icone) => e('button', { key: id, style: { ...S.chip(visao === id), display: 'flex', alignItems: 'center', gap: 6 }, onClick: () => escolher(id), 'aria-pressed': visao === id }, [Icon(icone, 13), rotulo]);
-    const barra = e('div', { key: 'visoes', style: { display: 'flex', gap: 8, padding: '18px 24px 0', maxWidth: 1200, margin: '0 auto', flexWrap: 'wrap' } }, [
-      chip('chamados', 'Chamados tratados', 'BarChart3'),
-      window.DisponibilidadeView ? chip('disponibilidade', 'Disponibilidade', 'Activity') : null,
+    const [desde, ate] = intervaloDe(periodo);
+    const filtro = { desde, ate };
+    return e('div', { className: 'exu-tela v2r-tela' }, [
+      e('header', { key: 'cab', className: 'exu-cab' }, [
+        e('div', { key: 't' }, [
+          e('h2', { key: 'h' }, 'Resultados'),
+          e('p', { key: 'p' }, (visao === 'disponibilidade' ? 'Quedas e voltas das automações e integrações' : 'Chamados do GLPI tratados pelas automações') + ' · ' + dataBr(desde) + (desde === ate ? '' : ' a ' + dataBr(ate))),
+        ]),
+        e(SeletorPeriodo, { key: 'per', periodo, mudar: setPeriodo }),
+      ]),
+      e('div', { key: 'abas', className: 'exu-abas', role: 'tablist' }, [
+        e('button', { key: 'c', type: 'button', role: 'tab', className: 'exu-aba', 'aria-selected': visao === 'chamados' ? 'true' : 'false', onClick: () => escolher('chamados') }, [Icon('BarChart3', 14, 'currentColor'), 'Chamados tratados']),
+        window.DisponibilidadeView ? e('button', { key: 'd', type: 'button', role: 'tab', className: 'exu-aba', 'aria-selected': visao === 'disponibilidade' ? 'true' : 'false', onClick: () => escolher('disponibilidade') }, [Icon('Activity', 14, 'currentColor'), 'Disponibilidade']) : null,
+      ]),
+      visao === 'disponibilidade' && window.DisponibilidadeView ? e(window.DisponibilidadeView, { key: 'disp', filtro }) : e(ResultadosView, { key: 'res', filtro }),
     ]);
-    return e('div', null, [barra, visao === 'disponibilidade' && window.DisponibilidadeView ? e(window.DisponibilidadeView, { key: 'disp' }) : e(ResultadosView, { key: 'res' })]);
   }
 
   window.ResultadosView = ResultadosComVisoes;
