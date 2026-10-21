@@ -86,11 +86,14 @@
     });
   }
 
-  // v3 abre com so=v3: só a Foto de perfil e as Alt. Status ganham a tela nova; as outras automações ficam como estão
+  // v3 abre com so=v3: Foto de perfil e Alt. Status têm tela própria; as demais do kit, o layout padrão
   const ehFoto = !!(document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento'));
   const ehAltStatus = !!(document.getElementById('acaoGlobal') && document.getElementById('cpfsInput') && document.getElementById('resultsTable'));
   const params = new URLSearchParams(location.search);
   const ehV3 = params.get('so') === 'v3';
+  // campos com rótulo visível mas sem ligação (label sem "for"): o leitor de tela não anunciava o nome. Só acrescenta
+  // aria-label, sem mexer na estrutura, então vale também nas telas montadas pelo React
+  if (ehV3) nomearCampos();
   // telas montadas pelo React (Cadastro de voluntário e de colaborador, em Python): mover ou editar nós que o React
   // controla quebra a tela; nelas fica só o estilo
   if (document.getElementById('root')) return;
@@ -103,12 +106,6 @@
   else if (ehAltStatus) altStatusNova();
   else if (ehV3) layoutPadrao();
   if (ehV3) acessosDoHubDiscretos();
-  // v3: o que só aparece durante o uso fica à vista (com selo) para validar o layout
-  if (ehV3 && params.get('mostrar') === 'tudo') {
-    document.documentElement.classList.add('v3-validar');
-    revelarTudo();
-    setTimeout(revelarTudo, 1500); // telas que escondem de novo depois de ler /api/opcoes
-  }
 
   // Logins que vieram do Hub (o app.js põe o selo "Preenchido pelo Hub" ao lado do campo, via ArxAcessos.marcarCampo):
   // usuário e senha somem e fica só "Acesso do Hub", com "Usar outro login" para quem precisar trocar. Sem o selo
@@ -170,17 +167,47 @@
     aplicar();
   }
 
-  function revelarTudo() {
-    // fora: tela ao vivo, janelas por cima, arquivo (tem zona própria), abas alternativas e mensagens vazias
-    const fora = '.pip, .pip-frame, .modal-overlay, input[type="file"], .panel-tab, .tab-panel, .error, .ok-msg, #modoProdutos';
-    document.querySelectorAll('.wrap .hidden').forEach((el) => {
-      if (el.matches(fora) || el.closest('.pip, .modal-overlay, #modoProdutos')) return;
-      el.classList.remove('hidden');
-      el.classList.add('v3-revelado');
-    });
-    ['resultsCard', 'historicoCard', 'mensagensCard'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el && el.style.display === 'none') { el.style.display = ''; el.classList.add('v3-revelado'); }
+  function nomearCampos() {
+    const temNome = (c) => c.getAttribute('aria-label') || c.getAttribute('aria-labelledby') || c.closest('label') ||
+      (c.id && document.querySelector('label[for="' + CSS.escape(c.id) + '"]'));
+    const aplicar = () => {
+      document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea').forEach((c) => {
+        if (temNome(c)) return;
+        let rotulo = c.previousElementSibling && c.previousElementSibling.tagName === 'LABEL' ? c.previousElementSibling : null;
+        // rótulo e campo no mesmo invólucro, sem outro campo junto (o par é inequívoco)
+        const pai = c.parentElement;
+        if (!rotulo && pai && pai.querySelectorAll(':scope > label').length === 1 && pai.querySelectorAll('input, select, textarea').length === 1) rotulo = pai.querySelector(':scope > label');
+        // rótulo logo antes da linha que agrupa o campo (ex.: select + botão numa .form-row), com um campo só na linha
+        if (!rotulo && pai && !pai.querySelector(':scope > label') && pai.querySelectorAll('input, select, textarea').length === 1 &&
+          pai.previousElementSibling && pai.previousElementSibling.tagName === 'LABEL' && !pai.previousElementSibling.htmlFor) rotulo = pai.previousElementSibling;
+        const texto = rotulo && rotulo.textContent.replace(/\s+/g, ' ').trim();
+        if (texto) c.setAttribute('aria-label', texto.slice(0, 120));
+      });
+    };
+    let agendado = false;
+    new MutationObserver(() => {
+      if (agendado) return;
+      agendado = true;
+      setTimeout(() => { agendado = false; aplicar(); }, 60);
+    }).observe(document.body, { childList: true, subtree: true });
+    aplicar();
+  }
+
+  // Abas pelo teclado (padrão WAI-ARIA): só a aba ativa entra no Tab; setas trocam, Home e End vão às pontas.
+  function ligarTeclasDasAbas(lista, irPara) {
+    if (!lista) return;
+    const abas = () => Array.from(lista.querySelectorAll('[role="tab"]'));
+    abas().forEach((a) => { a.tabIndex = a.getAttribute('aria-selected') === 'true' ? 0 : -1; });
+    lista.addEventListener('keydown', (ev) => {
+      const todas = abas();
+      const i = todas.indexOf(document.activeElement);
+      if (i < 0) return;
+      const destino = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: todas.length - 1 }[ev.key];
+      if (destino === undefined) return;
+      ev.preventDefault();
+      const alvo = todas[(destino + todas.length) % todas.length];
+      irPara(alvo.getAttribute('data-aba'));
+      alvo.focus();
     });
   }
 
@@ -215,16 +242,35 @@
     if (pRes) { pRes.appendChild(res); extrasRes.forEach((el) => pRes.appendChild(el)); }
     if (pHist) pHist.appendChild(hist);
 
+    // o cartão fica escondido até ter conteúdo (o app.js decide): a aba mostra uma mensagem no lugar
+    const escondido = (el) => el.classList.contains('hidden') || el.style.display === 'none' || el.hidden;
+    const comVazio = (painelAba, cartoes, texto) => {
+      const vazio = document.createElement('div');
+      vazio.className = 'card v2a-vazio';
+      vazio.textContent = texto;
+      painelAba.insertBefore(vazio, painelAba.firstChild);
+      const atualizar = () => { vazio.hidden = cartoes.some((c) => !escondido(c)); };
+      cartoes.forEach((c) => new MutationObserver(atualizar).observe(c, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] }));
+      atualizar();
+    };
+    if (pRes) comVazio(pRes, [res, ...extrasRes], 'O resultado aparece aqui quando a execução terminar.');
+    if (pHist) comVazio(pHist, [hist], 'Nenhuma execução carregada.');
+
+    // o histórico só carrega pelo botão "Histórico de execuções" do cabeçalho (o app.js busca e mostra o cartão)
+    const botaoHist = pHist ? Array.from(cab.querySelectorAll('button')).find((b) => /hist[óo]rico/i.test(b.textContent)) : null;
+    let abrindoHist = false;
     function irPara(aba) {
-      v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x.getAttribute('data-aba') === aba ? 'true' : 'false'));
+      v2.querySelectorAll('.v2f-aba').forEach((x) => {
+        const sel = x.getAttribute('data-aba') === aba;
+        x.setAttribute('aria-selected', sel ? 'true' : 'false');
+        x.tabIndex = sel ? 0 : -1;
+      });
       v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = p.getAttribute('data-painel') !== aba; });
+      if (aba === 'hist' && botaoHist && escondido(hist) && !abrindoHist) { abrindoHist = true; botaoHist.click(); abrindoHist = false; }
     }
     v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => irPara(b.getAttribute('data-aba'))));
-    // o botão "Histórico de execuções" do cabeçalho abria o cartão; o app.js continua carregando, e a aba aparece
-    if (pHist) {
-      Array.from(cab.querySelectorAll('button')).filter((b) => /hist[óo]rico/i.test(b.textContent))
-        .forEach((b) => b.addEventListener('click', () => setTimeout(() => irPara('hist'))));
-    }
+    if (botaoHist) botaoHist.addEventListener('click', () => { if (!abrindoHist) setTimeout(() => irPara('hist')); });
+    ligarTeclasDasAbas(v2.querySelector('.v2f-abas'), irPara);
 
     // contagem nas abas: linhas da tabela (ou itens) que o app.js preenche
     const contar = (cartao, id) => {
@@ -309,9 +355,9 @@
           <h2>1. Quem e o que fazer</h2>
           <div class="v2f-campo">
             <label>Ação</label>
-            <div class="v2a-acoes" role="radiogroup" aria-label="Ação">
-              <button type="button" role="radio" data-acao="bloquear"><b>Bloquear e inativar</b><small>Inativa no SGA e bloqueia no PowerCRM</small></button>
-              <button type="button" role="radio" data-acao="ativar"><b>Ativar e desbloquear</b><small>Ativa no SGA e desbloqueia no PowerCRM</small></button>
+            <div class="v2a-acoes" role="group" aria-label="Ação">
+              <button type="button" data-acao="bloquear"><b>Bloquear e inativar</b><small>Inativa no SGA e bloqueia no PowerCRM</small></button>
+              <button type="button" data-acao="ativar"><b>Ativar e desbloquear</b><small>Ativa no SGA e desbloqueia no PowerCRM</small></button>
             </div>
           </div>
           <div class="v2f-campo" id="v2aVarias"><label>CPFs, nomes ou ${pessoa}s</label></div>
@@ -371,11 +417,16 @@
 
     // abas: Executar (lista colada ou planilha, os campos originais) e Resultado; uma pessoa só é uma lista de uma linha
     function irPara(aba) {
-      v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x.getAttribute('data-aba') === aba ? 'true' : 'false'));
+      v2.querySelectorAll('.v2f-aba').forEach((x) => {
+        const sel = x.getAttribute('data-aba') === aba;
+        x.setAttribute('aria-selected', sel ? 'true' : 'false');
+        x.tabIndex = sel ? 0 : -1;
+      });
       v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = (aba === 'res') !== (p.getAttribute('data-painel') === 'res'); });
       if (aba !== 'res') atualizar();
     }
     v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => irPara(b.getAttribute('data-aba'))));
+    ligarTeclasDasAbas(v2.querySelector('.v2f-abas'), irPara);
 
     // ação: dois botões grandes ligados ao select original
     v2.querySelectorAll('[data-acao]').forEach((b) => b.addEventListener('click', () => {
@@ -387,7 +438,7 @@
     // resumo ao vivo (a "prévia" desta automação): ação, quem, empresas e sistemas
     const visivel = (el) => el && !el.classList.contains('hidden');
     function atualizar() {
-      v2.querySelectorAll('[data-acao]').forEach((b) => b.setAttribute('aria-checked', b.getAttribute('data-acao') === acao.value ? 'true' : 'false'));
+      v2.querySelectorAll('[data-acao]').forEach((b) => b.setAttribute('aria-pressed', b.getAttribute('data-acao') === acao.value ? 'true' : 'false'));
       const ativa = document.querySelector('.tab-btn.active[data-tab]');
       const planilha = ativa && ativa.getAttribute('data-tab') === 'planilha';
       const arquivo = $('planilhaInput') && $('planilhaInput').files[0];
@@ -534,10 +585,11 @@
 
     // abas
     v2.querySelectorAll('.v2f-aba').forEach((b) => b.addEventListener('click', () => {
-      v2.querySelectorAll('.v2f-aba').forEach((x) => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
+      v2.querySelectorAll('.v2f-aba').forEach((x) => { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); x.tabIndex = x === b ? 0 : -1; });
       v2.querySelectorAll('[data-painel]').forEach((p) => { p.hidden = p.getAttribute('data-painel') !== b.getAttribute('data-aba'); });
       if (b.getAttribute('data-aba') === 'hist') carregarHistorico();
     }));
+    ligarTeclasDasAbas(v2.querySelector('.v2f-abas'), (aba) => v2.querySelector('.v2f-aba[data-aba="' + aba + '"]').click());
 
     // prévia ao vivo: a arte de verdade, desenhada pela automação sem gravar (/api/foto.png)
     const urlPrevia = (n, d, baixar) => '/api/foto.png?nome=' + encodeURIComponent(n) + '&departamento=' + encodeURIComponent(d) + (baixar ? '&baixar=1' : '');

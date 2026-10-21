@@ -151,3 +151,27 @@
 .v3-anexo-lista img, .v3-anexo-icone { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--hover-bg-soft); }
 .v3-anexo-lista b { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v3-anexo-lista small { font-size: 11.5px; color: var(--muted); }
+
+/* ---------- acessibilidade (WCAG 2.1 AA) ---------- */
+/* contraste medido: texto normal >= 4,5:1 nos fundos usados (branco, #f5f5f5 e os tons claros de aviso e erro) */
+:root {
+  --muted: #636363;      /* 5,5:1 em #f5f5f5 (era 4,35:1) */
+  --muted-soft: #6b6b6b; /* 4,9:1 em #f5f5f5 e 5,3:1 no branco (era 3,1 a 3,4:1) */
+  --warn: #9a4a07;       /* 5,5:1 no fundo de aviso (era 2,8 a 3,2:1) */
+  --error: #c10009;      /* 5,4:1 no fundo de erro e 6,4:1 com texto branco (era 4,0:1) */
+  --chip-mix: 45%;       /* selos coloridos: 45% da cor + 55% do texto, >= 5,8:1 em todas as cores do cadastro */
+}
+:root[data-theme="dark"] {
+  --muted-soft: #a3a3a3; /* 6,0:1 em #262626 (era 3,2:1) */
+  --chip-mix: 62%;       /* >= 5,2:1 no tema escuro */
+}
+:root[data-theme="dark"] .alertas-contador.erro { background: #b91c1c; } /* branco 6,5:1 (era 2,9:1) */
+/* busca do topo: o campo tira o contorno; o anel vai na caixa inteira */
+.hub-search:focus-within { border-color: var(--ring-border) !important; box-shadow: 0 0 0 3px var(--ring); }
+.hub-search input::-webkit-search-cancel-button { cursor: pointer; }
+/* títulos de coluna ordenáveis: botão sem aparência de botão, com foco visível */
+.exr-tab th.ordenavel .v3-ordenar { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; border-radius: 4px; }
+.exr-tab th.num .v3-ordenar { justify-content: flex-end; }
+.exr-tab th.ordenavel .v3-ordenar:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
+.exd-faixa:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; border-radius: 4px; }
+.exr-tab th.ordenavel { cursor: default; } /* quem ordena é o botão dentro do título */
