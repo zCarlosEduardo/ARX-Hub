@@ -47,6 +47,53 @@
     e('div', { key: 'b', className: 'mc-rodape' }, Abrir()),
   ]);
 
+  // Atual melhorado: mesma estrutura do card de hoje. A cor do cadastro entra como variável (--c) e o CSS tinge.
+  const Seta = () => e('span', { className: 'mc-seta', 'aria-hidden': true }, Icon('ArrowLeft', 15, 'currentColor', 2.25));
+  const comCor = (a, extra) => ({ '--c': corDe(a), ...extra });
+
+  // A. refinado: brilho suave na cor do cadastro, ícone com anel, rodapé com sistemas e botão com seta
+  const Refinado = (a) => e('article', { className: 'mc-card mc-ref', style: comCor(a) }, [
+    e('div', { key: 't', className: 'mc-linha' }, [
+      e('span', { key: 'i', className: 'mc-ref-icone', 'aria-hidden': true }, Icon(a.icon, 20, corDe(a))),
+      Status(a),
+    ]),
+    e('div', { key: 'x', className: 'mc-ref-texto' }, [
+      e('h3', { key: 'n' }, a.name),
+      e('p', { key: 'd', className: 'mc-desc' }, a.description || 'Sem descrição'),
+    ]),
+    e('div', { key: 'b', className: 'mc-ref-rodape' }, [
+      Categorias(a) || e('span', { key: 'v' }),
+      e('a', { key: 'a', className: 'mc-ref-abrir', href: '/' }, ['Abrir', Seta()]),
+    ]),
+  ]);
+
+  // B. gradiente: fundo levemente tingido de cima para baixo e ícone maior
+  const Gradiente = (a) => e('article', { className: 'mc-card mc-ref mc-grad', style: comCor(a) }, [
+    e('div', { key: 't', className: 'mc-linha' }, [
+      e('span', { key: 'i', className: 'mc-ref-icone mc-grad-icone', 'aria-hidden': true }, Icon(a.icon, 22, corDe(a))),
+      Status(a),
+    ]),
+    Categorias(a) && e('div', { key: 'c' }, Categorias(a)),
+    e('div', { key: 'x', className: 'mc-ref-texto' }, [
+      e('h3', { key: 'n' }, a.name),
+      e('p', { key: 'd', className: 'mc-desc' }, a.description || 'Sem descrição'),
+    ]),
+    e('a', { key: 'a', className: 'mc-grad-abrir', href: '/' }, ['Abrir automação', Seta()]),
+  ]);
+
+  // C. limpo: o card inteiro é o link, sem botão; a seta aparece ao passar o mouse
+  const Limpo = (a) => e('a', { className: 'mc-card mc-ref mc-limpo', style: comCor(a), href: '/', 'aria-label': 'Abrir ' + a.name }, [
+    e('div', { key: 't', className: 'mc-linha' }, [
+      e('span', { key: 'i', className: 'mc-ref-icone', 'aria-hidden': true }, Icon(a.icon, 20, corDe(a))),
+      Seta(),
+    ]),
+    e('div', { key: 'x', className: 'mc-ref-texto' }, [
+      e('h3', { key: 'n' }, a.name),
+      e('p', { key: 'd', className: 'mc-desc' }, a.description || 'Sem descrição'),
+    ]),
+    e('div', { key: 'b', className: 'mc-ref-rodape' }, [Categorias(a) || e('span', { key: 'v' }), Status(a)]),
+  ]);
+
   // 2. lista compacta: cabe muito mais automação na tela
   const Compacto = (a) => e('article', { className: 'mc-card mc-compacto' }, [
     Quadro(a, 34),
@@ -113,6 +160,9 @@
 
   const MODELOS = [
     { chave: 'atual', nome: 'Modelo 1: atual', texto: 'O card de hoje, para comparar.', desenhar: Atual, grade: 'mc-grade' },
+    { chave: 'refinado', nome: 'Atual melhorado A: refinado', texto: 'A mesma estrutura, com brilho suave na cor do cadastro, ícone com anel, sistemas no rodapé e botão com seta.', desenhar: Refinado, grade: 'mc-grade' },
+    { chave: 'gradiente', nome: 'Atual melhorado B: gradiente', texto: 'Fundo levemente tingido com a cor do cadastro, ícone maior e botão que ganha a cor ao passar o mouse.', desenhar: Gradiente, grade: 'mc-grade' },
+    { chave: 'limpo', nome: 'Atual melhorado C: limpo', texto: 'Sem botão: o card inteiro abre a automação e a seta aparece ao passar o mouse. Status no rodapé.', desenhar: Limpo, grade: 'mc-grade' },
     { chave: 'compacto', nome: 'Modelo 2: lista compacta', texto: 'Uma linha por automação. Mostra mais automações sem rolar.', desenhar: Compacto, grade: 'mc-lista' },
     { chave: 'faixa', nome: 'Modelo 3: faixa colorida', texto: 'Borda na cor do cadastro e ícone ao lado do nome.', desenhar: Faixa, grade: 'mc-grade' },
     { chave: 'numeros', nome: 'Modelo 4: com números', texto: 'Execuções, itens feitos e taxa de sucesso dos últimos 30 dias (fora o modo teste).', desenhar: Numeros, grade: 'mc-grade' },
@@ -152,7 +202,7 @@
       e('header', { key: 'h', className: 'mc-cab' }, [
         e('div', { key: 't' }, [
           e('h1', { key: 'h' }, 'Modelos de card'),
-          e('p', { key: 'p', className: 'mc-desc' }, 'Os mesmos dados do painel em seis visuais. Diga qual modelo prefere e ele vai para o Hub.'),
+          e('p', { key: 'p', className: 'mc-desc' }, 'Os mesmos dados do painel em visuais diferentes. Diga qual modelo prefere e ele vai para o Hub.'),
         ]),
         e('div', { key: 'a', className: 'mc-acoes' }, [
           lista && lista.length > 6 ? e('button', { key: 'todas', type: 'button', className: 'mc-botao', onClick: () => setTodas(!todas) },
