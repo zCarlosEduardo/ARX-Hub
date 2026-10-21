@@ -204,6 +204,13 @@
     ]);
   };
 
+  // Refinado básico: só ícone, nome, status, descrição e Abrir. Sem brilho, menu, sistemas nem endereço.
+  const RefBasico = (a) => e('article', { className: 'mc-card mc-basico', style: comCor(a) }, [
+    e('div', { key: 't', className: 'mc-linha' }, [IconeRef(a, 38), Status(a)]),
+    Texto(a),
+    e('a', { key: 'a', className: 'mc-basico-abrir', href: '/' }, ['Abrir', Seta()]),
+  ]);
+
   const RefFaixa = (a, ctx) => e('article', { className: 'mc-card mc-ref mc-ref-faixa', style: comCor(a) }, [
     e('div', { key: 't', className: 'mc-linha' }, [IconeRef(a), e('div', { key: 'd', className: 'mc-ref-acoes' }, [Status(a), Menu(a, ctx)])]),
     Texto(a),
@@ -295,6 +302,8 @@
     { chave: 'cabecalho', nome: 'Modelo 6: cabeçalho colorido', texto: 'Topo tingido com a cor do cadastro e ícone preenchido.', desenhar: Cabecalho, grade: 'mc-grade' },
   ];
 
+  const SO_BASICO = new URLSearchParams(location.search).get('so') === 'basico';
+
   function App() {
     const [lista, setLista] = useState(null);
     const [erro, setErro] = useState('');
@@ -347,6 +356,28 @@
       ]),
       e('div', { key: 'g', className: m.grade }, mostradas.map((a) => e(React.Fragment, { key: a.id }, m.desenhar(a, ctx)))),
     ]);
+    const gradeDe = (desenhar, l) => e('div', { className: 'mc-grade' }, l.map((a) => e(React.Fragment, { key: a.id }, desenhar(a, ctx))));
+    const basico = lista && lista.length ? e('section', { key: 'basico', id: 'basico', className: 'mc-modelo', 'aria-labelledby': 't-basico' }, [
+      e('div', { key: 'c', className: 'mc-modelo-cab mc-entre-cab' }, [
+        e('div', { key: 't' }, [
+          e('h2', { key: 'h', id: 't-basico' }, 'Refinado básico'),
+          e('p', { key: 'p', className: 'mc-desc' }, 'O refinado com o mínimo: ícone, nome, status, descrição e Abrir.'),
+        ]),
+        e('span', { key: 's', className: 'mc-nota' }, plural(lista.length, 'automação', 'automações') + ' · ' + online + ' online · ' + (lista.length - online) + ' offline'),
+      ]),
+      e(React.Fragment, { key: 'g' }, gradeDe(RefBasico, principais)),
+      doBanco.length ? e('section', { key: 'db', className: 'db-section', 'aria-label': 'Banco de Dados' }, [
+        e('div', { key: 'head', className: 'db-section-head' }, [
+          e('div', { key: 'icon', className: 'db-section-icon' }, Icon('Database', 18, 'var(--db-color)')),
+          e('div', { key: 'txt', style: { minWidth: 0 } }, [
+            e('div', { key: 't', className: 'mc-db-titulo' }, 'Banco de Dados'),
+            e('div', { key: 's', className: 'mc-desc' }, 'Rotinas que alimentam e mantêm o banco-central.'),
+          ]),
+          e('span', { key: 'count', className: 'db-section-count' }, plural(doBanco.length, 'automação', 'automações')),
+        ]),
+        e(React.Fragment, { key: 'grid' }, gradeDe(RefBasico, doBanco)),
+      ]) : null,
+    ]) : null;
     const grupo = (chave, titulo, texto) => e('div', { key: chave, className: 'mc-grupo' }, [
       e('h2', { key: 'h' }, titulo), e('p', { key: 'p', className: 'mc-desc' }, texto),
     ]);
@@ -371,6 +402,21 @@
         gradeCompleta('grid', doBanco),
       ]) : null,
     ]) : null;
+    if (SO_BASICO) {
+      return e('main', { className: 'mc-tela' }, [
+        e('header', { key: 'h', className: 'mc-cab' }, [
+          e('h1', { key: 'h' }, 'Automações'),
+          e('div', { key: 'a', className: 'mc-acoes' }, [
+            e('button', { key: 'tema', type: 'button', className: 'mc-botao', onClick: trocarTema }, tema === 'dark' ? 'Tema claro' : 'Tema escuro'),
+            e('a', { key: 'todos', className: 'mc-botao', href: '/modelos-cards.html' }, 'Ver todos os modelos'),
+          ]),
+        ]),
+        erro ? e('p', { key: 'erro', className: 'mc-aviso', role: 'alert' }, erro) : null,
+        !lista && !erro ? e('p', { key: 'c', className: 'mc-aviso' }, 'Carregando automações…') : null,
+        lista && !lista.length ? e('p', { key: 'v', className: 'mc-aviso' }, 'Nenhuma automação cadastrada.') : null,
+        basico,
+      ]);
+    }
     return e('main', { className: 'mc-tela' }, [
       e('header', { key: 'h', className: 'mc-cab' }, [
         e('div', { key: 't' }, [
@@ -385,6 +431,7 @@
         ]),
       ]),
       e('nav', { key: 'n', className: 'mc-indice', 'aria-label': 'Modelos' }, [
+        e('a', { key: 'basico', href: '#basico', className: 'destaque' }, 'Refinado básico'),
         e('a', { key: 'completo', href: '#completo', className: 'destaque' }, 'Refinado completo'),
         ...VARIACOES.map((m) => e('a', { key: m.chave, href: '#' + m.chave }, m.nome)),
         e('a', { key: 'outros', href: '#outros' }, 'Outros modelos'),
@@ -392,6 +439,7 @@
       erro ? e('p', { key: 'erro', className: 'mc-aviso', role: 'alert' }, erro) : null,
       !lista && !erro ? e('p', { key: 'c', className: 'mc-aviso' }, 'Carregando automações…') : null,
       lista && !lista.length ? e('p', { key: 'v', className: 'mc-aviso' }, 'Nenhuma automação cadastrada.') : null,
+      basico,
       completo,
       mostradas.length ? grupo('gv', 'Variações do refinado', 'Mesmo estilo, com arranjos diferentes. As variações mostram 6 automações; use "Mostrar todas" para ver o resto.') : null,
       ...(mostradas.length ? VARIACOES.map(secao) : []),

@@ -147,3 +147,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-sans);
 .mc-ref-faixa { box-shadow: inset 0 3px 0 var(--c); }
 .mc-ref-faixa:hover { box-shadow: inset 0 3px 0 var(--c), var(--shadow-card-hover); }
 .mc-ref:has(.mc-menu-pop) { z-index: 30; }
+
+/* Refinado básico */
+.mc-basico { gap: 12px; padding: 16px; transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
+.mc-basico:hover { border-color: color-mix(in srgb, var(--c) 35%, var(--border)); box-shadow: var(--shadow-card-hover); }
+.mc-basico .mc-ref-icone { border-radius: 10px; }
+.mc-basico-abrir { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--secondary); color: var(--text); font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.mc-basico-abrir:hover { background: var(--hover-bg); border-color: var(--border-hover); }
+.mc-basico-abrir:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 2px; }
+.mc-basico:hover .mc-seta { transform: scaleX(-1) translateX(-3px); }
+@media (prefers-reduced-motion: reduce) { .mc-basico { transition: none; } }
