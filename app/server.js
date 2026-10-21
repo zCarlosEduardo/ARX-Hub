@@ -57,7 +57,6 @@ app.get(['/', '/index.html'], (req, res, next) => {
 // O layout novo (antes em /v3/) virou o Hub principal; endereços salvos de /v3/ vão para /. A versão anterior
 // fica em /original/ como reserva.
 app.get(['/v3', '/v3/', '/v3/index.html'], (req, res) => res.redirect(302, '/'));
-app.get('/original', (req, res) => res.redirect(302, '/original/'));
 
 // Tutoriais em vídeo do botão "?" (Hub e automações): pasta montada no container, fora do Git (mídia pesada).
 // CORS aberto porque as automações, em outras portas, leem o índice tutoriais.json daqui.
