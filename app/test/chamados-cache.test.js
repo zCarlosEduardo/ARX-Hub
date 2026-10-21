@@ -458,3 +458,25 @@ test('store: sem criarFonte (navegador sem EventSource) segue só com a busca no
   assert.equal(m.store.estado().aoVivo, false);
   assert.equal(m.store.estado().dados.itens.length, 1);
 });
+
+// Cada aba do Hub segura conexões abertas (avisos); o navegador abre no máximo 6 por endereço. Aba escondida solta
+// o canal e, ao voltar, reabre e busca a lista (pode ter perdido avisos enquanto estava fechado).
+test('store: pausar fecha o canal; retomar reabre e busca de novo; sem token não reabre', async () => {
+  const m = montarComCanal({ respostas: [lista(), lista()] });
+  m.store.iniciar();
+  await umTick();
+  assert.equal(m.f.fontes.length, 1);
+  m.store.pausar();
+  assert.equal(m.f.fontes[0].fechada, true);
+  m.store.pausar();
+  m.store.retomar();
+  assert.equal(m.f.fontes.length, 2);
+  assert.equal(m.f.fontes[1].fechada, false);
+  await umTick();
+  assert.equal(m.pedidos.length, 2);
+  const sem = montarComCanal({ token: '', respostas: [] });
+  sem.store.iniciar();
+  sem.store.pausar();
+  sem.store.retomar();
+  assert.equal(sem.f.fontes.length, 0);
+});
