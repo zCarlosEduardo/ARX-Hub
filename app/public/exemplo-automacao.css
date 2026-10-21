@@ -216,3 +216,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--au); }
   .pip { width: calc(100vw - 40px); }
 }
 @media (prefers-reduced-motion: reduce) { .pip, .pip.minimizado::before, .pip-ponto-vivo, .pip-vivo i::after { animation: none; } .tv-cursor { transition: none; } }
+
+/* login vindo de Meus acessos: uma linha discreta no lugar dos campos */
+.au-login-hub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }

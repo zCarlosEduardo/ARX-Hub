@@ -22,6 +22,16 @@
     document.documentElement.style.setProperty('--au-fg', claro ? '#111111' : '#ffffff');
   })();
 
+  // Login de Meus acessos: com o cofre do Hub aberto, a automação recebe os logins e não mostra os campos de login.
+  // Fora do Hub, ou com o cofre travado, os campos aparecem para digitar (como nas automações reais).
+  function useLoginHub() {
+    let cofre = null;
+    try { cofre = window.parent !== window && window.parent.ExemploTopo ? window.parent.ExemploTopo.cofre : null; } catch (err) { cofre = null; /* fora do Hub */ }
+    const [aberto, setAberto] = useState(cofre ? cofre.aberto : false);
+    useEffect(() => (cofre ? cofre.assinar(setAberto) : undefined), []);
+    return aberto;
+  }
+  const SOBRE_LOGIN = /Lembrar|usuário e senha|o login|login padrão|login do PowerCRM é global/i;
   const todosCampos = (secoes) => secoes.flatMap((s) => s.campos).flatMap((c) => (c.t === 'grupo' ? c.campos : [c]));
   function valoresIniciais(def) {
     const v = {};
@@ -98,7 +108,8 @@
   }
 
   // Associações agrupadas pelo login do Hub que vale nelas (Cadastro de colaborador).
-  function LoginsAssoc({ c, valor, set }) {
+  function LoginsAssoc({ c, valor, set, hub }) {
+    if (hub) return e(Empresas, { c: Object.assign({}, c, { opcoes: A.EMP.map((x) => 'Associação ' + x) }), valor, set });
     const grupos = [['ana.lima', ['Associação Aurora', 'Associação Boreal', 'Associação Cerrado']], ['ana.lima.delta', ['Associação Delta', 'Associação Estrela', 'Associação Farol']]];
     const misturou = grupos.filter(([, l]) => l.some((a) => valor.includes(a))).length > 1;
     return e('div', { className: 'au-campo' }, [
@@ -195,8 +206,20 @@
     ]);
   }
 
-  function Campo({ c, v, set, tocado, avisar }) {
+  function Campo({ c, v, set, tocado, avisar, hub }) {
+    const [outro, setOutro] = useState(false);
     const valor = v[c.k];
+    // com login no Hub: nada de campos de login, "Lembrar" nem textos sobre login
+    if (hub && !outro) {
+      if (c.t === 'lembrar' || (c.t === 'senha' && c.hub) || (c.t === 'ajuda' && SOBRE_LOGIN.test(c.texto))) return null;
+      if (c.t === 'login' || c.t === 'logins-sga') {
+        return e('div', { className: 'au-login-hub' }, [
+          Ico('Lock', 13, 'currentColor'),
+          e('span', { key: 't' }, c.t === 'logins-sga' ? 'Logins do SGA de Meus acessos, um por associação' : 'Login do ' + c.sistema + ' de Meus acessos'),
+          e('button', { key: 'b', type: 'button', className: 'au-link', onClick: () => setOutro(true) }, 'Usar outro login'),
+        ]);
+      }
+    }
     const mudar = (x) => set(c.k, x);
     const erro = tocado && c.obrig && vazio(valor) ? 'Obrigatório.' : '';
     const rot = (r) => (r ? e('label', { key: 'l', htmlFor: c.k }, r) : null);
@@ -209,11 +232,11 @@
     switch (c.t) {
       case 'ajuda': return e(Ajuda, { texto: c.texto, destaque: c.destaque });
       case 'subtitulo': return e('h3', { className: 'au-sub' }, c.texto);
-      case 'grupo': return e('div', { className: 'au-linha2' }, c.campos.filter((x) => visivel(x, v)).map((x) => e(Campo, { key: x.k, c: x, v, set, tocado, avisar })));
+      case 'grupo': return e('div', { className: 'au-linha2' }, c.campos.filter((x) => visivel(x, v)).map((x) => e(Campo, { key: x.k, c: x, v, set, tocado, avisar, hub })));
       case 'empresas': return e(Empresas, { c, valor, set: mudar });
       case 'login': return e(Login, { c });
       case 'logins-sga': return e(LoginsSga, { c, avisar });
-      case 'logins-assoc': return e(LoginsAssoc, { c, valor, set: mudar });
+      case 'logins-assoc': return e(LoginsAssoc, { c, valor, set: mudar, hub: hub && !outro });
       case 'lembrar': return e('div', { className: 'au-lembrar' }, [e('label', { key: 'l', className: 'au-check' }, [e('input', { key: 'i', type: 'checkbox', defaultChecked: false }), 'Lembrar neste navegador']), e('button', { key: 'b', type: 'button', className: 'au-link', onClick: () => avisar('Logins esquecidos neste navegador (exemplo).', 'ok') }, 'Esquecer')]);
       case 'check': return e('label', { className: 'au-check' + (c.forte ? ' forte' : '') }, [e('input', { key: 'i', type: 'checkbox', checked: !!valor, onChange: (ev) => mudar(ev.target.checked) }), c.rot]);
       case 'checks': return e('div', { className: 'au-campo' }, [e('span', { key: 'r', className: 'au-rot' }, c.rot), e('div', { key: 'c', className: 'au-lembrar' }, c.opcoes.map((o) => e('label', { key: o, className: 'au-check' }, [e('input', { key: 'i', type: 'checkbox', checked: valor.includes(o), onChange: () => mudar(valor.includes(o) ? valor.filter((x) => x !== o) : [...valor, o]) }), o])))]);
@@ -448,6 +471,7 @@
     const [execs, setExecs] = useState({});
     const [hist, setHist] = useState(false);
     const [avisar, avisos] = useAvisos();
+    const hub = useLoginHub();
     const parar = useRef(false);
     const logRef = useRef(null);
     const exec = execs[aba || 'unica'] || null;
@@ -517,12 +541,12 @@
           e('span', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [e('span', { key: 's', className: 'exu-sit ' + (err ? 'pendencia' : 'concluido') }, [e('i', { key: 'i' }), err ? err + (err === 1 ? ' erro' : ' erros') : 'Sem erros']), RAIZ.historico === 'Leituras feitas' ? e('button', { key: 'x', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => avisar('Leitura apagada (exemplo).', 'ok') }, 'Apagar') : null]),
         ]))),
       ]) : null,
-      e('div', { key: 'g', className: 'au-grade' + (def.umaColuna ? ' uma' : '') }, def.secoes.map((s, i) => {
+      e('div', { key: 'g', className: 'au-grade' + (def.umaColuna ? ' uma' : '') }, def.secoes.filter((s) => !(hub && s.soLogin)).map((s, i) => {
         if (!s.semNumero) numero = s.numero || numero + 1;
         return e('section', { key: aba + i, className: 'au-card' + (s.larga ? ' larga' : '') }, [
           e('h2', { key: 'h' }, [s.semNumero ? null : e('span', { key: 'n', className: 'au-num' }, String(s.numero || numero)), s.titulo]),
           e('div', { key: 'c', className: 'au-campos' }, [
-            ...s.campos.filter((c) => visivel(c, v)).map((c, j) => e(Campo, { key: (c.k || c.t) + j, c, v, set, tocado, avisar })),
+            ...s.campos.filter((c) => visivel(c, v)).map((c, j) => e(Campo, { key: (c.k || c.t) + j, c, v, set, tocado, avisar, hub })),
             s.iniciar ? e('div', { key: 'ini', className: 'au-iniciar' }, [
               exec && exec.rodando
                 ? e('button', { key: 'p', type: 'button', className: 'exu-btn perigo', onClick: () => { parar.current = true; } }, [Ico('Square', 14, 'currentColor'), 'Parar'])

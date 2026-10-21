@@ -140,7 +140,7 @@
     'atualizar-cooperativas': {
       titulo: 'Atualizar cooperativas', icone: 'Building2', sistemas: ['PowerCRM'], umaColuna: true,
       sub: 'Busca as cooperativas de cada associação no SGA (API) e no PowerCRM (navegador) e grava no banco central.',
-      secoes: [{ titulo: 'Login do PowerCRM', semNumero: true, campos: [
+      secoes: [{ titulo: 'Execução', semNumero: true, campos: [
         { t: 'ajuda', texto: 'O login não fica salvo no servidor e é usado apenas durante a execução. A opção "Lembrar" guarda os dados somente neste navegador.' },
         loginCrm({ rotUsuario: 'E-mail', rotSenha: 'Senha' }), lembrar,
       ], iniciar: 'Atualizar cooperativas' }],
@@ -197,8 +197,8 @@
       titulo: 'Gerenciar permissões', icone: 'Lock', sistemas: ['SGA', 'PowerCRM'],
       sub: 'Departamentos, roles e grupos de permissão do SGA e do PowerCRM, por associação.',
       secoes: [
-        { titulo: 'Logins do SGA', semNumero: true, campos: [{ k: 'logins', t: 'logins-sga', ajuda: 'Informe um ou mais logins do SGA e marque as associações em que cada um é válido. Use mais de um login quando uma senha vale apenas para parte das associações.' }, lembrar] },
-        { titulo: 'Login do PowerCRM', semNumero: true, campos: [{ t: 'ajuda', texto: 'Uma única conta acessa várias empresas, por isso o login do PowerCRM é global.' }, loginCrm(), lembrar, { t: 'ajuda', texto: 'O login não fica salvo no servidor. Com a opção "Lembrar" marcada, é guardado somente neste navegador.' }] },
+        { titulo: 'Logins do SGA', semNumero: true, soLogin: true, campos: [{ k: 'logins', t: 'logins-sga', ajuda: 'Informe um ou mais logins do SGA e marque as associações em que cada um é válido. Use mais de um login quando uma senha vale apenas para parte das associações.' }, lembrar] },
+        { titulo: 'Login do PowerCRM', semNumero: true, soLogin: true, campos: [{ t: 'ajuda', texto: 'Uma única conta acessa várias empresas, por isso o login do PowerCRM é global.' }, loginCrm(), lembrar, { t: 'ajuda', texto: 'O login não fica salvo no servidor. Com a opção "Lembrar" marcada, é guardado somente neste navegador.' }] },
         { titulo: 'Buscar grupos de permissão', numero: 1, larga: true, campos: [{ t: 'ajuda', texto: 'Lê os grupos de permissão de todas as associações nos dois sistemas.' }], iniciar: 'Buscar em todas as associações (SGA e PowerCRM)' },
         { titulo: 'Departamentos', numero: 2, campos: [{ k: 'deptos', t: 'lista-add', colunas: ['Departamento'], placeholders: ['Nome do departamento (ex.: Cadastro)'], valor: [['Cadastro'], ['Comercial'], ['Financeiro'], ['Eventos']] }] },
         { titulo: 'Roles', numero: 3, campos: [{ k: 'roles', t: 'lista-add', colunas: ['Departamento', 'Chave', 'Nome'], placeholders: ['@deptos', 'Chave padronizada (ex.: ANALISTA_CADASTRO)', 'Nome (ex.: Analista de Cadastro)'], valor: [['Cadastro', 'ANALISTA_CADASTRO', 'Analista de Cadastro'], ['Comercial', 'CONSULTOR', 'Consultor'], ['Comercial', 'SUPERVISOR_COMERCIAL', 'Supervisor comercial']] }] },

@@ -9,7 +9,7 @@
   // Cofre de exemplo: começa travado; abrir e travar avisam quem depende dele (Abrir chamado).
   const ouvintes = new Set();
   const cofre = {
-    aberto: false, pedirAbrir: null,
+    aberto: true, pedirAbrir: null,
     mudar(v) { cofre.aberto = v; ouvintes.forEach((f) => f(v)); },
     assinar(f) { ouvintes.add(f); return () => ouvintes.delete(f); },
   };
