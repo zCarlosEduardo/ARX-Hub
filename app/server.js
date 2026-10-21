@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const compression = require('compression');
 const { pool, init, waitForDb, rowToAutomation } = require('./db');
 const glpi = require('./glpi');
 const { validarId, validarAutomacao, validarUrlTeste } = require('./validacao');
@@ -16,6 +17,7 @@ const { mascararUrl } = require('./mascara');
 const { criarPasses } = require('./passe');
 const { podeVer, validarGrupos } = require('./admin');
 const { resumirExecucoes } = require('./execucoes');
+const { deveComprimir } = require('./compressao');
 const { criarRegistroExecucoes, repoExecucoes } = require('./execucoesRegistro');
 
 const passes = criarPasses();
@@ -27,6 +29,9 @@ const URL_CHAMADOS = (process.env.CHAMADOS_GLPI_URL || 'http://host.docker.inter
 const app = express();
 // O front do Hub fala com o chamados-glpi por aqui, sem ver o endereço dele. Antes do express.json: o corpo passa em fluxo.
 app.use('/servicos/chamados', (req, res) => repassar(req, res, URL_CHAMADOS, req.url, '/servicos/chamados'));
+// Respostas comprimidas (o front tem ~800 KB de js/css; com gzip, cerca de um terço). Depois do repasse acima, que
+// passa em fluxo; o SSE (/api/events, text/event-stream) não é comprimido para os avisos não ficarem presos no buffer.
+app.use(compression({ filter: deveComprimir }));
 // o "Abrir chamado" pode levar fotos e documentos (glpi.lerAnexos: até 25 MB, em base64); o resto fica no limite padrão
 const jsonPadrao = express.json();
 const jsonComAnexos = express.json({ limit: '36mb' });
