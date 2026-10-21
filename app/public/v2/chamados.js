@@ -1,3 +1,4 @@
+// v2 (Hub de exemplo): cópia de chamados.js com a tela no layout novo (lista, visões, painel lateral); a lógica é a mesma.
 // Aba "Chamados" do ARX Hub: chamados do GLPI (entidade Sistemas) que as
 // automações sabem resolver aparecem como cards: "Rodar" ou "Não rodar".
 // Quem faz o trabalho é o serviço chamados-glpi (porta 4013): ele lê o GLPI,
@@ -199,9 +200,10 @@
   }
 
   // estilos (mesmo visual dos cards do Painel)
+  // v2: mesmos nomes do Hub atual (detalhesSenha usa label e chip), visual do layout novo
   const S = {
-    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeInUp 0.3s ease both' },
-    label: { fontSize: 11.5, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 },
+    card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: 'var(--shadow-card)' },
+    label: { fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 },
     input: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', color: 'var(--text)', fontSize: 13.5, boxSizing: 'border-box', fontFamily: 'inherit' },
     btnPrim: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
     btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
@@ -235,7 +237,9 @@
     ]);
   }
 
-  function VerChamado({ item, userToken, onFechar }) {
+  // v2: painel lateral no layout novo. Mostra o chamado como conversa (pedido, acompanhamentos, soluções e as execuções da
+  // automação, do mais antigo para o mais novo). `extra` (opcional) vem da aba Chamados: escolhas e ações do card.
+  function VerChamado({ item, userToken, onFechar, extra }) {
     const [d, setD] = useState({ carregando: true, erro: null, chamado: null });
     const [h, setH] = useState({ carregando: true, erro: null, itens: [] });
     const [copiado, setCopiado] = useState(false);
@@ -255,7 +259,7 @@
     }, [item.id, userToken]);
 
     useEffect(() => {
-      const tecla = (ev) => { if (ev.key === 'Escape') onFechar(); };
+      const tecla = (ev) => { if (ev.key === 'Escape' && !document.querySelector('.exu-modal-fundo')) onFechar(); };
       window.addEventListener('keydown', tecla);
       return () => window.removeEventListener('keydown', tecla);
     }, [onFechar]);
@@ -263,84 +267,70 @@
     const c = d.chamado;
     const linha = [];
     if (c) {
-      linha.push({ k: 'aberto', em: c.abertoEm, autor: c.requerente });
+      linha.push({ k: 'aberto', em: c.abertoEm, autor: c.requerente, texto: c.descricao, de: 'pedido' });
       c.acompanhamentos.forEach((x, i) => linha.push({ ...x, k: 'acomp' + i, de: 'acomp' }));
       c.solucoes.forEach((x, i) => linha.push({ ...x, k: 'sol' + i, de: 'solucao' }));
     }
     h.itens.forEach((x) => linha.push({ ...x, k: 'exec' + x.id, de: 'exec' }));
     linha.forEach((x) => { x.t = tempo(x.em); });
-    linha.sort((a, b) => b.t - a.t);
+    linha.sort((a, b) => a.t - b.t);
 
-    const marcador = (cor) => e('span', { style: { position: 'absolute', left: -22, top: 4, width: 9, height: 9, borderRadius: '50%', background: cor, boxShadow: '0 0 0 3px var(--card)' } });
     function evento(x) {
-      let cor; let topo; let corpo = null;
       if (x.de === 'exec') {
-        cor = COR_EXEC[x.status] || 'var(--muted)';
-        topo = [
-          e('span', { key: 's', style: { fontWeight: 700, fontSize: 12.5, color: cor } }, 'Automação · ' + (NOME_EXEC[x.status] || x.status)),
-          x.teste && x.status !== 'teste' ? e('span', { key: 'm', style: S.tag('#F5A524') }, 'Modo teste') : null,
-        ];
-        corpo = [
-          e('div', { key: 'q', style: { fontSize: 12, color: 'var(--muted)' } }, [x.tipo ? x.tipo : null, x.por ? 'aprovado por ' + x.por : null].filter(Boolean).join(' · ') || 'Execução da automação'),
-          x.resultado ? e(TextoRecolhivel, { key: 'r', texto: x.resultado, recolhidoTodo: true, rotulo: 'Ver resultado' }) : null,
-        ];
-      } else {
-        cor = x.k === 'aberto' ? 'var(--muted)' : x.de === 'solucao' ? '#6DBE6A' : '#3B82F6';
-        topo = [e('span', { key: 's', style: { fontWeight: 700, fontSize: 12.5 } }, x.k === 'aberto' ? 'Chamado aberto' : x.de === 'solucao' ? 'Solução' : 'Acompanhamento')];
-        corpo = [
-          x.autor ? e('div', { key: 'a', style: { fontSize: 12, color: 'var(--muted)' } }, x.autor) : null,
-          x.texto ? e(TextoRecolhivel, { key: 't', texto: x.texto }) : null,
-        ];
+        const sit = { concluido: 'concluido', erro: 'erro', teste: 'pendencia', executando: 'rodando' }[x.status] || '';
+        return e('div', { key: x.k, className: 'exu-msg auto ' + (x.status === 'erro' ? 'erro' : x.status === 'concluido' ? 'ok' : 'pergunta') }, [
+          e('div', { key: 'm', className: 'exu-msg-meta' }, [Icon('Bot', 13, 'currentColor'), e('b', { key: 'b' }, 'Automação'), ' · ' + ([x.tipo, x.por ? 'aprovado por ' + x.por : null].filter(Boolean).join(' · ') || 'execução') + ' · ' + dataBr(x.em),
+            e('span', { key: 's', className: 'exu-sit ' + sit }, [e('i', { key: 'i' }), (NOME_EXEC[x.status] || x.status) + (x.teste && x.status !== 'teste' ? ' (teste)' : '')])]),
+          x.resultado ? e(TextoRecolhivel, { key: 'r', texto: x.resultado, linhas: 6 }) : null,
+        ]);
       }
-      return e('div', { key: x.k, style: { position: 'relative', paddingBottom: 16 } }, [
-        marcador(cor),
-        e('div', { key: 'h', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } }, [
-          ...topo,
-          e('span', { key: 'd', style: { marginLeft: 'auto', fontSize: 11.5, color: 'var(--muted-soft)' } }, dataBr(x.em)),
-        ]),
-        e('div', { key: 'c', style: { marginTop: 3, display: 'flex', flexDirection: 'column', gap: 4 } }, corpo),
+      const ehPedido = x.de === 'pedido';
+      return e('div', { key: x.k, className: 'exu-msg' + (x.de === 'solucao' ? ' auto ok' : x.de === 'acomp' ? ' v2c-acomp' : '') }, [
+        e('div', { key: 'm', className: 'exu-msg-meta' }, [e('b', { key: 'b' }, x.autor || (ehPedido ? 'Requerente' : 'GLPI')), ' · ' + (ehPedido ? 'abriu o chamado' : x.de === 'solucao' ? 'solução' : 'acompanhamento') + ' · ' + dataBr(x.em),
+          x.de === 'solucao' ? e('span', { key: 's', className: 'exu-sit concluido' }, [e('i', { key: 'i' }), 'Solucionado']) : null]),
+        x.texto ? e(TextoRecolhivel, { key: 't', texto: x.texto, linhas: ehPedido ? 10 : 6 }) : e('p', { key: 't', className: 'v2c-vazio' }, 'Sem texto'),
       ]);
     }
 
-    const faixa = (txt, cor) => e('div', { style: { fontSize: 12.5, color: cor || 'var(--muted)', padding: '6px 0' } }, txt);
-    const secao = (t) => e('div', { style: { ...S.label, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8, marginTop: 4 } }, t);
-
-    let miolo;
-    if (d.carregando) {
-      miolo = e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 20, 'var(--accent)')), 'Lendo o chamado no GLPI…']);
-    } else if (d.erro) {
-      miolo = e('div', { style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao ler o chamado: ' + d.erro);
-    } else {
-      miolo = e('div', null, [
-        secao('Descrição'),
-        e('div', { key: 'desc', style: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 18 } }, c.descricao ? e(TextoRecolhivel, { texto: c.descricao, linhas: 8 }) : faixa('Sem descrição')),
-        secao('Linha do tempo'),
-        h.carregando ? faixa('Buscando as execuções da automação…') : null,
-        h.erro ? faixa('Falha ao buscar as execuções da automação: ' + h.erro, 'var(--warn)') : null,
-        e('div', { key: 'tl', style: { position: 'relative', marginLeft: 5, paddingLeft: 16, borderLeft: '2px solid var(--border)', marginTop: 6 } }, linha.map(evento)),
-        !h.carregando && !h.erro && !h.itens.length ? faixa('A automação ainda não rodou neste chamado.') : null,
+    let conversa;
+    if (d.carregando) conversa = e('div', { className: 'v2-carregando' }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 16, 'var(--accent)')), 'Lendo o chamado no GLPI…']);
+    else if (d.erro) conversa = e('div', { className: 'exc-aviso', style: { background: 'var(--error-tint)' } }, [Icon('AlertCircle', 16, 'var(--error)'), 'Falha ao ler o chamado: ' + d.erro]);
+    else {
+      conversa = e('div', { className: 'exu-conversa' }, [
+        ...linha.map(evento),
+        h.carregando ? e('p', { key: 'hc', className: 'exu-msg-espera' }, 'Buscando as execuções da automação…') : null,
+        h.erro ? e('p', { key: 'he', className: 'exu-msg-espera', style: { color: 'var(--warn)' } }, 'Falha ao buscar as execuções da automação: ' + h.erro) : null,
+        !h.carregando && !h.erro && !h.itens.length ? e('p', { key: 'hv', className: 'exu-msg-espera' }, 'A automação ainda não rodou neste chamado.') : null,
       ]);
     }
 
-    return e('div', { onMouseDown: (ev) => { if (ev.target === ev.currentTarget) onFechar(); }, style: { position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.45)', display: 'flex', justifyContent: 'flex-end' } },
-      e('aside', { role: 'dialog', 'aria-label': 'Chamado #' + item.id, style: { width: 'min(560px, 100vw)', height: '100%', background: 'var(--card)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', animation: 'toastIn 0.2s ease both', boxSizing: 'border-box' } }, [
-        e('div', { key: 'cab', style: { padding: '16px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 } }, [
-          e('div', { key: 'l1', style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 } }, [
-            e('div', { key: 't', style: { fontWeight: 600, fontSize: 15, lineHeight: 1.35, minWidth: 0, wordBreak: 'break-word' } }, `#${item.id} · ${(c && c.titulo) || item.titulo}`),
-            e('button', { key: 'x', 'aria-label': 'Fechar', title: 'Fechar (Esc)', onClick: onFechar, style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' } }, Icon('X', 18, 'var(--muted)')),
+    const titulo = (c && c.titulo) || item.titulo || 'Chamado';
+    const link = (c && c.link) || item.link;
+    return ReactDOM.createPortal(e(React.Fragment, null, [
+      e('div', { key: 'f', className: 'exu-gaveta-fundo', onClick: onFechar }),
+      e('aside', { key: 'g', className: 'exu-gaveta v2c-gaveta', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Chamado #' + item.id }, [
+        e('div', { key: 'c', className: 'exu-gaveta-cab' }, [
+          e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [
+            e('div', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+              e('span', { key: 'i', className: 'exc-id' }, '#' + item.id),
+              item.tipoNome ? e('span', { key: 'tp', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome) : null,
+              e('span', { key: 's', className: 'exu-sit ' + (c && c.status >= 5 ? 'concluido' : 'pendencia') }, [e('i', { key: 'i' }), (c && c.statusNome) || item.statusNome || 'Aberto']),
+            ]),
+            e('h3', { key: 'h' }, titulo),
+            e('p', { key: 'm', className: 'v2c-meta' }, [(c && c.categoria) || item.categoria || 'Sem categoria', ' · ', (c && c.requerente) || item.requerente || 'Requerente não informado', ' · aberto em ', dataBr((c && c.abertoEm) || item.abertoEm)]),
+            link ? e('div', { key: 'a', className: 'v2c-links' }, [
+              e('button', { key: 'cp', type: 'button', className: 'exu-btn pequeno', onClick: async () => { if (await copiarTexto(link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } } }, [Icon('Copy', 13, 'currentColor'), copiado ? 'Link copiado' : 'Copiar link']),
+              e('a', { key: 'g', className: 'exu-btn pequeno', href: link, target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' }, title: 'Se cair em "sessão expirou", cole o link copiado na barra de endereço' }, [Icon('ExternalLink', 13, 'currentColor'), 'Abrir no GLPI']),
+            ]) : null,
           ]),
-          e('div', { key: 'tags', style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 } }, [
-            e('span', { key: 'c', style: S.tag('#3B82F6') }, (c && c.categoria) || item.categoria || '(sem categoria)'),
-            e('span', { key: 's', style: S.tag(c && c.status >= 5 ? '#6DBE6A' : '#F5A524') }, (c && c.statusNome) || item.statusNome),
-          ]),
-          e('div', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `Requerente: ${(c && c.requerente) || item.requerente || 'Não informado'} · aberto em ${dataBr((c && c.abertoEm) || item.abertoEm)}`),
-          e('div', { key: 'b', style: { display: 'flex', gap: 14, alignItems: 'center' } }, [
-            e('button', { key: 'cp', onClick: async () => { if (await copiarTexto((c && c.link) || item.link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } }, style: { background: 'none', border: 'none', cursor: 'pointer', color: copiado ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, copiado ? 'Link copiado' : 'Copiar link')]),
-            e('a', { key: 'g', href: (c && c.link) || item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' } }, [Icon('ExternalLink', 12), e('span', { key: 't' }, 'Abrir no GLPI')]),
-          ]),
+          e('button', { key: 'x', type: 'button', className: 'exu-btn pequeno', onClick: onFechar, 'aria-label': 'Fechar', title: 'Fechar (Esc)' }, Icon('X', 14)),
         ]),
-        e('div', { key: 'corpo', style: { flex: 1, overflowY: 'auto', padding: '14px 16px 40px' } }, miolo),
-      ]));
+        e('div', { key: 'b', className: 'exu-gaveta-corpo' }, [
+          extra ? e('section', { key: 'x', className: 'exu-bloco v2c-acoes' }, [e('h4', { key: 'h' }, 'Automação'), ...[].concat(extra)]) : null,
+          e('section', { key: 'cv', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'Conversa no chamado'), conversa]),
+        ]),
+      ]),
+    ]), document.body);
   }
 
   // ---------- Aba ----------
@@ -687,102 +677,118 @@
       })();
     }, [auto, pronto, lista.carregando, lista.guardado, lista.itens, rodandoAlgo, resultados, dispensados, tentativaAuto]); // eslint-disable-line
 
+    // ---------- v2: estado só da tela nova (visões, busca, seleção, painel e confirmações) ----------
+    const [visao, setVisao] = useState(() => ler('arxhub_v2_chamados_visao', 'disponiveis'));
+    const [busca, setBusca] = useState('');
+    const [tipoSel, setTipoSel] = useState('');
+    const [exibir, setExibir] = useState(() => ler('arxhub_v2_chamados_exibir', 'lista'));
+    const [marcados, setMarcados] = useState([]);
+    const [aberto, setAberto] = useState(null); // id do chamado no painel lateral
+    const [confirmar, setConfirmar] = useState(null); // { itens, manual, titulo }
+    const trocarVisao = (v) => { setVisao(v); gravar('arxhub_v2_chamados_visao', v); setMarcados([]); };
+    const trocarExibir = (v) => { setExibir(v); gravar('arxhub_v2_chamados_exibir', v); };
+
     if (!pronto) {
-      return e('div', { style: { padding: '28px 24px 96px' } }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
+      return e('div', { className: 'exu-tela' }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
     }
 
-    // ---------- card de um chamado ----------
-    function card(item, i) {
+    // Situação de um chamado na tela (texto e cor do selo; também decide em que visão ele aparece).
+    function situacao(item) {
+      const res = resultados[item.id];
+      if (execDoChamado(item.id)) return 'rodando';
+      if (res) return { concluido: 'concluido', teste: 'teste', pendencia: 'pendencia', repetir: 'repetir', nao_rodou: 'nao_rodou' }[res.status] || 'erro';
+      if (dispensados.includes(item.id)) return 'dispensado';
+      if (item.problemas.length) return 'manual';
+      if (lista.guardado || falta(item)) return 'falta';
+      if (deveExcluirDoAutomatico(item)) return 'confirmar';
+      return 'pronto';
+    }
+    const SIT = {
+      pronto: ['pronto', 'Pronto para rodar'], falta: ['pendencia', 'Falta escolher'], confirmar: ['pendencia', 'Confirmação manual'], manual: ['sem_automacao', 'Análise manual'],
+      dispensado: ['', 'Não rodar'], rodando: ['rodando', 'Rodando'], concluido: ['concluido', 'Solucionado'], teste: ['pendencia', 'Teste'], erro: ['erro', 'Erro'],
+      pendencia: ['pendencia', 'Pedido o que falta'], repetir: ['pendencia', 'Nova tentativa'], nao_rodou: ['pendencia', 'Não executado'],
+    };
+    const selo = (item) => { const s = SIT[situacao(item)]; return e('span', { className: 'exu-sit ' + s[0] }, [e('i', { key: 'i' }), s[1]]); };
+
+    // ---------- partes do chamado (as mesmas do card do Hub atual): detalhes com as escolhas, avisos e ações ----------
+    function partes(item) {
       const res = resultados[item.id];
       const execEste = execDoChamado(item.id);
       const rodandoEste = !!execEste;
       const c = escolha(item);
       const pendente = item.problemas.length ? null : lista.guardado ? TEXTO_AGUARDANDO : falta(item);
       const pode = !item.problemas.length && !pendente;
+      const campoTela = (rotulo, filho, k) => e('div', { key: k || rotulo, className: 'exu-campo' }, [e('label', { key: 'l' }, rotulo), filho]);
 
       let detalhes = null;
       if (item.tipo === 'fechamento' && item.periodo) {
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 6 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('div', { key: 'p' }, [e('strong', { key: 's' }, item.periodo.rotulo), e('span', { key: 'o', style: { color: 'var(--muted)' } }, ' · ' + item.periodo.origem)]),
-          e('div', { key: 'd', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 } }, ['dataInicial', 'dataFinal'].map((k) =>
-            e('input', { key: k, type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }), style: { ...S.input, padding: '6px 8px', fontSize: 12 } })
-          )),
+          e('div', { key: 'd', className: 'exu-duas-col' }, ['dataInicial', 'dataFinal'].map((k) =>
+            campoTela(k === 'dataInicial' ? 'Data inicial' : 'Data final', e('input', { type: 'date', value: c[k] || '', onChange: (ev) => mudarEscolha(item.id, { [k]: ev.target.value }) }), k))),
         ]);
       } else if (item.tipo === 'foto_perfil' && item.foto && item.foto.multi) {
         const f = item.foto;
         const duvidosas = f.fotos.filter((x) => x.duvida);
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('div', { key: 'r' }, [e('strong', { key: 'n' }, f.fotos.length + ' fotos de perfil'), e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' neste chamado (uma arte por pessoa, todas anexadas)')]),
-          e('div', { key: 'p', style: { color: 'var(--warn)', fontSize: 12 } }, 'Várias fotos: não roda no automático. Confira a lista abaixo (uma pessoa por linha: Nome | DEPARTAMENTO).'),
-          duvidosas.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, duvidosas.map((x) => `${x.nome}: ${x.motivos.join('; ')}`).join(' · ') + '. Edite a lista para liberar.') : null,
-          e('textarea', { key: 'lista', rows: Math.min(10, f.fotos.length + 1), value: c.fotoLista, onChange: (ev) => mudarEscolha(item.id, { fotoLista: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' } }),
+          e('div', { key: 'p', className: 'v2c-aviso' }, 'Várias fotos: não roda no automático. Confira a lista abaixo (uma pessoa por linha: Nome | DEPARTAMENTO).'),
+          duvidosas.length ? e('div', { key: 'm', className: 'v2c-aviso' }, duvidosas.map((x) => `${x.nome}: ${x.motivos.join('; ')}`).join(' · ') + '. Edite a lista para liberar.') : null,
+          campoTela('Lista de fotos', e('textarea', { rows: Math.min(10, f.fotos.length + 1), value: c.fotoLista, onChange: (ev) => mudarEscolha(item.id, { fotoLista: ev.target.value }) }), 'lista'),
         ]);
       } else if (item.tipo === 'foto_perfil' && item.foto) {
         const f = item.foto;
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('div', { key: 'r' }, [
             e('strong', { key: 'n' }, f.duvidaNome ? '(nome a informar)' : f.nome),
             e('span', { key: 'd', style: { color: 'var(--muted)' } }, ' · ' + (f.duvidaDepto ? '(departamento a informar)' : f.departamento)),
             !f.duvidaDepto && f.departamentoOrigem === 'planilha' ? e('span', { key: 'o', style: { color: 'var(--muted)' } }, ' (pela lista de funcionários)') : null,
           ]),
           e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Gera a foto de perfil (arte com nome e departamento), anexa no chamado e soluciona.'),
-          (f.duvidaNome || f.duvidaDepto) && f.motivos.length ? e('div', { key: 'm', style: { color: 'var(--warn)', fontSize: 12 } }, 'Há dúvida (não roda no automático): ' + f.motivos.join('; ') + '. Preencha abaixo.') : null,
-          f.outraPessoa && !f.duvidaDepto ? e('div', { key: 'o2', style: { color: 'var(--warn)', fontSize: 12 } }, 'A foto é para outra pessoa, não o solicitante.') : null,
-          f.duvidaNome ? e('div', { key: 'nome' }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Nome na foto'),
-            e('input', { key: 'i', value: c.fotoNome, placeholder: f.analista ? 'Analista 4' : 'Primeiro e último nome', onChange: (ev) => mudarEscolha(item.id, { fotoNome: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
-            f.sugestaoNome && !c.fotoNome ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoNome: f.sugestaoNome }) }, 'Usar: ' + f.sugestaoNome) : null,
-          ]) : null,
-          f.duvidaDepto ? e('div', { key: 'dep' }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Departamento na foto (MAIÚSCULO)'),
-            e('input', { key: 'i', value: c.fotoDepartamento, placeholder: 'Ex.: CENTRAL DE RELACIONAMENTO', onChange: (ev) => mudarEscolha(item.id, { fotoDepartamento: ev.target.value.toUpperCase() }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
-            f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', style: { ...S.chip(false), marginTop: 6 }, onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
-          ]) : null,
+          (f.duvidaNome || f.duvidaDepto) && f.motivos.length ? e('div', { key: 'm', className: 'v2c-aviso' }, 'Há dúvida (não roda no automático): ' + f.motivos.join('; ') + '. Preencha abaixo.') : null,
+          f.outraPessoa && !f.duvidaDepto ? e('div', { key: 'o2', className: 'v2c-aviso' }, 'A foto é para outra pessoa, não o solicitante.') : null,
+          f.duvidaNome ? campoTela('Nome na foto', e('div', { className: 'v2c-com-sugestao' }, [
+            e('input', { key: 'i', value: c.fotoNome, placeholder: f.analista ? 'Analista 4' : 'Primeiro e último nome', onChange: (ev) => mudarEscolha(item.id, { fotoNome: ev.target.value }) }),
+            f.sugestaoNome && !c.fotoNome ? e('button', { key: 's', type: 'button', className: 'exu-btn pequeno', onClick: () => mudarEscolha(item.id, { fotoNome: f.sugestaoNome }) }, 'Usar: ' + f.sugestaoNome) : null,
+          ]), 'nome') : null,
+          f.duvidaDepto ? campoTela('Departamento na foto (MAIÚSCULO)', e('div', { className: 'v2c-com-sugestao' }, [
+            e('input', { key: 'i', value: c.fotoDepartamento, placeholder: 'Ex.: CENTRAL DE RELACIONAMENTO', onChange: (ev) => mudarEscolha(item.id, { fotoDepartamento: ev.target.value.toUpperCase() }) }),
+            f.sugestaoDepartamento && !c.fotoDepartamento ? e('button', { key: 's', type: 'button', className: 'exu-btn pequeno', onClick: () => mudarEscolha(item.id, { fotoDepartamento: f.sugestaoDepartamento }) }, 'Usar: ' + f.sugestaoDepartamento) : null,
+          ]), 'dep') : null,
         ]);
       } else if (item.tipo === 'senha_sistemas' || ehSenhaSga(item)) {
         detalhes = detalhesSenha(item);
       } else if (item.tipo === 'senha_crm') {
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
+        detalhes = e('div', { key: 'det', className: 'v2c-det', style: { color: 'var(--muted)' } }, 'Responde que a senha do CRM não é alterada por aqui (usar "Esqueci minha senha") e soluciona o chamado.');
       } else if (item.tipo === 'erro_exportar_modelo') {
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('strong', { key: 'n' }, item.placa ? `Placa ${item.placa}` : `Card ${item.codigoCard || 'Não informado'}`),
           item.descricaoErro ? e('div', { key: 'd', style: { color: 'var(--muted)' } }, item.descricaoErro) : null,
           e('div', { key: 'p', style: { color: 'var(--muted)' } }, 'Busca o código FIPE no card do PowerCRM (só roda com 1 card) e cadastra o modelo no SGA.'),
-          e('div', { key: 'r', style: { color: 'var(--warn)', fontSize: 12 } }, 'Reconhecido pela descrição. Só cadastra se encontrar um único card e a FIPE; modelo já existente recebe a resposta "Modelo já cadastrado".'),
+          e('div', { key: 'r', className: 'v2c-aviso' }, 'Reconhecido pela descrição. Só cadastra se encontrar um único card e a FIPE; modelo já existente recebe a resposta "Modelo já cadastrado".'),
         ]);
       } else if (item.tipo === 'cadastro_modelo' && item.modelo) {
         const f = item.modelo.fipe;
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('strong', { key: 'n' }, `FIPE ${item.modelo.codigoFipe}`),
           f ? e('div', { key: 'm' }, `${f.marca} · ${f.modelo}`) : null,
           f ? e('div', { key: 't', style: { color: 'var(--muted)' } }, `${f.tipoNome}${f.combustivel ? ' · ' + f.combustivel : ''} · cadastra só no SGA`) : null,
-          item.modelo.fipeErro ? e('div', { key: 'e', style: { color: 'var(--warn)' } }, 'Falha ao consultar a FIPE: ' + item.modelo.fipeErro) : null,
+          item.modelo.fipeErro ? e('div', { key: 'e', className: 'v2c-aviso' }, 'Falha ao consultar a FIPE: ' + item.modelo.fipeErro) : null,
         ]);
       } else if (item.tipo === 'cadastro_consultor' && item.consultor) {
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('strong', { key: 'n' }, item.consultor.nome || 'Não informado'),
           e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${item.consultor.cpfMascarado || 'Não informado'} · ${item.consultor.email || 'e-mail não informado'}`),
           item.cooperativa
-            ? e('div', { key: 'k', style: { marginTop: 6 } }, [
-                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, `Cooperativa no SGA (o chamado informa "${item.cooperativa.informada}")`),
-                e('select', { key: 's', value: c.cooperativa, onChange: (ev) => mudarEscolha(item.id, { cooperativa: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
-                  e('option', { key: '', value: '' }, 'Escolha a cooperativa…'),
-                  item.cooperativa.sugestoes.length && !item.cooperativa.exata
-                    ? e('optgroup', { key: 'sug', label: 'Parecidas com o que o chamado diz' }, item.cooperativa.sugestoes.map((n) => e('option', { key: n, value: n }, n)))
-                    : null,
-                  e('optgroup', { key: 'todas', label: 'Todas do SGA' }, item.cooperativa.opcoes.map((n) => e('option', { key: n, value: n }, n))),
-                ]),
-                item.cooperativa.exata ? e('div', { key: 'ok', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, 'O nome do chamado é igual ao do SGA.') : null,
-              ])
+            ? campoTela(`Cooperativa no SGA (o chamado informa "${item.cooperativa.informada}")`, e('select', { value: c.cooperativa, onChange: (ev) => mudarEscolha(item.id, { cooperativa: ev.target.value }) }, [
+                e('option', { key: '', value: '' }, 'Escolha a cooperativa…'),
+                item.cooperativa.sugestoes.length && !item.cooperativa.exata ? e('optgroup', { key: 'sug', label: 'Parecidas com o que o chamado diz' }, item.cooperativa.sugestoes.map((n) => e('option', { key: n, value: n }, n))) : null,
+                e('optgroup', { key: 'todas', label: 'Todas do SGA' }, item.cooperativa.opcoes.map((n) => e('option', { key: n, value: n }, n))),
+              ]), 'coop')
             : e('div', { key: 'k' }, 'Cooperativa: ' + (item.consultor.cooperativa || 'Não informado')),
-          item.baseCrm
-            ? e('div', { key: 'crm', style: { marginTop: 6 } }, [
-                e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Base do PowerCRM'),
-                e('select', { key: 's', value: c.baseCrm, onChange: (ev) => mudarEscolha(item.id, { baseCrm: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } },
-                  item.baseCrm.opcoes.map((b, i) => e('option', { key: b, value: b }, i === 0 ? b + ' (principal)' : b))),
-                e('div', { key: 'n', style: { color: 'var(--muted)', fontSize: 11.5, marginTop: 3 } }, item.baseCrm.pedida ? 'Base informada no chamado.' : 'O chamado não informa a base. Será usada a principal.'),
-              ])
-            : null,
+          item.cooperativa && item.cooperativa.exata ? e('div', { key: 'ok', style: { color: 'var(--muted)', fontSize: 12 } }, 'O nome do chamado é igual ao do SGA.') : null,
+          item.baseCrm ? campoTela('Base do PowerCRM', e('select', { value: c.baseCrm, onChange: (ev) => mudarEscolha(item.id, { baseCrm: ev.target.value }) }, item.baseCrm.opcoes.map((b, i) => e('option', { key: b, value: b }, i === 0 ? b + ' (principal)' : b))), 'crm') : null,
+          item.baseCrm ? e('div', { key: 'n', style: { color: 'var(--muted)', fontSize: 12 } }, item.baseCrm.pedida ? 'Base informada no chamado.' : 'O chamado não informa a base. Será usada a principal.') : null,
         ]);
       } else if (item.altStatus && item.pessoa) {
         const p = item.pessoa;
@@ -790,295 +796,316 @@
         const sel = item.altStatus.todas.filter((b) => !sec.includes(b.chave) || c.extrasAlt.includes(b.chave)); // o que vai rodar
         const sga = sel.some((b) => b.temSga);
         const crm = sel.filter((b) => b.temPowercrm).map((b) => b.label);
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('strong', { key: 'n' }, p.nome || 'Não informado'),
           e('div', { key: 'b', style: { color: p.busca === 'CPF' ? 'var(--muted)' : 'var(--warn)' } }, p.busca === 'CPF' ? `Busca pelo CPF ${p.cpfMascarado}` : 'Busca pelo nome (o chamado não tem CPF)'),
           e('div', { key: 'q', style: { color: 'var(--muted)' } }, item.altStatus.qual === 'usuario' ? 'Colaborador interno' : 'Consultor/voluntário'),
           e('div', { key: 's' }, [sga ? 'SGA: inativar' : null, crm.length ? `PowerCRM (${crm.join(', ')}): bloquear` : null].filter(Boolean).join(' · ')),
-          item.altStatus.secundarias.length ? e('div', { key: 'ex', style: { marginTop: 4 } }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Também validar em (o chamado só cita as marcadas)'),
-            e('div', { key: 'c', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, item.altStatus.secundarias.map((b) => {
-              const marcada = c.extrasAlt.includes(b.chave);
-              return e('button', { key: b.chave, style: S.chip(marcada), onClick: () => mudarEscolha(item.id, { extrasAlt: marcada ? c.extrasAlt.filter((x) => x !== b.chave) : [...c.extrasAlt, b.chave] }) }, b.label);
-            })),
-          ]) : null,
-          p.outrosSistemas ? e('div', { key: 'o', style: { color: 'var(--warn)', fontSize: 12 } }, 'Cita chats e outros sistemas, que ficam fora (somente SGA e CRM). Vai como observação na solução.') : null,
+          item.altStatus.secundarias.length ? campoTela('Também validar em (o chamado só cita as marcadas)', e('div', { className: 'ext-login-assoc' }, item.altStatus.secundarias.map((b) => {
+            const marcada = c.extrasAlt.includes(b.chave);
+            return e('button', { key: b.chave, type: 'button', 'aria-pressed': marcada ? 'true' : 'false', onClick: () => mudarEscolha(item.id, { extrasAlt: marcada ? c.extrasAlt.filter((x) => x !== b.chave) : [...c.extrasAlt, b.chave] }) }, b.label);
+          })), 'extras') : null,
+          p.outrosSistemas ? e('div', { key: 'o', className: 'v2c-aviso' }, 'Cita chats e outros sistemas, que ficam fora (somente SGA e CRM). Vai como observação na solução.') : null,
         ]);
       } else if (item.tipo === 'cadastro_usuario' && item.usuario) {
         const u = item.usuario;
         const bases = (item.associacaoUsuario && item.associacaoUsuario.empresasCrm) || [];
-        detalhes = e('div', { key: 'det', style: { fontSize: 12.5, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 8 } }, [
+        detalhes = e('div', { key: 'det', className: 'v2c-det' }, [
           e('div', { key: 'i' }, [
             e('span', { key: 's', style: S.tag(u.sistema === 'SGA' ? '#3B82F6' : '#F5514D') }, u.sistema === 'CRM' ? 'PowerCRM' : u.sistema),
             ' ',
-            e('strong', { key: 'n' }, u.nomeCadastro || u.nome || 'Não informado'), // como vai ficar cadastrado ("ARX - ...")
+            e('strong', { key: 'n' }, u.nomeCadastro || u.nome || 'Não informado'),
             e('div', { key: 'c', style: { color: 'var(--muted)' } }, `CPF ${u.cpfMascarado || 'Não informado'} · ${u.email || 'e-mail não informado'}`),
-            u.daPlanilha && u.planilha ? e('div', { key: 'pl', style: { color: 'var(--warn)', fontSize: 12 } }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'função não informada'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.solicitanteDepto ? ` Solicitante do departamento ${u.solicitanteDepto}${u.avisoDepto ? ', diferente da aba da lista: confira o perfil' : ''}.` : ''}${u.ambos ? ' O chamado cita SGA e CRM; apenas o primeiro citado é processado.' : ''}` ) : null,
+            u.daPlanilha && u.planilha ? e('div', { key: 'pl', className: 'v2c-aviso' }, `Dados da lista de funcionários (aba ${u.planilha.aba} · ${u.planilha.funcao || 'função não informada'}). Confira se a pessoa ainda está ativa e se o perfil está certo; este não roda no automático.${u.solicitanteDepto ? ` Solicitante do departamento ${u.solicitanteDepto}${u.avisoDepto ? ', diferente da aba da lista: confira o perfil' : ''}.` : ''}${u.ambos ? ' O chamado cita SGA e CRM; apenas o primeiro citado é processado.' : ''}`) : null,
           ]),
-          e('select', { key: 'perfil', value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }, [
-            e('option', { key: '', value: '' }, 'Perfil (departamento · role)…'),
+          campoTela('Perfil (departamento · role)', e('select', { value: c.roleId, onChange: (ev) => mudarEscolha(item.id, { roleId: ev.target.value }) }, [
+            e('option', { key: '', value: '' }, 'Escolha o perfil…'),
             ...lista.perfis.map((p) => e('option', { key: p.id, value: p.id }, p.nome)),
-          ]),
-          u.sistema === 'SGA' ? e('div', { key: 'login' }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Login no SGA'),
-            e('input', { key: 'i', value: c.loginSga, onChange: (ev) => mudarEscolha(item.id, { loginSga: ev.target.value }), style: { ...S.input, padding: '7px 9px', fontSize: 12.5 } }),
-          ]) : null,
-          u.sistema === 'CRM' && bases.length > 1 ? e('div', { key: 'bases' }, [
-            e('div', { key: 'l', style: { ...S.label, marginBottom: 4 } }, 'Bases do PowerCRM (cria uma para cada marcada)'),
-            e('div', { key: 'c', style: { display: 'flex', flexWrap: 'wrap', gap: 6 } }, bases.map((b) => {
-              const sel = c.empresasCrm.includes(b);
-              return e('button', { key: b, style: S.chip(sel), onClick: () => mudarEscolha(item.id, { empresasCrm: sel ? c.empresasCrm.filter((x) => x !== b) : [...c.empresasCrm, b] }) }, b);
-            })),
-          ]) : null,
+          ]), 'perfil'),
+          u.sistema === 'SGA' ? campoTela('Login no SGA', e('input', { value: c.loginSga, onChange: (ev) => mudarEscolha(item.id, { loginSga: ev.target.value }) }), 'login') : null,
+          u.sistema === 'CRM' && bases.length > 1 ? campoTela('Bases do PowerCRM (cria uma para cada marcada)', e('div', { className: 'ext-login-assoc' }, bases.map((b) => {
+            const sel = c.empresasCrm.includes(b);
+            return e('button', { key: b, type: 'button', 'aria-pressed': sel ? 'true' : 'false', onClick: () => mudarEscolha(item.id, { empresasCrm: sel ? c.empresasCrm.filter((x) => x !== b) : [...c.empresasCrm, b] }) }, b);
+          })), 'bases') : null,
         ]);
       }
 
-      let rodape;
+      const avisos = [
+        avisoConfianca(item) ? e('div', { key: 'confianca', role: 'status', className: 'exc-aviso v2c-aviso-caixa' }, [Icon('AlertCircle', 16, 'var(--warn)'), e('div', { key: 't' }, [e('strong', { key: 't' }, avisoConfianca(item).titulo), e('div', { key: 'o' }, avisoConfianca(item).orientacao)])]) : null,
+        item.ia || item.reabertoIa ? e('div', { key: 'ia', className: 'chamado-ia v2c-ia' }, [
+          Icon('Bot', 14, 'currentColor'),
+          e('span', { key: 't' }, item.reabertoIa
+            ? `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.`
+            : item.ia.concorda
+              ? `IA local confirma o tipo (${Math.round(item.ia.confianca * 100)}%)${item.validadoPorIa ? '; liberado para o automático' : ''}.`
+              : `IA local ${item.ia.aplicar === 'auto' ? 'trocou o tipo para' : 'sugere'} ${item.tipoNome || 'sem automação'} (${Math.round(item.ia.confianca * 100)}%)${item.ia.motivo ? ': ' + item.ia.motivo : ''}`),
+        ]) : null,
+        item.pedirPendencia && !res ? e('div', { key: 'pend', className: 'v2c-aviso' }, `Falta ${item.pedirPendencia.faltas.join(' e ')} (não está na descrição, nos acompanhamentos nem nos prints). Rodar pede no chamado e deixa Pendente, sem atribuir.`) : null,
+        item.identificadorAchadoEm ? e('div', { key: 'achado', style: { fontSize: 12.5, color: 'var(--muted)' } }, `Identificador achado ${item.identificadorAchadoEm === 'print' ? 'no print anexado' : 'nos acompanhamentos'}.`) : null,
+        item.repetirIa && !res ? e('div', { key: 'rep', className: 'v2c-aviso' }, `Nova tentativa automática ${item.repetirIa.tentativa}: ${item.repetirIa.motivo || 'falha momentânea'}.`) : null,
+      ].filter(Boolean);
+      const problemas = item.problemas.length ? e('div', { key: 'prob', className: 'exc-aviso v2c-aviso-caixa', style: { flexDirection: 'column', alignItems: 'flex-start', gap: 4 } }, item.problemas.map((p, j) => e('div', { key: j }, '⚠ ' + p))) : null;
+      const ultima = item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 12, color: 'var(--muted)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null;
+
+      let acoes;
       if (res) {
-        rodape = e('div', { key: 'res', style: { borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 12.5 } }, [
-          e('div', { key: 's', style: { fontWeight: 600, color: res.status === 'erro' ? 'var(--error)' : res.status === 'teste' || res.status === 'nao_rodou' || res.status === 'repetir' || res.status === 'pendencia' ? 'var(--warn)' : 'var(--accent)' } },
-            res.status === 'teste'
-              ? `Teste: execução ${res.ok ? 'sem erro' : 'com erro'}`
-              : res.status === 'concluido'
-                ? 'Solucionado no GLPI'
-                : res.status === 'nao_rodou'
-                  ? 'Não executado: configuração pendente'
-                  : res.status === 'repetir'
-                    ? 'Falha momentânea: nova tentativa automática (IA)'
-                    : res.status === 'pendencia'
-                      ? 'Pedido o que falta: chamado Pendente'
-                    : 'Erro: devolutiva pendente no chamado'),
-          e('pre', { key: 't', style: { whiteSpace: 'pre-wrap', margin: '6px 0 0', fontFamily: 'inherit', color: 'var(--muted)' } }, res.texto),
-          res.status !== 'concluido'
-            ? e('button', { key: 'again', style: { ...S.btnSec, marginTop: 8, width: '100%' }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14), e('span', { key: 't' }, 'Rodar novamente')])
-            : null,
+        const cls = res.status === 'erro' ? 'erro' : ['teste', 'nao_rodou', 'repetir', 'pendencia'].includes(res.status) ? 'pergunta' : 'ok';
+        acoes = e('div', { key: 'res', className: 'exu-msg auto ' + cls }, [
+          e('div', { key: 's', className: 'exu-msg-meta' }, [Icon('Bot', 13, 'currentColor'), e('b', { key: 'b' },
+            res.status === 'teste' ? `Teste: execução ${res.ok ? 'sem erro' : 'com erro'}`
+              : res.status === 'concluido' ? 'Solucionado no GLPI'
+                : res.status === 'nao_rodou' ? 'Não executado: configuração pendente'
+                  : res.status === 'repetir' ? 'Falha momentânea: nova tentativa automática (IA)'
+                    : res.status === 'pendencia' ? 'Pedido o que falta: chamado Pendente'
+                      : 'Erro: devolutiva pendente no chamado')]),
+          e('p', { key: 't' }, res.texto),
+          res.status !== 'concluido' ? e('button', { key: 'again', type: 'button', className: 'exu-btn', style: { marginTop: 10 }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14, 'currentColor'), 'Rodar novamente']) : null,
         ]);
       } else if (rodandoEste) {
-        rodape = e('div', { key: 'rod', style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--muted)' } }, [
-          e('span', { key: 'sp', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14)),
+        acoes = e('div', { key: 'rod', className: 'v2-carregando' }, [
+          e('span', { key: 'sp', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14, 'var(--accent)')),
           e('span', { key: 't', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, (execEste.linhas[execEste.linhas.length - 1] || 'Em execução…').replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '')),
         ]);
       } else if (confirmando === item.id) {
-        rodape = e('div', { key: 'conf', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
-          e('div', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar em modo real? O chamado ficará atribuído ao titular do token e será solucionado no GLPI.'),
+        acoes = e('div', { key: 'conf', className: 'v2c-confirmar' + (modoTeste ? '' : ' real') }, [
+          e('div', { key: 'q' }, modoTeste ? 'Rodar em modo teste (não escreve no GLPI)?' : 'Rodar em modo real? O chamado ficará atribuído ao titular do token e será solucionado no GLPI.'),
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-            e('button', { key: 's', style: { ...S.btnPrim, flex: 1 }, onClick: () => rodar([item], { manual: true }) }, 'Confirmar'),
-            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => setConfirmando(null) }, 'Cancelar'),
+            e('button', { key: 'n', type: 'button', className: 'exu-btn', onClick: () => setConfirmando(null) }, 'Cancelar'),
+            e('button', { key: 's', type: 'button', className: 'exu-btn primario', onClick: () => rodar([item], { manual: true }) }, 'Confirmar'),
           ]),
         ]);
       } else {
-        const bloqueado = !pode;
-        rodape = e('div', { key: 'btns', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
-          pendente ? e('div', { key: 'f', style: { fontSize: 12, color: 'var(--warn)' } }, pendente) : null,
+        acoes = e('div', { key: 'btns', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [
+          pendente ? e('div', { key: 'f', className: 'v2c-aviso' }, pendente) : null,
           e('div', { key: 'b', style: { display: 'flex', gap: 8 } }, [
-            e('button', { key: 'r', disabled: bloqueado, style: { ...S.btnPrim, flex: 1, opacity: bloqueado ? 0.45 : 1, cursor: bloqueado ? 'not-allowed' : 'pointer' }, onClick: () => setConfirmando(item.id) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, 'Rodar')]),
-            e('button', { key: 'n', style: { ...S.btnSec, flex: 1 }, onClick: () => dispensar(item.id, !dispensados.includes(item.id)) }, dispensados.includes(item.id) ? 'Voltar para a lista' : 'Não rodar'),
+            e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !pode, style: { flex: 1 }, onClick: () => setConfirmando(item.id) }, [Icon('Activity', 14, 'currentColor'), 'Rodar']),
+            e('button', { key: 'n', type: 'button', className: 'exu-btn', style: { flex: 1 }, onClick: () => dispensar(item.id, !dispensados.includes(item.id)) }, dispensados.includes(item.id) ? 'Voltar para a lista' : 'Não rodar'),
           ]),
         ]);
       }
-
-      return e('div', { key: item.id, style: { ...S.card, animationDelay: Math.min(i, 10) * 35 + 'ms', borderColor: rodandoEste ? 'var(--accent)' : 'var(--border)' } }, [
-        e('div', { key: 'top', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-          e('div', { key: 'tipo', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0 } }, [
-            e('span', { key: 't', style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome),
-            mostrarEntidade && item.entidade ? e('span', { key: 'ent', title: 'Entidade no GLPI', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, border: '1px solid var(--border)', color: 'var(--muted)' } }, item.entidade) : null,
-            rotuloConfianca(item) ? e('span', { key: 'conf', style: { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: 'var(--warn-tint)', color: 'var(--warn)', border: '1px solid var(--warn)' } }, rotuloConfianca(item)) : null,
-          ]),
-          e('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
-            // o GLPI usa cookie SameSite=Strict: clicar aqui (de outro site) pode cair em "sessão expirou";
-            // colar o link na barra de endereço sempre funciona
-            e('button', { key: 'ver', title: 'Ler o chamado aqui no Hub (descrição, acompanhamentos e histórico da automação)', onClick: () => setVerChamado(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Eye', 13), e('span', { key: 't' }, 'Ver chamado')]),
-            e('button', { key: 'c', title: 'Copiar o link do chamado (cole na barra de endereço; funciona mesmo quando o clique cai em "sessão expirou")', onClick: () => copiarLink(item), style: { background: 'none', border: 'none', cursor: 'pointer', color: linkCopiado === item.id ? 'var(--accent)' : 'var(--muted)', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, padding: 0, whiteSpace: 'nowrap' } }, [Icon('Copy', 12), e('span', { key: 't' }, linkCopiado === item.id ? 'Link copiado' : 'Copiar link')]),
-            e('a', { key: 'a', href: item.link, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' } }, '#' + item.id),
-          ]),
-        ]),
-        e('div', { key: 'info' }, [
-          e('div', { key: 'a', style: { fontWeight: 600, fontSize: 14 } }, item.categoria || '(sem categoria)'),
-          e('div', { key: 't', style: { color: 'var(--muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.4 } }, item.titulo),
-          e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5, marginTop: 4 } }, `${dataBr(item.abertoEm)} · ${item.requerente || ''} · ${item.statusNome}`),
-        ]),
-        avisoConfianca(item) ? e('div', { key: 'confianca', role: 'status', style: { background: 'var(--warn-tint)', border: '1px solid var(--warn)', borderRadius: 10, padding: '8px 10px', color: 'var(--warn)', fontSize: 12.5, lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 } }, [
-          e('strong', { key: 't' }, avisoConfianca(item).titulo),
-          e('div', { key: 'o' }, avisoConfianca(item).orientacao),
-        ]) : null,
-        // opinião da IA local (Administração > IA): confirma, sugere outro tipo ou encerra reaberto
-        item.ia || item.reabertoIa ? e('div', { key: 'ia', className: 'chamado-ia', style: { fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' } }, [
-          e('span', { key: 'r', style: { fontWeight: 600, color: 'var(--text)' } }, 'IA:'),
-          e('span', { key: 't' }, item.reabertoIa
-            ? `reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.`
-            : item.ia.concorda
-              ? `confirma o tipo (${Math.round(item.ia.confianca * 100)}%)${item.validadoPorIa ? '; liberado para o automático' : ''}.`
-              : `${item.ia.aplicar === 'auto' ? 'trocou o tipo' : 'sugere'} ${item.tipoNome || 'sem automação'} (${Math.round(item.ia.confianca * 100)}%)${item.ia.motivo ? ': ' + item.ia.motivo : ''}`),
-        ]) : null,
-        item.pedirPendencia && !res ? e('div', { key: 'pend', style: { fontSize: 12, color: 'var(--warn)' } }, `Falta ${item.pedirPendencia.faltas.join(' e ')} (não está na descrição, nos acompanhamentos nem nos prints). Rodar pede no chamado e deixa Pendente, sem atribuir.`) : null,
-        item.identificadorAchadoEm ? e('div', { key: 'achado', style: { fontSize: 12, color: 'var(--muted)' } }, `Identificador achado ${item.identificadorAchadoEm === 'print' ? 'no print anexado' : 'nos acompanhamentos'}.`) : null,
-        item.repetirIa && !res ? e('div', { key: 'rep', style: { fontSize: 12, color: 'var(--warn)' } }, `Nova tentativa automática ${item.repetirIa.tentativa}: ${item.repetirIa.motivo || 'falha momentânea'}.`) : null,
-        detalhes,
-        item.problemas.length ? e('div', { key: 'prob', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, item.problemas.map((p, j) => e('div', { key: j, style: { fontSize: 12, color: 'var(--warn)' } }, '⚠ ' + p))) : null,
-        item.ultimaExecucao ? e('div', { key: 'ult', style: { fontSize: 11.5, color: 'var(--muted-soft)' } }, `Última execução: ${NOME_EXEC[item.ultimaExecucao.status] || item.ultimaExecucao.status} · ${dataBr(item.ultimaExecucao.em)} · ${item.ultimaExecucao.por || ''}`) : null,
-        rodape,
-      ]);
+      return { avisos, detalhes, problemas, ultima, acoes, rodandoEste };
     }
 
-    // ---------- tela de cards ----------
-    // Só aparece o que dá pra fazer; o resto (dados faltando, sistema não
-    // automatizado...) fica atrás de um link, pra análise manual.
+    // ---------- listas, visões e filtros ----------
     const itensDaEntidade = Cache.puro.filtrarPorEntidade(lista.itens, entidadeAtiva);
     const possiveis = itensDaEntidade.filter((i) => !i.problemas.length && !dispensados.includes(i.id));
     const manuais = itensDaEntidade.filter((i) => i.problemas.length);
     const naoRodar = itensDaEntidade.filter((i) => !i.problemas.length && dispensados.includes(i.id));
-    const visiveis = verOutros ? [...possiveis, ...naoRodar, ...manuais] : possiveis;
     // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento;
     // nenhum enquanto a lista for a guardada (só a lista confirmada pelo servidor roda)
     const prontosTodos = lista.guardado ? [] : possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
+    const VISOES = [
+      ['disponiveis', 'Disponíveis', possiveis],
+      ['prontos', 'Prontos', possiveis.filter((i) => situacao(i) === 'pronto')],
+      ['falta', 'Falta escolher', possiveis.filter((i) => situacao(i) === 'falta')],
+      ['confirmar', 'Confirmação manual', possiveis.filter((i) => situacao(i) === 'confirmar')],
+      ['resultado', 'Com resultado', itensDaEntidade.filter((i) => resultados[i.id] || execDoChamado(i.id))],
+      ['manual', 'Análise manual', manuais],
+      ['naorodar', 'Não rodar', naoRodar],
+      ['todos', 'Todos', itensDaEntidade],
+    ];
+    const visaoAtual = VISOES.find((v) => v[0] === visao) || VISOES[0];
+    const q = busca.trim().toLowerCase();
+    const tipos = [...new Map(itensDaEntidade.map((i) => [i.tipo, i.tipoNome])).entries()].filter(([k]) => k).sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'pt-BR'));
+    const visiveis = visaoAtual[2].filter((i) => (!tipoSel || i.tipo === tipoSel) && (!q || [i.id, i.titulo, i.categoria, i.requerente, i.tipoNome].join(' ').toLowerCase().includes(q)));
+    const marcadosItens = visiveis.filter((i) => marcados.includes(i.id));
+    const marcadosProntos = marcadosItens.filter((i) => situacao(i) === 'pronto');
+    const todosMarcados = visiveis.length > 0 && visiveis.every((i) => marcados.includes(i.id));
+    const alternar = (id) => setMarcados((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
+    const itemAberto = aberto ? lista.itens.find((i) => i.id === aberto) : null;
 
-    // cartões da barra do topo: mesma altura e mesmo desenho
-    const cartaoTopo = (ativo, cor, fundo = 'var(--accent-soft)') => ({ display: 'flex', alignItems: 'center', gap: 10, height: 40, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, fontSize: 12.5, border: '1px solid ' + (ativo ? cor : 'var(--border)'), background: ativo ? fundo : 'var(--card, transparent)' });
+    // ---------- automático (estado do servidor) ----------
     const descreverAuto = (window.ChamadosAuto && window.ChamadosAuto.descreverAuto) || (() => ({}));
     const estadoAuto = descreverAuto({
       computadores: computadoresAuto, rodando: Object.values(execucoes).filter((x) => !x.fim).reduce((n, x) => n + x.ids.length, 0),
       ultima: ultimoAuto, filaWhatsapp, modoTeste, limite: auto.limite,
     });
-    // faixa abaixo da barra: confirmação, erro e estado do automático
-    const faixaAuto = (confirmandoAuto || auto.ativo || erroAuto) ? e('div', { key: 'faixa', style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', marginBottom: 16, borderRadius: 10, border: '1px solid ' + (confirmandoAuto ? 'var(--warn)' : 'var(--border)'), background: confirmandoAuto ? 'var(--warn-tint)' : 'transparent', fontSize: 12.5 } }, [
-      confirmandoAuto ? e('div', { key: 'conf', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-        e('span', { key: 'q', style: { color: 'var(--warn)', fontWeight: 600, flex: '1 1 260px' } }, `Ligar o modo automático? Os chamados serão processados em modo real, até ${auto.limite} por vez, sem confirmação individual.`),
-        e('button', { key: 's', style: S.btnPrim, onClick: () => { ligarAuto(); setConfirmandoAuto(false); } }, 'Ligar'),
-        e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoAuto(false) }, 'Cancelar'),
-      ]) : null,
-      erroAuto ? e('div', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
-      auto.ativo ? e('div', { key: 'st', className: 'auto-estado', style: { display: 'flex', flexDirection: 'column', gap: 3 } }, [
-        e('div', { key: 'tt', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--text)' } }, [
-          e('span', { key: 'p', 'aria-hidden': 'true', style: { width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 } }),
-          e('span', { key: 't' }, 'Modo automático ligado'),
-        ]),
-        estadoAuto.computadores ? e('div', { key: 'c', style: { color: 'var(--muted)', fontSize: 12 } }, estadoAuto.computadores) : null,
-        e('div', { key: 'ag', style: { color: 'var(--muted)', fontSize: 12 } }, [estadoAuto.agora, estadoAuto.ultima, estadoAuto.whatsapp].filter(Boolean).join(' ')),
-        estadoAuto.aviso ? e('div', { key: 'av', style: { color: 'var(--warn)', fontSize: 12, fontWeight: 600 } }, estadoAuto.aviso) : null,
-        e('div', { key: 'm', style: { color: 'var(--muted-soft)', fontSize: 11.5 } }, 'Mantenha esta aba aberta: é este navegador que roda os chamados.'),
-      ]) : null,
+    const faixaAuto = (auto.ativo || erroAuto) ? e('div', { key: 'faixa', className: 'exc-aviso auto-estado', style: auto.ativo ? { background: 'var(--accent-soft)', color: 'var(--text)', alignItems: 'flex-start' } : { background: 'var(--warn-tint)' } }, [
+      Icon(auto.ativo ? 'Activity' : 'AlertCircle', 16, auto.ativo ? 'var(--accent)' : 'var(--warn)'),
+      e('div', { key: 't', style: { display: 'flex', flexDirection: 'column', gap: 3, flex: 1 } }, [
+        auto.ativo ? e('b', { key: 'tt' }, 'Modo automático ligado: até ' + (auto.limite === 1 ? '1 chamado' : auto.limite + ' chamados') + ' por vez neste computador') : null,
+        auto.ativo && estadoAuto.computadores ? e('span', { key: 'c', style: { color: 'var(--muted)', fontSize: 12 } }, estadoAuto.computadores) : null,
+        auto.ativo ? e('span', { key: 'ag', style: { color: 'var(--muted)', fontSize: 12 } }, [estadoAuto.agora, estadoAuto.ultima, estadoAuto.whatsapp].filter(Boolean).join(' ')) : null,
+        auto.ativo && estadoAuto.aviso ? e('span', { key: 'av', style: { color: 'var(--warn)', fontSize: 12, fontWeight: 600 } }, estadoAuto.aviso) : null,
+        erroAuto ? e('span', { key: 'ea', style: { color: 'var(--warn)', fontSize: 12 } }, erroAuto) : null,
+        auto.ativo ? e('span', { key: 'm', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Mantenha esta aba aberta: é este navegador que roda os chamados.') : null,
+      ]),
     ]) : null;
 
-    const cabecalho = e('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' } }, [
-      e('div', { key: 't' }, [
-        e('div', { key: 'n', style: { fontWeight: 600, fontSize: 19 } }, 'Chamados'),
-        e('div', { key: 's', style: { color: 'var(--muted-soft)', fontSize: 12.5, marginTop: 4 } }, lista.usuario ? [
-          e('span', { key: 'a' }, `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} ${mostrarEntidade ? 'em ' + plural(lista.entidades.length, 'entidade', 'entidades') : 'na entidade ' + (lista.entidades[0] || 'Sistemas')} · aprovação como ${lista.usuario.nome}`),
-          // o tooltip do carimbo mostra quanto durou a leitura do GLPI (só quando o servidor mede)
-          lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR')}`) : null,
-          // ponto discreto: o aviso do GLPI (webhook) está chegando, a lista atualiza sozinha
-          lista.aoVivo ? e('span', { key: 'ao-vivo', title: 'Atualização automática ligada', 'aria-label': 'Atualização automática ligada', role: 'img', style: { display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', marginLeft: 6, verticalAlign: 'middle' } }) : null,
-          verificadoEm ? e('span', { key: 'v' }, ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR')) : null,
-          // região viva sempre presente para o leitor de tela anunciar a troca
-          e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8, color: 'var(--muted)' } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),
-        ] : [
-          e('span', { key: 'a' }, 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
-          e('span', { key: 'vivo', 'aria-live': 'polite' }, ''),
+    // ---------- cabeçalho ----------
+    const subtitulo = lista.usuario ? [
+      e('span', { key: 'a' }, `${possiveis.length} para rodar · ${plural(lista.totalAbertos, 'aberto', 'abertos')} ${mostrarEntidade ? 'em ' + plural(lista.entidades.length, 'entidade', 'entidades') : 'na entidade ' + (lista.entidades[0] || 'Sistemas')} · aprovação como ${lista.usuario.nome}`),
+      lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR')}`) : null,
+      lista.aoVivo ? e('span', { key: 'ao-vivo', title: 'Atualização automática ligada', 'aria-label': 'Atualização automática ligada', role: 'img', className: 'v2c-ao-vivo' }) : null,
+      verificadoEm ? e('span', { key: 'v' }, ' · verificado ' + verificadoEm.toLocaleTimeString('pt-BR')) : null,
+      e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8, color: 'var(--muted)' } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),
+    ] : [e('span', { key: 'a' }, 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'), e('span', { key: 'vivo', 'aria-live': 'polite' }, '')];
+
+    const cabecalho = e('header', { key: 'head', className: 'exu-cab' }, [
+      e('div', { key: 't' }, [e('h2', { key: 'h' }, 'Chamados'), e('p', { key: 'p' }, subtitulo)]),
+      e('div', { key: 'a', className: 'exu-acoes' }, [
+        e('label', { key: 'mt', className: 'exu-chave' + (modoTeste ? ' v2c-teste' : ''), title: modoTeste ? 'Modo teste: nada é escrito no GLPI' : 'Modo real: o resultado é gravado no GLPI' }, [
+          e('input', { key: 'c', type: 'checkbox', className: 'admin-chave', role: 'switch', checked: modoTeste, onChange: (ev) => { setModoTeste(ev.target.checked); gravar(KEY_MODO_TESTE, ev.target.checked); } }),
+          modoTeste ? 'Modo teste' : 'Modo real',
+        ]),
+        e('label', { key: 'au', className: 'exu-chave', title: 'Roda sozinho os chamados prontos. Com mais computadores ligados, cada um pega a sua parte.' }, [
+          e('input', { key: 'c', type: 'checkbox', className: 'admin-chave', role: 'switch', checked: auto.ativo, onChange: (ev) => {
+            if (!ev.target.checked) { mudarAuto({ ativo: false }); setErroAuto(''); }
+            else if (modoTeste) ligarAuto();
+            else { setErroAuto(''); setConfirmar({ tipo: 'auto' }); }
+          } }),
+          'Automático',
+        ]),
+        // quantos chamados este computador pega de cada vez: um contador só
+        e('div', { key: 'pv', className: 'exu-contador', role: 'group', 'aria-label': 'Chamados por vez no automático', title: 'Quantos chamados este computador pega de cada vez' }, [
+          e('button', { key: 'm', type: 'button', disabled: auto.limite <= 1, onClick: () => mudarAuto({ limite: Math.max(1, auto.limite - 1) }), 'aria-label': 'Diminuir' }, '−'),
+          e('span', { key: 'n', 'aria-live': 'polite' }, [e('b', { key: 'b' }, String(auto.limite)), ' por vez']),
+          e('button', { key: 'p', type: 'button', disabled: auto.limite >= 20, onClick: () => mudarAuto({ limite: Math.min(20, auto.limite + 1) }), 'aria-label': 'Aumentar' }, '+'),
+        ]),
+        prontosTodos.length > 1 ? e('button', { key: 'todos', type: 'button', className: 'exu-btn primario', onClick: () => setConfirmar({ itens: prontosTodos, manual: false }) }, [Icon('Activity', 14, 'currentColor'), `Rodar todos os prontos (${prontosTodos.length})`]) : null,
+        e('button', { key: 'cfg', type: 'button', className: 'exu-btn', onClick: () => Hub.abrirEditor(), title: 'Meus acessos' }, [Icon('Pencil', 14, 'currentColor'), 'Acessos']),
+        e('button', { key: 'rf', type: 'button', className: 'exu-btn', disabled: lista.carregando, onClick: buscar, title: 'Atualizar a lista' }, [
+          e('span', { key: 'i', style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14, 'currentColor')),
+          lista.carregando ? 'Buscando…' : 'Atualizar',
         ]),
       ]),
-      e('div', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-        e('label', { key: 'mt', title: modoTeste ? 'Modo teste: nada é escrito no GLPI' : 'Modo real: o resultado é gravado no GLPI', style: { ...cartaoTopo(modoTeste, 'var(--warn)', 'var(--warn-tint)'), cursor: 'pointer' } }, [
-          e('input', { key: 'c', type: 'checkbox', checked: modoTeste, onChange: (ev) => { setModoTeste(ev.target.checked); gravar(KEY_MODO_TESTE, ev.target.checked); } }),
-          e('span', { key: 't', style: { fontWeight: 600, color: modoTeste ? 'var(--warn)' : 'var(--text)' } }, 'Modo teste'),
-          e('span', { key: 's', style: { fontSize: 11.5, color: modoTeste ? 'var(--warn)' : 'var(--muted-soft)' } }, modoTeste ? 'não escreve no GLPI' : 'gravando no GLPI'),
-        ]),
-        e('div', { key: 'auto', title: 'Quantos chamados este computador pega de cada vez. Com mais computadores ligados, cada um pega a sua parte.', style: cartaoTopo(auto.ativo, 'var(--accent)') }, [
-          e('label', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer', color: auto.ativo ? 'var(--accent)' : 'var(--text)' } }, [
-            e('input', { key: 'c', type: 'checkbox', checked: auto.ativo, onChange: (ev) => {
-              if (!ev.target.checked) { mudarAuto({ ativo: false }); setConfirmandoAuto(false); setErroAuto(''); }
-              else if (modoTeste) ligarAuto();
-              else { setErroAuto(''); setConfirmandoAuto(true); }
-            } }),
-            e('span', { key: 't' }, 'Modo automático'),
-          ]),
-          e('span', { key: 'a', style: { color: 'var(--muted)', fontSize: 12 } }, 'até'),
-          e('input', { key: 'n', type: 'number', min: 1, max: 20, value: auto.limite, onChange: (ev) => mudarAuto({ limite: Math.max(1, Math.min(20, Number(ev.target.value) || 1)) }), style: { ...S.input, width: 52, padding: '3px 6px', fontSize: 12.5 } }),
-          e('span', { key: 'b', style: { color: 'var(--muted)', fontSize: 12 } }, 'por vez'),
-        ]),
-        prontosTodos.length > 1
-          ? confirmandoTodos
-            ? e('div', { key: 'todos', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
-                e('span', { key: 'q', style: { fontSize: 12.5, color: modoTeste ? 'var(--muted)' : 'var(--warn)' } }, `Rodar ${prontosTodos.length}${modoTeste ? ' em modo teste' : ' em modo real'}?`),
-                e('button', { key: 's', style: S.btnPrim, onClick: () => rodar(prontosTodos) }, 'Confirmar'),
-                e('button', { key: 'n', style: S.btnSec, onClick: () => setConfirmandoTodos(false) }, 'Cancelar'),
-              ])
-            : e('button', { key: 'todos', style: { ...S.btnPrim, height: 40 }, onClick: () => setConfirmandoTodos(true) }, [Icon('Activity', 14, 'var(--primary-fg)'), e('span', { key: 't' }, `Rodar todos os prontos (${prontosTodos.length})`)])
-          : null,
-        e('button', { key: 'cfg', style: { ...S.btnSec, height: 40 }, onClick: () => Hub.abrirEditor() }, [Icon('Pencil', 14), e('span', { key: 't' }, 'Acessos')]),
-        e('button', { key: 'rf', style: { ...S.btnSec, height: 40 }, disabled: lista.carregando, onClick: buscar }, [
-          e('span', { key: 'i', style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14)),
-          e('span', { key: 't' }, lista.carregando ? 'Buscando…' : 'Atualizar'),
-        ]),
+    ]);
+
+    const kpi = (v, rot, n, det) => e('button', { key: v, type: 'button', className: 'exu-kpi' + (visao === v ? ' marcado' : ''), 'aria-pressed': visao === v ? 'true' : 'false', onClick: () => trocarVisao(visao === v ? 'disponiveis' : v) },
+      [e('div', { key: 'r', className: 'exu-kpi-rot' }, rot), e('div', { key: 'v', className: 'exu-kpi-val' }, String(n)), e('div', { key: 'd', className: 'exu-kpi-det' }, det)]);
+    const kpis = e('div', { key: 'kpis', className: 'exu-kpis' }, [
+      kpi('prontos', 'Prontos para rodar', VISOES[1][2].length, 'reconhecidos e completos'),
+      kpi('falta', 'Falta escolher', VISOES[2][2].length, 'perfil, cooperativa, login…'),
+      kpi('confirmar', 'Confirmação manual', VISOES[3][2].length, 'não entram no automático'),
+      kpi('manual', 'Análise manual', manuais.length, 'faltam dados no chamado'),
+      kpi('resultado', 'Com resultado', VISOES[4][2].length, 'nesta tela'),
+    ]);
+    const abas = e('div', { key: 'abas', className: 'exu-abas', role: 'tablist' }, VISOES.map(([v, rot, l]) => e('button', {
+      key: v, type: 'button', role: 'tab', className: 'exu-aba', 'aria-selected': visao === v ? 'true' : 'false', onClick: () => trocarVisao(v),
+    }, [rot, e('span', { key: 'n', className: 'n' }, String(l.length))])));
+    const barra = e('div', { key: 'barra', className: 'exu-barra' }, [
+      e('label', { key: 'b', className: 'exu-busca' }, [Icon('Search', 15, 'var(--muted-soft)'), e('input', { key: 'i', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar por número, título, categoria ou requerente', 'aria-label': 'Buscar chamados' })]),
+      e('select', { key: 't', className: 'exu-select', value: tipoSel, onChange: (ev) => setTipoSel(ev.target.value), 'aria-label': 'Tipo' }, [e('option', { key: '', value: '' }, 'Todos os tipos'), ...tipos.map(([k, n]) => e('option', { key: k, value: k }, n))]),
+      mostrarEntidade ? e('select', { key: 'en', className: 'exu-select', value: entidadeAtiva, onChange: (ev) => setFiltroEntidade(ev.target.value), 'aria-label': 'Entidade' }, [e('option', { key: '', value: '' }, 'Todas as entidades'), ...lista.entidades.map((n) => e('option', { key: n, value: n }, n))]) : null,
+      e('div', { key: 'v', className: 'exu-seg', role: 'group', 'aria-label': 'Exibição' }, [
+        e('button', { key: 'l', type: 'button', 'aria-pressed': exibir === 'lista' ? 'true' : 'false', onClick: () => trocarExibir('lista') }, [Icon('FileText', 13, 'currentColor'), ' Lista']),
+        e('button', { key: 'c', type: 'button', 'aria-pressed': exibir === 'cartoes' ? 'true' : 'false', onClick: () => trocarExibir('cartoes') }, [Icon('LayoutDashboard', 13, 'currentColor'), ' Cartões']),
       ]),
     ]);
 
     const horaGuardada = lista.em ? lista.em.toLocaleTimeString('pt-BR') : 'Não informado';
     const comListaGuardada = lista.guardado && lista.itens.length > 0;
     const avisoGuardada = lista.erro && comListaGuardada
-      ? e('div', { key: 'aviso-guardada', role: 'alert', style: { fontSize: 12.5, color: 'var(--warn)', marginBottom: 14 } }, `Não foi possível atualizar a lista: ${lista.erro}. Mostrando a lista guardada às ${horaGuardada}. Nada roda até a lista ser atualizada.`)
+      ? e('div', { key: 'aviso-guardada', role: 'alert', className: 'exc-aviso' }, [Icon('AlertCircle', 16, 'var(--warn)'), `Não foi possível atualizar a lista: ${lista.erro}. Mostrando a lista guardada às ${horaGuardada}. Nada roda até a lista ser atualizada.`])
       : null;
-    // filtro por entidade: só existe com mais de uma entidade na lista
-    const barraEntidade = mostrarEntidade
-      ? e('div', { key: 'filtro-entidade', role: 'group', 'aria-label': 'Filtrar por entidade', style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 14 } }, [
-        e('span', { key: 'l', style: { color: 'var(--muted)', fontSize: 11.5 } }, 'Entidade:'),
-        e('button', { key: 'todas', 'aria-pressed': entidadeAtiva === '', style: S.chip(entidadeAtiva === ''), onClick: () => setFiltroEntidade('') }, 'Todas'),
-        ...lista.entidades.map((nome) => e('button', { key: nome, 'aria-pressed': entidadeAtiva === nome, style: S.chip(entidadeAtiva === nome), onClick: () => setFiltroEntidade(nome) }, nome)),
-      ])
-      : null;
+
+    // ---------- lista e cartões ----------
+    const tipoTag = (item) => e('span', { style: S.tag(COR_TIPO[item.tipo] || '#6b7280') }, item.tipoNome || 'Sem automação');
+    const linha = (item) => e('div', {
+      key: item.id, role: 'row', tabIndex: 0, className: 'exc-linha v2c-linha' + (marcados.includes(item.id) ? ' selecionada' : '') + (aberto === item.id ? ' aberta' : ''),
+      onClick: () => setAberto(item.id), onKeyDown: (ev) => { if (ev.key === 'Enter') setAberto(item.id); },
+    }, [
+      e('span', { key: 'm', className: 'exc-marcar', onClick: (ev) => ev.stopPropagation() }, e('input', { type: 'checkbox', checked: marcados.includes(item.id), onChange: () => alternar(item.id), 'aria-label': 'Marcar chamado ' + item.id })),
+      e('div', { key: 't', className: 'exc-titulo' }, [
+        e('b', { key: 'b' }, [e('span', { key: 'i', className: 'exc-id' }, '#' + item.id), e('span', { key: 't' }, item.categoria || '(sem categoria)')]),
+        e('small', { key: 's' }, item.titulo),
+      ]),
+      e('div', { key: 'tp', className: 'exc-celula' }, [tipoTag(item), rotuloConfianca(item) ? e('span', { key: 'c', className: 'exc-ia', title: 'Confirmação manual' }, '•') : null, item.ia && !item.ia.concorda ? e('span', { key: 'ia', className: 'exc-ia', title: 'A IA local sugere outro tipo' }, [Icon('Bot', 12, 'currentColor'), 'IA']) : null]),
+      e('div', { key: 'r', className: 'exc-celula' }, item.requerente || 'Não informado'),
+      e('div', { key: 'h', className: 'exc-celula' }, dataBr(item.abertoEm)),
+      e('div', { key: 's' }, selo(item)),
+    ]);
+    const cartao = (item) => {
+      const p = partes(item);
+      return e('div', { key: item.id, className: 'exu-cartao v2c-cartao' + (p.rodandoEste ? ' rodando' : '') }, e('div', { className: 'exu-cartao-corpo', style: { display: 'flex', flexDirection: 'column', gap: 10 } }, [
+        e('div', { key: 'top', className: 'exc-cartao-topo' }, [
+          e('span', { key: 'm', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [e('input', { key: 'c', type: 'checkbox', checked: marcados.includes(item.id), onChange: () => alternar(item.id), 'aria-label': 'Marcar chamado ' + item.id }), tipoTag(item), mostrarEntidade && item.entidade ? e('span', { key: 'ent', className: 'exu-tipo' }, item.entidade) : null]),
+          selo(item),
+        ]),
+        e('button', { key: 'tt', type: 'button', className: 'v2c-cartao-titulo', onClick: () => setAberto(item.id) }, [e('span', { key: 'i', className: 'exc-id' }, '#' + item.id + ' '), e('b', { key: 'c' }, item.categoria || '(sem categoria)'), e('small', { key: 't' }, item.titulo), e('small', { key: 'm', className: 'v2c-meta' }, `${dataBr(item.abertoEm)} · ${item.requerente || ''} · ${item.statusNome}`)]),
+        ...p.avisos, p.detalhes, p.problemas, p.ultima, p.acoes,
+      ]));
+    };
 
     let corpo;
     if (lista.erro && !comListaGuardada) {
-      corpo = e('div', { key: 'erro', style: { color: 'var(--error)', fontSize: 13.5, padding: '20px 0' } }, 'Falha ao buscar os chamados: ' + lista.erro);
+      corpo = e('div', { key: 'erro', className: 'exc-aviso', style: { background: 'var(--error-tint)' } }, [Icon('AlertCircle', 16, 'var(--error)'), 'Falha ao buscar os chamados: ' + lista.erro]);
     } else if (!lista.usuario && lista.carregando) {
-      corpo = e('div', { key: 'load', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted-soft)', padding: '50px 20px' } }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
+      corpo = e('div', { key: 'load', className: 'exc-vazio' }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 22, 'var(--accent)')), 'Buscando chamados no GLPI…']);
     } else if (!visiveis.length) {
-      corpo = e('div', { key: 'vazio', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '50px 20px', color: 'var(--muted-soft)', textAlign: 'center' } }, [
-        Icon('Inbox', 34, 'var(--muted-soft)', 1.3),
-        e('div', { key: 't', style: { fontSize: 14 } }, 'Nenhum chamado disponível para rodar.'),
-        e('div', { key: 's', style: { fontSize: 12.5 } }, 'Aparecem aqui: Fechamento p/ cobrança, Cadastro de consultor, Cadastro de usuário (SGA/CRM), Inativação de consultor e Bloqueio de acesso da entidade Sistemas.'),
-      ]);
+      corpo = e('div', { key: 'vazio', className: 'exc-tabela' }, e('div', { className: 'exc-vazio' }, [
+        Icon('Inbox', 30, 'var(--muted-soft)', 1.3),
+        q || tipoSel ? 'Nenhum chamado com esses filtros.' : visao === 'disponiveis' ? 'Nenhum chamado disponível para rodar.' : 'Nada nesta visão.',
+        q || tipoSel ? e('button', { key: 'l', type: 'button', className: 'exu-btn pequeno', onClick: () => { setBusca(''); setTipoSel(''); } }, 'Limpar filtros') : null,
+      ]));
+    } else if (exibir === 'cartoes') {
+      corpo = e('div', { key: 'grid', className: 'v2c-cartoes' }, visiveis.map(cartao));
     } else {
-      corpo = e('div', { key: 'grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 12 } }, visiveis.map(card));
+      corpo = e('div', { key: 'tab', className: 'exc-tabela v2c-tabela', role: 'table', 'aria-label': 'Chamados' }, [
+        e('div', { key: 'h', className: 'exc-cab v2c-linha', role: 'row' }, [
+          e('span', { key: 'm', className: 'exc-marcar' }, e('input', { type: 'checkbox', checked: todosMarcados, onChange: () => setMarcados(todosMarcados ? [] : visiveis.map((i) => i.id)), 'aria-label': 'Marcar todos os exibidos' })),
+          e('span', { key: 'c' }, 'Chamado'), e('span', { key: 't' }, 'Tipo'), e('span', { key: 'r' }, 'Requerente'), e('span', { key: 'a' }, 'Aberto em'), e('span', { key: 's' }, 'Situação'),
+        ]),
+        ...visiveis.map(linha),
+      ]);
     }
 
     const extras = [];
-    if (manuais.length || naoRodar.length) {
-      extras.push(e('button', { key: 'outros', style: { ...S.link, marginTop: 14 }, onClick: () => setVerOutros((v) => !v) },
-        verOutros ? 'Mostrar apenas os disponíveis para rodar' : `Exibir também ${manuais.length ? `${manuais.length} para análise manual` : ''}${manuais.length && naoRodar.length ? ' e ' : ''}${naoRodar.length ? `${naoRodar.length} ${naoRodar.length === 1 ? 'marcado' : 'marcados'} como "Não rodar"` : ''}`));
-    }
     if (mensagensGerais.length) {
-      extras.push(e('div', { key: 'msgs', style: { ...S.card, marginTop: 18 } }, mensagensGerais.map((m, i) =>
-        e('div', { key: i }, [
-          e('div', { key: 'l', style: S.label }, 'Mensagem geral do fechamento ' + m.periodo),
-          e('textarea', { key: 't', readOnly: true, value: m.texto, rows: Math.min(18, m.texto.split('\n').length + 1), style: { ...S.input, resize: 'vertical' } }),
-          e('button', { key: 'c', style: { ...S.link, marginTop: 6 }, onClick: () => navigator.clipboard && navigator.clipboard.writeText(m.texto) }, 'Copiar'),
-        ])
-      )));
+      extras.push(e('section', { key: 'msgs', className: 'exu-cartao' }, e('div', { className: 'exu-cartao-corpo', style: { display: 'flex', flexDirection: 'column', gap: 14 } }, mensagensGerais.map((m, i) =>
+        e('div', { key: i, className: 'exu-campo' }, [
+          e('label', { key: 'l' }, 'Mensagem geral do fechamento ' + m.periodo),
+          e('textarea', { key: 't', readOnly: true, value: m.texto, rows: Math.min(18, m.texto.split('\n').length + 1) }),
+          e('button', { key: 'c', type: 'button', className: 'exu-btn pequeno', style: { alignSelf: 'flex-start' }, onClick: () => copiarTexto(m.texto) }, [Icon('Copy', 13, 'currentColor'), 'Copiar']),
+        ])))));
     }
     const listaExec = Object.values(execucoes).reverse();
     if (listaExec.length) {
-      extras.push(e('div', { key: 'execs', style: { ...S.card, marginTop: 18, gap: 8 } }, [
-        e('div', { key: 'h', style: { fontWeight: 600, fontSize: 13.5 } }, `Execuções${rodandoAlgo ? ` · ${listaExec.filter((x) => !x.fim).length} em execução` : ''}`),
-        ...listaExec.map((x) => {
-          const aberto = !!logsAbertos[x.jobId];
-          return e('div', { key: x.jobId, style: { borderTop: '1px solid var(--border)', paddingTop: 8 } }, [
-            e('div', { key: 'r', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
-              e('div', { key: 't', style: { fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 } }, [
-                !x.fim ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 13)) : null,
-                e('span', { key: 'n' }, `${x.ids.map((id) => '#' + id).join(', ')} · ${x.fim ? (x.fim.error ? 'erro' : 'concluída') : 'em execução…'}`),
-              ]),
-              e('div', { key: 'b', style: { display: 'flex', gap: 12 } }, [
-                !x.fim ? e('button', { key: 'p', style: { ...S.link, color: 'var(--error)' }, onClick: () => fetch(`${SERVICO}/api/parar/${x.jobId}`, { method: 'POST' }).catch(() => {}) }, 'Parar') : null,
-                e('button', { key: 'v', style: S.link, onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !aberto })) }, aberto ? 'Ocultar log' : 'Ver log'),
-              ]),
+      extras.push(e('section', { key: 'execs', className: 'exu-cartao' }, [
+        e('div', { key: 'c', className: 'exu-cartao-cab' }, e('div', null, [e('h3', { key: 'h' }, 'Execuções'), e('p', { key: 'p' }, rodandoAlgo ? listaExec.filter((x) => !x.fim).length + ' em execução agora' : 'Todas terminaram.')])),
+        e('div', { key: 'b', className: 'exu-cartao-corpo', style: { display: 'flex', flexDirection: 'column' } }, listaExec.map((x) => {
+          const abertoLog = !!logsAbertos[x.jobId];
+          return e('div', { key: x.jobId, className: 'v2c-exec' }, [
+            e('div', { key: 'r', className: 'v2c-exec-linha' }, [
+              !x.fim ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 13, 'var(--accent)')) : null,
+              e('span', { key: 'n', style: { flex: 1, minWidth: 0 } }, x.ids.map((id) => '#' + id).join(', ')),
+              e('span', { key: 'st', className: 'exu-sit ' + (!x.fim ? 'rodando' : x.fim.error ? 'erro' : 'concluido') }, [e('i', { key: 'i' }), !x.fim ? 'Em execução' : x.fim.error ? 'Erro' : 'Concluída']),
+              !x.fim ? e('button', { key: 'p', type: 'button', className: 'exu-btn pequeno perigo', onClick: () => fetch(`${SERVICO}/api/parar/${x.jobId}`, { method: 'POST' }).catch(() => {}) }, 'Parar') : null,
+              e('button', { key: 'v', type: 'button', className: 'exu-btn pequeno', onClick: () => setLogsAbertos((l) => ({ ...l, [x.jobId]: !abertoLog })) }, abertoLog ? 'Ocultar log' : 'Ver log'),
             ]),
-            aberto ? e('pre', { key: 'l', style: { margin: '8px 0 0', maxHeight: 260, overflowY: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'pre-wrap', color: 'var(--muted)' } }, x.linhas.join('\n') || 'Aguardando…') : null,
+            abertoLog ? e('pre', { key: 'l', className: 'v2c-log' }, x.linhas.join('\n') || 'Aguardando…') : null,
           ]);
-        }),
+        })),
       ]));
     }
 
-    return e('div', { style: { padding: '28px 24px 96px', maxWidth: 1200, margin: '0 auto' } }, [cabecalho, faixaAuto, avisoGuardada, barraEntidade, corpo, ...extras, verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null]);
+    const lote = marcados.length ? e('div', { key: 'lote', className: 'exc-lote', role: 'toolbar', 'aria-label': 'Ações nos selecionados' }, [
+      e('b', { key: 'n' }, marcados.length === 1 ? '1 selecionado' : marcados.length + ' selecionados'),
+      e('button', { key: 'r', type: 'button', className: 'exu-btn pequeno', disabled: !marcadosProntos.length, title: marcadosProntos.length < marcadosItens.length ? 'Só os prontos rodam em lote' : '', onClick: () => setConfirmar({ itens: marcadosProntos, manual: false }) }, 'Rodar ' + (marcadosProntos.length || '')),
+      e('button', { key: 'd', type: 'button', className: 'exu-btn pequeno', onClick: () => { marcadosItens.forEach((i) => dispensar(i.id, true)); setMarcados([]); } }, 'Não rodar'),
+      e('button', { key: 'l', type: 'button', className: 'exu-btn pequeno', onClick: () => setMarcados([]), 'aria-label': 'Limpar seleção' }, Icon('X', 13, 'currentColor')),
+    ]) : null;
+
+    const { Modal } = window.ExemploUI;
+    const janelaConfirmar = confirmar ? (confirmar.tipo === 'auto'
+      ? e(Modal, {
+          key: 'conf-auto', perigo: true, titulo: 'Ligar o modo automático em modo real?', fechar: () => setConfirmar(null),
+          descricao: `Os chamados prontos serão processados em modo real, até ${auto.limite} por vez, sem confirmação individual. Cada chamado fica atribuído ao titular do token e é solucionado no GLPI.`,
+          rodape: [e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: () => setConfirmar(null) }, 'Cancelar'), e('button', { key: 'o', type: 'button', className: 'exu-btn primario', onClick: () => { setConfirmar(null); ligarAuto(); } }, 'Ligar')],
+        })
+      : e(Modal, {
+          key: 'conf-rodar', perigo: !modoTeste, titulo: `Rodar ${plural(confirmar.itens.length, 'chamado', 'chamados')}${modoTeste ? ' em modo teste' : ' em modo real'}?`, fechar: () => setConfirmar(null),
+          descricao: modoTeste ? 'Em teste a automação lê e preenche, mas não escreve no GLPI.' : 'Em modo real os chamados ficam atribuídos ao titular do token e são solucionados no GLPI.',
+          rodape: [e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: () => setConfirmar(null) }, 'Cancelar'), e('button', { key: 'o', type: 'button', className: 'exu-btn primario', onClick: () => { const l = confirmar.itens; setConfirmar(null); setMarcados([]); rodar(l, { manual: confirmar.manual }); } }, 'Rodar')],
+        }, e('div', { className: 'v2c-lista-conf' }, confirmar.itens.slice(0, 8).map((i) => e('div', { key: i.id }, [e('span', { key: 'n', className: 'exc-id' }, '#' + i.id + ' '), i.tipoNome, ' · ', i.categoria || 'Sem categoria'])).concat(confirmar.itens.length > 8 ? [e('div', { key: 'mais', style: { color: 'var(--muted)' } }, 'e mais ' + (confirmar.itens.length - 8))] : []))))
+      : null;
+
+    const gaveta = itemAberto ? (() => {
+      const p = partes(itemAberto);
+      return e(VerChamado, { key: 'ver-' + itemAberto.id, item: itemAberto, userToken: acessos.userToken, onFechar: () => { setAberto(null); setConfirmando(null); }, extra: [...p.avisos, p.detalhes, p.problemas, p.ultima, p.acoes].filter(Boolean) });
+    })() : verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null;
+
+    return e('div', { className: 'exu-tela v2c-tela' }, [cabecalho, faixaAuto, avisoGuardada, kpis, abas, barra, corpo, ...extras, lote, janelaConfirmar, gaveta]);
   }
 
   window.ChamadosView = ChamadosView;
