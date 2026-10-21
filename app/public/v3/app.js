@@ -187,8 +187,8 @@
     // '' = não deu para pegar (sem token): a tela abre sem passe e só funciona se a automação for de todo mundo.
     const [passes, setPasses] = useState({});
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
-    // v3: só a Foto de perfil ganha a tela nova (o proxy injeta o estilo com ?v2=1; so=foto deixa as outras como estão)
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=foto' + (passe ? '&passe=' + encodeURIComponent(passe) : '');
+    // v3: a Foto de perfil e as Alt. Status ganham a tela nova (o proxy injeta o estilo com ?v2=1; so=v3 deixa as outras como estão)
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3' + (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
       pedirPasse(a.id).then((passe) => { if (janela) janela.location = comPasse(a, passe); });
@@ -224,6 +224,8 @@
     const [glpiLookupLoading, setGlpiLookupLoading] = useState(false);
     const [glpiLookupError, setGlpiLookupError] = useState(null);
     const [glpiForm, setGlpiForm] = useState({ categoriaId: '', requerenteId: '', atribuidoId: '', titulo: '', descricao: '' });
+    const [glpiAnexos, setGlpiAnexos] = useState([]); // v3: fotos e documentos do chamado ({ nome, tipo, tamanho, base64 })
+    const [glpiArrastando, setGlpiArrastando] = useState(false);
     const [glpiSubmitting, setGlpiSubmitting] = useState(false);
     const [glpiReqSearch, setGlpiReqSearch] = useState('');
     const [glpiReqOpen, setGlpiReqOpen] = useState(false);
@@ -1044,16 +1046,38 @@
         const atribuido = users.find((u) => String(u.id) === String(glpiForm.atribuidoId));
         const result = await api('/api/glpi/ticket', {
           method: 'POST',
-          body: JSON.stringify({ userToken: glpiToken, ...glpiForm, categoriaLabel: categoria ? categoria.label : null, requerenteLabel: requerente ? requerente.label : null, atribuidoLabel: atribuido ? atribuido.label : null }),
+          body: JSON.stringify({ userToken: glpiToken, ...glpiForm, categoriaLabel: categoria ? categoria.label : null, requerenteLabel: requerente ? requerente.label : null, atribuidoLabel: atribuido ? atribuido.label : null,
+            anexos: glpiAnexos.map((a) => ({ nome: a.nome, tipo: a.tipo, base64: a.base64 })) }),
         });
-        setGlpiSucesso({ id: result.id, url: result.url, titulo: glpiForm.titulo.trim(), categoria: categoria ? categoria.label : 'Sem categoria' });
+        setGlpiSucesso({ id: result.id, url: result.url, titulo: glpiForm.titulo.trim(), categoria: categoria ? categoria.label : 'Sem categoria', anexados: result.anexados || 0, falhasAnexo: result.falhasAnexo || [] });
         setGlpiForm({ categoriaId: '', requerenteId: '', atribuidoId: '', titulo: '', descricao: '' });
+        setGlpiAnexos([]);
         setGlpiTocado(false);
       } catch (err) {
         pushToast('error', 'Não foi possível abrir o chamado: ' + err.message);
       } finally {
         setGlpiSubmitting(false);
       }
+    }
+    // anexos: mesmas regras do servidor (glpi.lerAnexos); conferidas aqui para avisar antes de enviar
+    const ANEXO_ACEITOS = 'image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip';
+    const TIPO_POR_EXT = { doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', zip: 'application/zip', pdf: 'application/pdf', csv: 'text/csv', txt: 'text/plain', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+    const tamanhoTexto = (n) => (n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB');
+    function adicionarAnexos(arquivos) {
+      Array.from(arquivos || []).forEach((f, i) => {
+        const ext = String(f.name || '').split('.').pop().toLowerCase();
+        const tipo = TIPO_POR_EXT[ext] || f.type;
+        const nome = f.name && f.name !== 'image.png' ? f.name : 'print-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '-' + i + '.png';
+        if (!Object.values(TIPO_POR_EXT).includes(tipo)) { pushToast('error', nome + ': envie foto, PDF ou documento.'); return; }
+        if (f.size > 10 * 1024 * 1024) { pushToast('error', nome + ' passa de 10 MB.'); return; }
+        const leitor = new FileReader();
+        leitor.onload = () => setGlpiAnexos((atual) => {
+          if (atual.length >= 5) { pushToast('error', 'Envie até 5 arquivos por chamado.'); return atual; }
+          if (atual.reduce((soma, a) => soma + a.tamanho, 0) + f.size > 25 * 1024 * 1024) { pushToast('error', 'Os arquivos passam de 25 MB no total.'); return atual; }
+          return [...atual, { id: Math.random().toString(36).slice(2), nome, tipo, tamanho: f.size, base64: String(leitor.result).split(',')[1] || '', previa: tipo.startsWith('image/') ? leitor.result : null }];
+        });
+        leitor.readAsDataURL(f);
+      });
     }
     const campoV2 = (rotulo, filho, extra) => e('div', { className: 'exu-campo' }, [e('label', { key: 'l' }, rotulo), filho, extra || null]);
 
@@ -1077,7 +1101,8 @@
       glpiBody = e('div', { key: 'ok', className: 'ext-sucesso' }, [
         e('span', { key: 'i', className: 'ext-sucesso-icone' }, Icon('Activity', 26, 'var(--accent)')),
         e('b', { key: 'b' }, glpiSucesso.id ? 'Chamado #' + glpiSucesso.id + ' aberto' : 'Chamado aberto'),
-        e('p', { key: 'p' }, glpiSucesso.titulo + ' · ' + glpiSucesso.categoria),
+        e('p', { key: 'p' }, glpiSucesso.titulo + ' · ' + glpiSucesso.categoria + (glpiSucesso.anexados ? ' · ' + (glpiSucesso.anexados === 1 ? '1 arquivo anexado' : glpiSucesso.anexados + ' arquivos anexados') : '')),
+        glpiSucesso.falhasAnexo && glpiSucesso.falhasAnexo.length ? e('div', { key: 'fa', className: 'exc-aviso' }, 'O chamado foi aberto, mas não consegui anexar: ' + glpiSucesso.falhasAnexo.join(', ') + '. Anexe pelo GLPI.') : null,
         e('div', { key: 'a', style: { display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' } }, [
           glpiSucesso.url ? e('a', { key: 'g', className: 'exu-btn', href: glpiSucesso.url, target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' } }, [Icon('ExternalLink', 14, 'currentColor'), 'Ver no GLPI']) : null,
           e('button', { key: 'o', type: 'button', className: 'exu-btn', onClick: () => setGlpiSucesso(null) }, 'Abrir outro'),
@@ -1092,7 +1117,24 @@
           e('div', { key: 'a' }, campoV2('Atribuído a', e(EscolhaPessoa, { users, valor: glpiForm.atribuidoId, mudar: (id) => setGlpiField('atribuidoId', id) }), e('p', { key: 'a', className: 'exu-campo-ajuda' }, 'Vazio: fila da equipe.'))),
         ]),
         campoV2('Título', e('input', { value: glpiForm.titulo, onChange: (ev) => setGlpiField('titulo', ev.target.value), maxLength: 200, placeholder: 'Ex.: Erro ao bloquear usuário', 'aria-invalid': !!erroTitulo }), erroTitulo ? e('p', { key: 'e', className: 'exu-campo-erro' }, erroTitulo) : null),
-        campoV2('Descrição', e('textarea', { value: glpiForm.descricao, onChange: (ev) => setGlpiField('descricao', ev.target.value), placeholder: 'Conte o que aconteceu e o que já tentou.', style: { height: 100 } })),
+        campoV2('Descrição', e('textarea', { value: glpiForm.descricao, onChange: (ev) => setGlpiField('descricao', ev.target.value), onPaste: (ev) => { if (ev.clipboardData && ev.clipboardData.files.length) { ev.preventDefault(); adicionarAnexos(ev.clipboardData.files); } }, placeholder: 'Conte o que aconteceu e o que já tentou. Cole um print aqui (Ctrl+V).', style: { height: 100 } })),
+        campoV2('Fotos e documentos (opcional)', e('div', { className: 'v3-anexos' }, [
+          e('label', {
+            key: 'z', className: 'ext-anexo v3-anexo-zona' + (glpiArrastando ? ' arrastando' : ''),
+            onDragOver: (ev) => { ev.preventDefault(); setGlpiArrastando(true); }, onDragLeave: () => setGlpiArrastando(false),
+            onDrop: (ev) => { ev.preventDefault(); setGlpiArrastando(false); adicionarAnexos(ev.dataTransfer.files); },
+          }, [
+            Icon('Plus', 16, 'var(--muted)'),
+            e('span', { key: 't' }, 'Arraste aqui, cole um print ou'),
+            e('span', { key: 'b', className: 'exu-btn pequeno' }, 'escolha arquivos'),
+            e('input', { key: 'i', type: 'file', multiple: true, accept: ANEXO_ACEITOS, className: 'v3-anexo-input', onChange: (ev) => { adicionarAnexos(ev.target.files); ev.target.value = ''; } }),
+          ]),
+          glpiAnexos.length ? e('ul', { key: 'l', className: 'v3-anexo-lista' }, glpiAnexos.map((a) => e('li', { key: a.id }, [
+            a.previa ? e('img', { key: 'p', src: a.previa, alt: '' }) : e('span', { key: 'p', className: 'v3-anexo-icone' }, Icon('FileText', 16, 'var(--muted)')),
+            e('div', { key: 'n' }, [e('b', { key: 'b' }, a.nome), e('small', { key: 's' }, tamanhoTexto(a.tamanho))]),
+            e('button', { key: 'x', type: 'button', className: 'exu-btn pequeno', onClick: () => setGlpiAnexos((l) => l.filter((x) => x.id !== a.id)), 'aria-label': 'Remover ' + a.nome }, Icon('X', 13, 'currentColor')),
+          ]))) : null,
+        ]), e('p', { key: 'a', className: 'exu-campo-ajuda' }, 'Fotos, PDF, Word, Excel ou PowerPoint. Até 5 arquivos de 10 MB.')),
       ]);
     }
 

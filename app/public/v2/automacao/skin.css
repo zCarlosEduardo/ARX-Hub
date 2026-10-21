@@ -39,8 +39,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .v2f-aba .n { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--hover-bg); color: var(--muted); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
 .v2f-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
 .v2f-campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.v2f-campo label { display: flex; justify-content: space-between; margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
-.v2f-campo label span { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.v2f-campo > label { display: flex; justify-content: space-between; margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.v2f-campo > label span { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
 .v2f-campo input[aria-invalid="true"] { border-color: var(--error) !important; }
 .v2f-ajuda { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .v2f-erro { margin: 0; font-size: 12px; color: var(--error); }
@@ -88,3 +88,32 @@ details.v2f-tec summary { cursor: pointer; font-size: 12.5px; color: var(--muted
 details.v2f-tec .log { margin-top: 10px; }
 @media (max-width: 860px) { .v2f-grade { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .v2f-passos li.agora i { animation: none; } }
+
+/* ---------------- Alt. Status Usuário e Voluntário: mesmo padrão da Foto ---------------- */
+.v2a .v2f-campo > label span { font-size: 11px; font-weight: 600; color: var(--accent-fg); background: var(--accent-soft); padding: 1px 8px; border-radius: 999px; }
+.v2a .v2f-campo > label span:empty { display: none; }
+.v2a-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v2a-acoes button { text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.v2a-acoes button b { font-size: 13px; font-weight: 600; }
+.v2a-acoes button small { font-size: 11.5px; color: var(--muted); }
+.v2a-acoes button:hover { border-color: var(--border-hover); }
+.v2a-acoes button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.v2a-acoes button[data-acao="bloquear"][aria-checked="true"] { border-color: var(--error); background: var(--error-tint); box-shadow: inset 0 0 0 1px var(--error); }
+.v2a #v2aEmpresas .empresa-checklist { max-height: 220px; overflow-y: auto; }
+.v2a #v2aIniciar { margin-top: 4px; align-items: center; }
+.v2a #v2aIniciar .primary-btn { margin: 0; }
+.v2a #v2aIniciar .error { margin: 0; flex-basis: 100%; }
+.v2a-resumo { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: 10px; background: var(--hover-bg-soft); border: 1px solid var(--border); font-size: 13px; }
+.v2a-resumo dt { color: var(--muted); }
+.v2a-resumo dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.v2a-resumo dd.perigo { color: var(--error); }
+.v2a-resumo dd.ok { color: var(--accent-fg); }
+.v2a #v2aSistemas .painel-sistema { margin-top: 0; margin-bottom: 12px; }
+.v2a #v2aSobre { margin-top: 4px; }
+.v2a #v2aTec .log { margin-top: 10px; }
+.v2a #v2aRes .card { margin: 0; }
+.v2a #resultsTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.v2a #resultsTable th { text-align: left; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 8px; border-bottom: 1px solid var(--border); }
+.v2a #resultsTable td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.v2a-vazio { color: var(--muted); font-size: 13px; text-align: center; padding: 32px; }
+@media (max-width: 640px) { .v2a-acoes { grid-template-columns: 1fr; } }

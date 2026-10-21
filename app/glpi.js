@@ -113,9 +113,77 @@ async function listarGrupos(userToken) {
   });
 }
 
-async function createTicket(userToken, { titulo, descricao, categoriaId, requerenteId, atribuidoId }) {
-  if (!titulo || !titulo.trim()) throw new Error('Título é obrigatório.');
+// Anexos do "Abrir chamado": fotos, PDF e documentos de escritório, até 5 arquivos de 10 MB (25 MB no total).
+const ANEXO_MAX = 5;
+const ANEXO_MAX_BYTES = 10 * 1024 * 1024;
+const ANEXOS_MAX_BYTES = 25 * 1024 * 1024;
+const ANEXO_TIPOS = /^(image\/(png|jpeg|gif|webp|bmp)|application\/pdf|text\/(plain|csv)|application\/(msword|vnd\.ms-excel|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)|zip|x-zip-compressed))$/;
+
+/** Valida a lista vinda do navegador ([{ nome, tipo, base64 }]) e devolve [{ nome, tipo, conteudo: Buffer }]; erro em português. */
+function lerAnexos(lista) {
+  if (lista === undefined || lista === null) return [];
+  if (!Array.isArray(lista)) throw new Error('Anexos inválidos.');
+  if (lista.length > ANEXO_MAX) throw new Error(`Envie até ${ANEXO_MAX} arquivos por chamado.`);
+  let total = 0;
+  return lista.map((a) => {
+    const nome = a && typeof a.nome === 'string' ? a.nome.replace(/[\\/\u0000-\u001f]/g, '_').trim().slice(0, 200) : '';
+    const tipo = a && typeof a.tipo === 'string' ? a.tipo.toLowerCase() : '';
+    if (!nome) throw new Error('Arquivo sem nome.');
+    if (!ANEXO_TIPOS.test(tipo)) throw new Error(`O arquivo ${nome} não é foto, PDF nem documento aceito.`);
+    if (typeof a.base64 !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(a.base64)) throw new Error(`O arquivo ${nome} veio corrompido.`);
+    const conteudo = Buffer.from(a.base64, 'base64');
+    if (!conteudo.length) throw new Error(`O arquivo ${nome} está vazio.`);
+    if (conteudo.length > ANEXO_MAX_BYTES) throw new Error(`O arquivo ${nome} passa de 10 MB.`);
+    total += conteudo.length;
+    if (total > ANEXOS_MAX_BYTES) throw new Error('Os arquivos passam de 25 MB no total.');
+    return { nome, tipo, conteudo };
+  });
+}
+
+/** Sobe um arquivo como Documento do GLPI ligado ao chamado (mesmo caminho do chamados-glpi). */
+async function anexarDocumento(sessionToken, ticketId, { nome, tipo, conteudo }) {
+  const headers = { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken };
+  const form = new FormData();
+  form.append('uploadManifest', JSON.stringify({ input: { name: nome, _filename: [nome], items_id: ticketId, itemtype: 'Ticket' } }));
+  form.append('filename[0]', new Blob([conteudo], { type: tipo }), nome);
+  const resp = await fetch(BASE_URL + '/Document', { method: 'POST', headers, body: form, signal: AbortSignal.timeout(60000) });
+  const dados = await resp.json().catch(() => null);
+  if (!resp.ok || !dados || !dados.id) throw new Error(`o GLPI não aceitou (HTTP ${resp.status})`);
+  // com items_id/itemtype no manifesto o GLPI já liga ao chamado; se não ligou, liga aqui
+  const ligados = await glpiFetch(`/Ticket/${ticketId}/Document_Item`, { headers }).catch(() => []);
+  if (!(Array.isArray(ligados) ? ligados : []).some((l) => Number(l.documents_id) === Number(dados.id))) {
+    await glpiFetch('/Document_Item', { method: 'POST', headers, body: JSON.stringify({ input: { documents_id: dados.id, items_id: ticketId, itemtype: 'Ticket' } }) });
+  }
+}
+
+/**
+ * Abre o chamado e anexa os arquivos na mesma sessão. O chamado vale mesmo se um anexo falhar:
+ * devolve { id, anexados, falhas: [nome do arquivo] } para a tela avisar.
+ */
+async function createTicketComAnexos(userToken, dados, anexos) {
+  if (!dados.titulo || !dados.titulo.trim()) throw new Error('Título é obrigatório.');
   return withSession(userToken, async (sessionToken) => {
+    const id = await criarNaSessao(sessionToken, dados);
+    const falhas = [];
+    for (const a of anexos || []) {
+      try {
+        await anexarDocumento(sessionToken, id, a);
+      } catch (err) {
+        console.error('[glpi] chamado', id, 'anexo', a.nome, 'falhou:', sanitizar(err.message, [userToken, sessionToken]));
+        falhas.push(a.nome);
+      }
+    }
+    return { id, anexados: (anexos || []).length - falhas.length, falhas };
+  });
+}
+
+async function createTicket(userToken, dados) {
+  if (!dados.titulo || !dados.titulo.trim()) throw new Error('Título é obrigatório.');
+  return withSession(userToken, (sessionToken) => criarNaSessao(sessionToken, dados));
+}
+
+async function criarNaSessao(sessionToken, { titulo, descricao, categoriaId, requerenteId, atribuidoId }) {
+  {
     const input = { name: titulo.trim(), content: descricao || '' };
     if (categoriaId) input.itilcategories_id = Number(categoriaId);
     if (requerenteId) input._users_id_requester = Number(requerenteId);
@@ -130,7 +198,7 @@ async function createTicket(userToken, { titulo, descricao, categoriaId, requere
     const id = Array.isArray(data) ? data[0] && data[0].id : data && data.id;
     if (!id) throw new Error('GLPI não retornou o id do chamado criado.');
     return id;
-  });
+  }
 }
 
 /** Situação do chamado no GLPI (1 novo ... 5 solucionado, 6 fechado), lida com o token informado. */
@@ -155,4 +223,4 @@ async function identificarUsuario(userToken) {
   });
 }
 
-module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, ticketUrl, sanitizar, identificarUsuario, listarGrupos };
+module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, createTicketComAnexos, lerAnexos, ticketUrl, sanitizar, identificarUsuario, listarGrupos };

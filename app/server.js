@@ -27,7 +27,10 @@ const URL_CHAMADOS = (process.env.CHAMADOS_GLPI_URL || 'http://host.docker.inter
 const app = express();
 // O front do Hub fala com o chamados-glpi por aqui, sem ver o endereço dele. Antes do express.json: o corpo passa em fluxo.
 app.use('/servicos/chamados', (req, res) => repassar(req, res, URL_CHAMADOS, req.url, '/servicos/chamados'));
-app.use(express.json());
+// o "Abrir chamado" pode levar fotos e documentos (glpi.lerAnexos: até 25 MB, em base64); o resto fica no limite padrão
+const jsonPadrao = express.json();
+const jsonComAnexos = express.json({ limit: '36mb' });
+app.use((req, res, next) => (req.path === '/api/glpi/ticket' ? jsonComAnexos : jsonPadrao)(req, res, next));
 
 // Versão do front (hash da pasta public): a tela aberta consulta e recarrega quando muda. O index sai com
 // ?v=<versão> nos scripts e estilos, então um F5 comum já pede os arquivos novos (sem depender do cache).
@@ -410,11 +413,20 @@ app.post('/api/glpi/ticket', asyncHandler(async (req, res) => {
   const categoriaLabel = textoLimitado(b.categoriaLabel, 'categoriaLabel', 300, false) || null;
   const requerenteLabel = textoLimitado(b.requerenteLabel, 'requerenteLabel', 300, false) || null;
   const atribuidoLabel = textoLimitado(b.atribuidoLabel, 'atribuidoLabel', 300, false) || null;
-  let id;
+  let anexos;
   try {
-    id = await glpi.createTicket(userToken, {
+    anexos = glpi.lerAnexos(b.anexos);
+  } catch (err) {
+    throw new ErroHttp(400, err.message);
+  }
+  let id;
+  let falhas = [];
+  try {
+    const r = await glpi.createTicketComAnexos(userToken, {
       titulo, descricao, categoriaId: b.categoriaId, requerenteId: b.requerenteId, atribuidoId: b.atribuidoId,
-    });
+    }, anexos);
+    id = r.id;
+    falhas = r.falhas;
   } catch (err) {
     throw erroGlpi(err);
   }
@@ -428,7 +440,7 @@ app.post('/api/glpi/ticket', asyncHandler(async (req, res) => {
   } catch (err) {
     console.error('[glpi] chamado', id, 'criado, mas não gravei no histórico:', err.message);
   }
-  res.json({ id, url: glpi.ticketUrl(id) });
+  res.json({ id, url: glpi.ticketUrl(id), anexados: anexos.length - falhas.length, falhasAnexo: falhas });
 }));
 
 app.get('/api/glpi/history', asyncHandler(async (req, res) => {
