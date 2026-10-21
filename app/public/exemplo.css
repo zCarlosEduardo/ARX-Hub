@@ -370,7 +370,7 @@ button.exu-kpi:hover { border-color: var(--border-hover); }
 .ex-mini { right: auto !important; left: 16px; }
 
 /* Meus acessos: cada login do SGA com as associações em que vale */
-.ext-login { display: flex !important; flex-direction: column; gap: 10px; }
+.ext-login { display: flex !important; flex-direction: column; align-items: stretch !important; gap: 10px; }
 .ext-login-cab { display: flex; align-items: center; gap: 8px; }
 .ext-login-usuario { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; }
 .ext-login-assoc { display: flex; flex-wrap: wrap; gap: 6px; }
