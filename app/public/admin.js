@@ -742,7 +742,7 @@
           : botao(ocupado === 'ligar' ? 'Ligando…' : 'Ligar IA', acao('ligar', '/api/admin/ia/ligar', 'IA ligada.'), 'prim', { key: 'l', disabled: !!ocupado }),
         botao(ocupado === 'exportar' ? 'Iniciando…' : 'Exportar do GLPI e treinar', acao('exportar', '/api/admin/ia/exportar', 'Exportação iniciada: o treino começa sozinho no fim.'), 'sec', { key: 'x', disabled: !ligada || !!ocupado || andamento }),
         botao(ocupado === 'treinar' ? 'Iniciando…' : 'Treinar de novo', acao('treinar', '/api/admin/ia/treinar', 'Treino iniciado.'), 'sec', { key: 't', disabled: !ligada || !!ocupado || andamento }),
-        e('a', { key: 'au', href: 'ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none', marginLeft: 'auto' } }, 'Abrir auditoria'),
+        e('a', { key: 'au', href: '/ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none', marginLeft: 'auto' } }, 'Abrir auditoria'),
       ])),
       secao('cfg', 'Como a IA age', 'Cada chave liga uma ajuda da IA. Desligada ou fora do ar, tudo segue pelas regras de hoje.', [
         campo('ta', 'Tipos que rodam no automático com a validação da IA', e('div', { className: 'admin-grade-tipos' },
