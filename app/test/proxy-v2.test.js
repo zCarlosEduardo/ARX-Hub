@@ -53,7 +53,12 @@ test('v2: /__arx-v2/ serve só os arquivos da lista', async () => {
     const css = await fetch(`${s.base}/__arx-v2/skin.css`);
     assert.equal(css.status, 200);
     assert.match(css.headers.get('content-type'), /text\/css/);
+    // os ícones do Hub, para o título da automação usar o mesmo ícone do cadastro
+    const icones = await fetch(`${s.base}/__arx-v2/icons.js`);
+    assert.equal(icones.status, 200);
+    assert.match(await icones.text(), /window\.Icons/);
     assert.equal((await fetch(`${s.base}/__arx-v2/../proxy.js`)).status, 404);
+    assert.equal((await fetch(`${s.base}/__arx-v2/app.js`)).status, 404);
     assert.equal((await fetch(`${s.base}/__arx-v2/qualquer.js`)).status, 404);
   } finally { await s.fim(); }
 });
