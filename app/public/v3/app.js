@@ -188,7 +188,7 @@
     const [passes, setPasses] = useState({});
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
     // v3: a Foto de perfil e as Alt. Status ganham a tela nova (o proxy injeta o estilo com ?v2=1; so=v3 deixa as outras como estão)
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3' + (passe ? '&passe=' + encodeURIComponent(passe) : '');
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&mostrar=tudo' + (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
       pedirPasse(a.id).then((passe) => { if (janela) janela.location = comPasse(a, passe); });
