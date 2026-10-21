@@ -82,7 +82,7 @@
       e('dl', { key: 'k', className: 'mc-kpis' }, [
         e('div', { key: 'e' }, [e('dt', { key: 't' }, 'Execuções'), e('dd', { key: 'd' }, numero(u ? u.execucoes : 0))]),
         e('div', { key: 'c' }, [e('dt', { key: 't' }, 'Itens feitos'), e('dd', { key: 'd' }, numero(feitos))]),
-        e('div', { key: 's' }, [e('dt', { key: 't' }, 'Sucesso'), e('dd', { key: 'd' }, taxa)]),
+        e('div', { key: 's' }, [e('dt', { key: 't' }, 'Sucesso'), e('dd', { key: 'd', className: total ? '' : 'mc-sem' }, taxa)]),
       ]),
       e('div', { key: 'b', className: 'mc-rodape mc-entre' }, [e('span', { key: 'p', className: 'mc-nota' }, 'Últimos 30 dias'), Abrir()]),
     ]);
