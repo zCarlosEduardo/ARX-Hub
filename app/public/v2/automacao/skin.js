@@ -2,6 +2,8 @@
 // Todas: título no modelo novo e números dos passos discretos. Gerar foto de perfil: tela nova inteira, usando a API da
 // própria automação (/api/foto.png para a prévia sem gravar, /api/start para gerar e /api/execucoes para o histórico).
 (function () {
+  // escapa texto antes de entrar em innerHTML (nome digitado, dados do histórico da automação)
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const SVG = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
   const ICONES = [
     [/senha/i, '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>'],
@@ -335,7 +337,6 @@
     const cab = wrap && wrap.querySelector('header.page-header');
     if (!wrap || !cab) return;
     const $ = (id) => document.getElementById(id);
-    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const acao = $('acaoGlobal');
     const cpfs = $('cpfsInput');
     const checklist = $('empresaChecklist'); // Usuário: várias empresas
@@ -503,7 +504,6 @@
     if (!wrap || !cab) return;
     // a tela antiga continua no DOM (escondida) para o app.js original não quebrar
     Array.from(wrap.children).forEach((el) => { if (el !== cab) el.classList.add('v2-escondido'); });
-    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const DEPTOS = ['Comercial', 'Qualidade', 'Cadastro', 'Financeiro', 'Eventos', 'Assistência'];
     const ORIGEM = { tela: 'Tela', chamado: 'Chamado do GLPI', api: 'API' };
     const v2 = document.createElement('div');
