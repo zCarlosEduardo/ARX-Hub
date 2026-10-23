@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "ARX Gravador",
+  "version": "1.0.0",
+  "description": "Grava os passos de um atendimento no SGA e no PowerCRM (com os dados pessoais mascarados) para virar automação.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.hinova.com.br/*",
+    "https://app.powercrm.com.br/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "ARX Gravador",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icones/16.png",
+      "32": "icones/32.png",
+      "48": "icones/48.png",
+      "128": "icones/128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.hinova.com.br/*",
+        "https://app.powercrm.com.br/*"
+      ],
+      "js": [
+        "mascarar.js",
+        "gravar.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icones/16.png",
+    "32": "icones/32.png",
+    "48": "icones/48.png",
+    "128": "icones/128.png"
+  }
+}
