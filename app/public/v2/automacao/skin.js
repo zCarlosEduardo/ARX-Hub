@@ -94,9 +94,9 @@
   // campos com rótulo visível mas sem ligação (label sem "for"): o leitor de tela não anunciava o nome. Só acrescenta
   // aria-label, sem mexer na estrutura, então vale também nas telas montadas pelo React
   nomearCampos();
-  // telas montadas pelo React (Cadastro de voluntário e de colaborador, em Python): mover ou editar nós que o React
-  // controla quebra a tela; nelas fica só o estilo
-  if (document.getElementById('root')) return;
+  // telas montadas por script num #root (Cadastro de voluntário e de colaborador, em Python): o layout não é mexido
+  // (os nós são remontados pelo app.js); só os logins do Hub ficam discretos, que apenas escondem campos e põem o selo
+  if (document.getElementById('root')) { acessosDoHubDiscretos(); return; }
   tituloNovo();
   passosDiscretos();
   // telas que montam partes depois (abas, cards que aparecem): aplica de novo
@@ -144,12 +144,25 @@
         const ocultos = campos.flatMap(partes);
         const chip = document.createElement('div');
         chip.className = 'v3-hub-acesso';
-        chip.innerHTML = '<span class="v3-hub-ok" aria-hidden="true">✓</span><span>Acesso do Hub</span><button type="button" class="link-btn">Usar outro login</button>';
+        // o rótulo do campo pode ser o próprio oculto ou estar dentro do invólucro escondido
+        const rotulo = campos.length === 1 && ocultos.map((el) => (el.tagName === 'LABEL' ? el : el.querySelector && el.querySelector('label'))).find(Boolean);
+        const nome = rotulo ? rotulo.textContent.trim() + ' vem do Hub' : 'Acesso do Hub';
+        chip.innerHTML = '<span class="v3-hub-ok" aria-hidden="true">✓</span><span></span><button type="button" class="link-btn"></button>';
+        chip.children[1].textContent = nome;
+        chip.children[2].textContent = rotulo ? 'Usar outra' : 'Usar outro login';
         const grupo = { campos, ocultos, chip, forcado: false };
         chip.querySelector('button').onclick = () => { grupo.forcado = true; mostrar(grupo, true); campos[0].focus(); };
         ocultos[0].parentNode.insertBefore(chip, ocultos[0]);
         grupos.push(grupo);
         mostrar(grupo, false);
+        // login numa linha da lista de logins (Relatórios, Gerenciar permissões): a linha fica recolhida, só com o
+        // título e o resumo das empresas; quem quiser mexer abre a linha
+        const linha = campo.closest('.cred-row');
+        if (linha && !linha.classList.contains('collapsed')) {
+          linha.classList.add('collapsed');
+          const botao = linha.querySelector('.cred-toggle');
+          if (botao) botao.setAttribute('aria-expanded', 'false');
+        }
       });
       // o selo sumiu (cofre travado, login trocado): os campos voltam
       grupos.forEach((g) => { if (!g.forcado && !g.campos.some(temSeloDoHub)) mostrar(g, true); });

@@ -10,7 +10,8 @@
   const resumoAlt = $('v2aResumo');
   if (resumoAlt) {
     const cartao = resumoAlt.closest('.card');
-    if (cartao && $('v2aIniciar')) cartao.insertBefore($('v2aIniciar'), resumoAlt.nextSibling);
+    // no fim do Resumo (depois dos logins de cada sistema), antes do "Sobre os logins guardados"
+    if (cartao && $('v2aIniciar')) cartao.insertBefore($('v2aIniciar'), $('v2aSobre') && $('v2aSobre').parentNode === cartao ? $('v2aSobre') : null);
     return;
   }
   if ($('previaBox')) return; // Foto de perfil: a prévia já faz o papel do resumo
@@ -39,6 +40,10 @@
 
   // o resumo lê o que está na tela: cada campo visível com rótulo, as empresas marcadas e as marcações sim ou não
   const visivel = (el) => !!el && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  // o que não é escolha da execução: lista de logins (com as empresas de cada um), "Lembrar" e "Selecionar todas"
+  // listas de marcações (situações, campos do relatório) ficam de fora: o Resumo mostra as escolhas principais
+  const emLista = (c) => c.type === 'checkbox' && !!c.closest('label') && c.closest('label').parentElement.querySelectorAll(':scope > label input[type="checkbox"]').length > 2;
+  const fora = (c) => emLista(c) || !!c.closest('.empresa-checklist, .cred-row, .cred-empresas-grid') || c.id === 'empresaSelecionarTodas' || /lembrar|selecionar tod/i.test((c.closest('label') || {}).textContent || '');
   const rotuloCurto = (t) => t.replace(/\s+/g, ' ').trim().split(/\s\(|:\s/)[0].replace(/^\d+\.\s*/, '').slice(0, 40);
   function valor(c) {
     if (c.tagName === 'SELECT') return c.multiple ? Array.from(c.selectedOptions).map((o) => o.textContent.trim()).join(', ') : (c.selectedOptions[0] ? c.selectedOptions[0].textContent.trim() : '');
@@ -57,12 +62,12 @@
     });
     form.querySelectorAll('label[for]').forEach((l) => {
       const c = $(l.getAttribute('for'));
-      if (!c || !visivel(c) || c.type === 'search' || c.closest('.empresa-checklist') || c.id === 'empresaSelecionarTodas') return;
+      if (!c || !visivel(c) || c.type === 'search' || fora(c) || (c.type === 'checkbox' && /lembrar/i.test(l.textContent))) return;
       linhas.push([rotuloCurto(l.textContent), valor(c) || 'Não informado']);
     });
     // marcações dentro do rótulo (Modo teste, Recorrente...): o texto antes dos dois-pontos vira o nome
     form.querySelectorAll('label.checkbox-label > input[type="checkbox"]').forEach((c) => {
-      if (!visivel(c) || c.closest('.empresa-checklist') || c.id === 'empresaSelecionarTodas') return;
+      if (!visivel(c) || fora(c)) return;
       linhas.push([rotuloCurto(c.closest('label').textContent), c.checked ? 'Sim' : 'Não']);
     });
     $('v1Resumo').innerHTML = linhas.slice(0, 10).map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('');
