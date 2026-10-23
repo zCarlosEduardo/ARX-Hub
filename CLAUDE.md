@@ -3,6 +3,9 @@
 ## Visão geral
 Painel central das automações ARX: lista as automações (cada uma é um container em `../ARX-Automacoes`), mostra se estão no ar (varredura periódica + SSE) e abre chamados no GLPI. Repositório irmão: `../ARX-Automacoes` (regras gerais do projeto no `CLAUDE.md` de lá).
 
+## Política de uso das Skills
+Siga a seção "Política de uso das Skills" de `../ARX-Automacoes/CLAUDE.md` (inventário das skills, quando usar cada uma e as regras). Leia essa seção antes da primeira tarefa da sessão; ela vale igual aqui.
+
 ## Stack
 Express 4 + Postgres (`pg`) no servidor; front em React UMD **sem build** (`app/public/*.js`, tudo em `window`, ordem de carga: icons, acessos, alertas, chamados, graficos-dados, graficos, disponibilidade, resultados, app; cálculos dos gráficos em `graficos-dados.js`, testados em `app/test`).
 
