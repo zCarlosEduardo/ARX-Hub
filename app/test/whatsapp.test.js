@@ -115,6 +115,8 @@ test('categoriaSugerida: grupo, associação citada, IA (só da lista) e, sem as
   assert.equal(s({ texto: 'liberar plano', conversa: 'Suporte GTA' }).id, 12, 'nome da conversa conta');
   assert.deepEqual(s({ texto: 'plano da ancori', associacaoIa: 'Ancore' }), { id: 10, nome: 'Ancore', origem: 'ia' });
   assert.equal(s({ texto: 'x', associacaoIa: 'Inventada' }).origem, 'interna');
+  assert.equal(s({ texto: 'liberar o plano do associado', associacaoIa: 'Ancore' }).origem, 'interna', 'IA apontou associação que ninguém citou');
+  assert.equal(s({ texto: 'cliente da tecprotegi', associacaoIa: 'Tech Protege' }).id, 11, 'erro de digitação em nome de duas palavras');
   assert.deepEqual(s({ texto: 'trocar a impressora do RH' }), { id: 2, nome: '🛑 ARX - Demandas Internas', origem: 'interna' });
   assert.deepEqual(W.categoriaSugerida({ categorias: [], texto: 'x' }), { id: 2, nome: 'ARX - Demandas Internas', origem: 'interna' });
 });

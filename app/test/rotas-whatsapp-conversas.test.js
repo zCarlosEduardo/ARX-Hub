@@ -139,10 +139,10 @@ test('sugerir com a IA: desligada avisa; ligada devolve título, tipo e a catego
     assert.deepEqual(r.json.categoria, { id: 45, nome: 'Tech', origem: 'grupo' }, 'o grupo tem categoria configurada');
     assert.deepEqual(pedidos[0].mensagens, ['Preciso desbloquear meu SGA', 'print', 'bom dia'], 'só o texto, em ordem');
     assert.deepEqual(pedidos[0].associacoes, ['Tech', 'Valle'], 'a interna não é associação');
-    // grupo sem categoria configurada: vale a associação reconhecida pela IA (da lista)
+    // grupo sem categoria configurada e nenhuma associação citada: a IA apontou Valle sem ninguém citar, vai para a interna
     await t.configurar({ conversas: { ativo: true }, grupos: [{ id: 'g1', nome: 'Grupo Tech', jid: '1203@g.us', tipos: [] }] });
     const r2 = await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', corpo);
-    assert.deepEqual(r2.json.categoria, { id: 46, nome: 'Valle', origem: 'ia' });
+    assert.deepEqual(r2.json.categoria, { id: 2, nome: 'ARX - Demandas Internas', origem: 'interna' });
     assert.equal((await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', { jid: G, ids: [] })).status, 400);
   } finally {
     t.fechar();

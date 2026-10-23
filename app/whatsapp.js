@@ -88,6 +88,22 @@ const quandoBr = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'Ameri
 const CATEGORIA_INTERNA_ID = 2;
 const curtoCategoria = (label) => String(label || '').split('>').pop().trim();
 const palavras = (t) => ` ${String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+function distancia(a, b) {
+  let ant = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const atual = [i];
+    for (let j = 1; j <= b.length; j++) atual[j] = Math.min(ant[j] + 1, atual[j - 1] + 1, ant[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    ant = atual;
+  }
+  return ant[b.length];
+}
+function pareceCitada(nome, texto) {
+  const alvo = chaveNome(nome);
+  const limite = alvo.length >= 6 ? 2 : 1;
+  const ps = palavras(texto).trim().split(' ').map(chaveNome).filter(Boolean);
+  const candidatas = [...ps, ...ps.slice(1).map((p, i) => ps[i] + p)];
+  return candidatas.some((p) => Math.abs(p.length - alvo.length) <= limite && distancia(p, alvo) <= limite);
+}
 const ehInterna = (c) => c.id === CATEGORIA_INTERNA_ID || /DEMANDASINTERNAS/.test(chaveNome(c.label));
 
 /**
@@ -107,8 +123,10 @@ function categoriaSugerida({ categorias = [], grupoCategoriaId = null, grupoCate
     return onde.includes(palavras(nome)) || (/\s/.test(nome.trim()) && compacto.includes(chaveNome(nome)));
   }).sort((a, b) => chaveNome(curtoCategoria(b.label)).length - chaveNome(curtoCategoria(a.label)).length);
   if (citadas.length) return { id: citadas[0].id, nome: citadas[0].label, origem: 'texto' };
+  // a IA às vezes aponta associação que ninguém citou (medido: 4 em 24): só vale se houver nas mensagens uma palavra (ou
+  // duas juntas) a até 1 letra de diferença do nome, ou 2 em nome de 6 letras ou mais. Assim ela pega erro de digitação.
   const pelaIa = associacaoIa ? associacoes.find((c) => chaveNome(curtoCategoria(c.label)) === chaveNome(associacaoIa)) : null;
-  if (pelaIa) return { id: pelaIa.id, nome: pelaIa.label, origem: 'ia' };
+  if (pelaIa && pareceCitada(curtoCategoria(pelaIa.label), `${conversa} ${texto}`)) return { id: pelaIa.id, nome: pelaIa.label, origem: 'ia' };
   const interna = categorias.find(ehInterna);
   return { id: interna ? interna.id : CATEGORIA_INTERNA_ID, nome: interna ? interna.label : 'ARX - Demandas Internas', origem: 'interna' };
 }
