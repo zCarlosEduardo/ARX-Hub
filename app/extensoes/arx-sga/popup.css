@@ -1,0 +1,53 @@
+/* Janela da extensão no desenho do Hub v1: fundo quase preto, superfícies um tom acima, controles em pílula, o principal
+   branco. Segue o tema do sistema (claro ou escuro). */
+:root {
+  color-scheme: light dark;
+  --bg: #f3f4f6; --card: #ffffff; --raised: #e8e9ec; --rule: #e3e5e8; --control: #cfd3d8;
+  --text: #0a0a0a; --muted: #4a4f57; --faint: #6b6b6b; --primary: #0a0a0a; --primary-fg: #ffffff;
+  --ok-bg: #e4f5ea; --ok: #146c35; --erro-bg: #fde8e8; --erro: #a3000a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0d0f; --card: #15171a; --raised: #24272b; --rule: #1f2226; --control: #3a3e44;
+    --text: #ffffff; --muted: #b4b4b4; --faint: #949494; --primary: #ffffff; --primary-fg: #000000;
+    --ok-bg: #15281d; --ok: #5bd68a; --erro-bg: #2c1a1d; --erro: #ff7a80;
+  }
+}
+* { box-sizing: border-box; }
+body { width: 380px; margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 14px/20px "Geist", system-ui, sans-serif; }
+h1 { margin: 0; font-size: 16px; font-weight: 600; }
+h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+p { margin: 0; }
+.topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.caixa { padding: 14px; border-radius: 16px; background: var(--card); }
+.caixa + .caixa { margin-top: 10px; }
+.dica { color: var(--faint); font-size: 12px; line-height: 16px; }
+label { display: grid; gap: 6px; font-weight: 500; }
+label + label, .campo + .campo { margin-top: 10px; }
+input[type="text"], input[type="password"] { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--control); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--control); }
+button.primario { background: var(--primary); color: var(--primary-fg); }
+button.texto { background: none; padding: 0 8px; color: var(--muted); }
+button.texto:hover { background: var(--raised); color: var(--text); }
+button.perigo { color: var(--erro); }
+.linha { display: flex; align-items: center; gap: 8px; }
+.linha .esp { flex: 1; }
+.acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+.login { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
+.login:first-of-type { border-top: 0; }
+.login .nome { flex: 1; min-width: 0; }
+.login b { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.login small { display: block; color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empresas { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; max-height: 180px; overflow-y: auto; padding: 6px 10px; border-radius: 10px; background: var(--bg); }
+.empresas label, .empresas label + label { display: flex; align-items: center; gap: 8px; height: 28px; font-weight: 400; margin: 0; }
+.empresas .usada { color: var(--faint); }
+.chave { appearance: none; position: relative; width: 34px; height: 20px; margin: 0; border-radius: 999px; background: var(--control); cursor: pointer; flex: none; }
+.chave::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 140ms ease; }
+.chave:checked { background: var(--primary); }
+.chave:checked::after { background: var(--primary-fg); transform: translateX(14px); }
+.msg { margin-top: 10px; padding: 8px 12px; border-radius: 12px; font-size: 13px; }
+.msg.ok { background: var(--ok-bg); color: var(--ok); }
+.msg.erro { background: var(--erro-bg); color: var(--erro); }
+.vazio { color: var(--faint); padding: 6px 0; }

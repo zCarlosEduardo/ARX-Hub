@@ -2,6 +2,7 @@
 // `X-Glpi-Token`, o GLPI diz quem é a pessoa e só quem está em `hub_admins` passa. O token não é guardado nem logado.
 //
 //   GET    /api/config-publica            (sem login) política do cofre que todo navegador precisa ler
+//   GET    /api/extensoes, /api/extensoes/<id>.zip  (sem login) extensões de navegador liberadas e o download
 //   GET    /api/admin/eu                  quem sou e se sou admin (para mostrar ou esconder o painel)
 //   GET    /api/admin/config              configurações e as opções para montar a tela
 //   PUT    /api/admin/config/:secao       grava uma seção (cofre ou whatsapp)
@@ -12,9 +13,11 @@
 //   PUT    /api/admin/config/automacoes   quem cadastra automação, como o endereço aparece, nova aba
 // `podeGerenciarAutomacoes` protege o cadastro de automações e as URLs reais no server.js (só admin, ou todos se liberado).
 const crypto = require('crypto');
+const path = require('path');
+const { listarExtensoes, montarZip } = require('./extensoes');
 const { adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
 
-const SECOES = ['cofre', 'automacoes', 'whatsapp', 'ia'];
+const SECOES = ['cofre', 'automacoes', 'whatsapp', 'ia', 'extensoes'];
 const TTL_PADRAO_MS = 60000;
 
 /**
@@ -23,6 +26,7 @@ const TTL_PADRAO_MS = 60000;
  */
 function criarRotasAdmin(deps) {
   const { repo, glpi, asyncHandler, ErroHttp } = deps;
+  const pastaExtensoes = deps.pastaExtensoes || path.join(__dirname, 'extensoes');
   const agora = deps.agora || Date.now;
   const ttlMs = deps.ttlMs === undefined ? TTL_PADRAO_MS : deps.ttlMs;
   const cache = new Map(); // sha256(token) -> { usuario, ate }: evita bater no GLPI a cada clique
@@ -110,8 +114,25 @@ function criarRotasAdmin(deps) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
       res.set('Cache-Control', 'no-store');
       // ia: lida pelo chamados-glpi (não tem segredo: só ligada, tipos e limites)
-      const { cofre, automacoes, ia } = await configAtual();
-      res.json({ cofre, automacoes, ia });
+      const { cofre, automacoes, ia, extensoes } = await configAtual();
+      res.json({ cofre, automacoes, ia, extensoes });
+    }));
+
+    // Extensões de navegador para baixar (sem login, como o resto do Hub): só as que a administração deixa à mostra
+    const liberadas = async () => {
+      const { extensoes } = await configAtual();
+      return extensoes.mostrar ? listarExtensoes(pastaExtensoes).filter((x) => !extensoes.ocultas.includes(x.id)) : [];
+    };
+    app.get('/api/extensoes', asyncHandler(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      res.json(await liberadas());
+    }));
+    app.get('/api/extensoes/:arquivo', asyncHandler(async (req, res) => {
+      // o id só vale se estiver no catálogo liberado: nada de caminho vindo da URL chega ao disco
+      const ext = (await liberadas()).find((x) => req.params.arquivo === x.id + '.zip');
+      if (!ext) throw new ErroHttp(404, 'Extensão não encontrada.');
+      res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${ext.id}-${ext.versao}.zip"`, 'Cache-Control': 'no-store' });
+      res.send(montarZip(path.join(pastaExtensoes, ext.id), ext.id));
     }));
 
     app.get('/api/admin/eu', asyncHandler(async (req, res) => {
@@ -123,7 +144,7 @@ function criarRotasAdmin(deps) {
     app.get('/api/admin/config', asyncHandler(async (req, res) => {
       await exigirAdmin(req);
       res.set('Cache-Control', 'no-store');
-      res.json({ config: await configAtual(), opcoes: { tipos: TIPOS_SOLICITACAO, sessoes: SESSOES_COFRE, modosWhatsapp: MODOS_WHATSAPP } });
+      res.json({ config: await configAtual(), opcoes: { tipos: TIPOS_SOLICITACAO, sessoes: SESSOES_COFRE, modosWhatsapp: MODOS_WHATSAPP, extensoes: listarExtensoes(pastaExtensoes) } });
     }));
 
     app.put('/api/admin/config/:secao', asyncHandler(async (req, res) => {

@@ -244,6 +244,26 @@
   }
 
   /** Escolha dos grupos do GLPI que veem uma automação (nenhum marcado = todos veem). */
+  // ---------- aba: Extensões (extensões de navegador que o Hub oferece para baixar) ----------
+  function AbaExtensoes({ config, opcoes, aoSalvar }) {
+    const [c, setC] = useState(() => copia(config.extensoes));
+    const lista = (opcoes && opcoes.extensoes) || [];
+    const salvar = useSalvar(async () => {
+      const novo = await api('PUT', '/api/admin/config/extensoes', c);
+      setC(novo);
+      aoSalvar({ ...config, extensoes: novo });
+      window.dispatchEvent(new CustomEvent('arx-config-extensoes', { detail: novo })); // o botão do Hub muda na hora
+    });
+    const alternar = (id, disponivel) => setC({ ...c, ocultas: disponivel ? c.ocultas.filter((x) => x !== id) : [...c.ocultas, id] });
+    return e('div', { className: 'admin-pilha' }, [
+      secao('ext', 'Extensões para baixar', 'Ficam no botão "Extensões" da barra de endereço do Hub, com o passo a passo de instalação.', [
+        caixa(c.mostrar, (v) => setC({ ...c, mostrar: v }), 'Mostrar o botão "Extensões" para todo mundo', { key: 'mostrar' }),
+        !lista.length ? dica('Nenhuma extensão na pasta extensoes do Hub.') : e('div', { key: 'l', className: 'admin-chaves' }, lista.map((x) =>
+          caixa(!c.ocultas.includes(x.id), (v) => alternar(x.id, v), [e('strong', { key: 'n' }, x.nome + (x.versao ? ' ' + x.versao : '')), e('span', { key: 'd', className: 'admin-dica', style: { display: 'block' } }, x.descricao || 'Sem descrição')], { key: x.id }))),
+      ], rodape(salvar.salvar, salvar.salvando, salvar.erro, salvar.ok)),
+    ]);
+  }
+
   function EditorGrupos({ automacao, grupos, aoSalvar }) {
     const [marcados, setMarcados] = useState(() => new Set(automacao.grupos || []));
     const [busca, setBusca] = useState('');
@@ -861,6 +881,7 @@
     ]],
     ['Automações', [
       ['automacoes', 'Automações', 'Workflow', 'Quem gerencia, como o endereço aparece, quem vê cada automação e a ordem no painel.'],
+      ['extensoes', 'Extensões', 'FileText', 'Extensões de navegador que o Hub oferece para baixar.'],
     ]],
     ['IA local', [
       ['ia', 'IA local', 'Bot', 'Ligar e desligar, treinar e escolher como a IA ajuda nos chamados.'],
@@ -901,6 +922,7 @@
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
+    else if (aba === 'extensoes') corpo = e(AbaExtensoes, { key: 'extensoes', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
     else if (aba === 'revisao') corpo = e(AbaRevisao, { key: 'revisao' });
     else if (aba === 'ia') corpo = e(AbaIa, { key: 'ia', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });

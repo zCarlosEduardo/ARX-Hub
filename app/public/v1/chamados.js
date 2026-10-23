@@ -801,7 +801,10 @@
       };
       medir();
       window.addEventListener('resize', medir);
-      return () => window.removeEventListener('resize', medir);
+      // a aba monta escondida (largura zero) para contar os prontos: mede de novo quando aparece
+      const obs = corpoRef.current && 'ResizeObserver' in window ? new ResizeObserver(medir) : null;
+      if (obs) obs.observe(corpoRef.current);
+      return () => { window.removeEventListener('resize', medir); if (obs) obs.disconnect(); };
     }, [exibir, pronto, auto.ativo, modoTeste]);
 
     // a aba Chamados da moldura mostra quantos estão prontos (app.js ouve o evento); o número é calculado mais abaixo

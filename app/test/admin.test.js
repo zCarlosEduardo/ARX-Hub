@@ -74,6 +74,10 @@ test('configuração padrão: cofre ativo com sessão do dia e WhatsApp desligad
 
 test('ia: padrão desligada; aceita tipos existentes e recusa limites fora da faixa', () => {
   assert.equal(validarSecao('ia', configPadrao().ia).ok, true);
+  assert.deepEqual(validarSecao('extensoes', configPadrao().extensoes), { ok: true, valor: { mostrar: true, ocultas: [] } });
+  assert.deepEqual(validarSecao('extensoes', { mostrar: false, ocultas: ['arx-sga', 'arx-sga'] }).valor, { mostrar: false, ocultas: ['arx-sga'] });
+  assert.equal(validarSecao('extensoes', { ocultas: ['../x'] }).ok, false);
+  assert.equal(validarSecao('extensoes', { mostrar: 'sim' }).ok, false);
   const ok = validarSecao('ia', { ligada: true, automaticoTipos: ['senha_sistemas', 'senha_sistemas'], confiancaMinima: '0.85', whatsappModo: 'responder' });
   assert.deepEqual([ok.valor.automaticoTipos, ok.valor.confiancaMinima, ok.valor.whatsappModo], [['senha_sistemas'], 0.85, 'responder']);
   assert.equal(validarSecao('ia', { automaticoTipos: ['nao_existe'] }).ok, false);

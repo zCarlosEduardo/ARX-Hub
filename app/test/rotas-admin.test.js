@@ -58,7 +58,7 @@ async function subir(adminsIniciais = [{ nome: 'Carlos Eduardo de Souza Alonso' 
     const texto = await r.text();
     return { status: r.status, corpo: texto ? JSON.parse(texto) : null, texto };
   };
-  return { repo, chamar, chamadasGlpi, ordemMudou: () => ordemMudou, fechar: () => new Promise((ok) => servidor.close(ok)) };
+  return { repo, base, chamar, chamadasGlpi, ordemMudou: () => ordemMudou, fechar: () => new Promise((ok) => servidor.close(ok)) };
 }
 
 test('config-publica não exige login e devolve o padrão (cofre ativo, sessão do dia)', async () => {
@@ -70,7 +70,32 @@ test('config-publica não exige login e devolve o padrão (cofre ativo, sessão 
       cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
       automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
       ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
+      extensoes: { mostrar: true, ocultas: [] },
     });
+  } finally { await s.fechar(); }
+});
+
+test('extensões: lista as liberadas, baixa o .zip e respeita o que a administração esconde', async () => {
+  const s = await subir();
+  try {
+    const lista = await s.chamar('GET', '/api/extensoes');
+    assert.equal(lista.status, 200);
+    assert.ok(lista.corpo.find((e) => e.id === 'arx-sga'));
+    const zip = await fetch(s.base + '/api/extensoes/arx-sga.zip');
+    assert.equal(zip.status, 200);
+    assert.match(zip.headers.get('content-type'), /application\/zip/);
+    assert.match(zip.headers.get('content-disposition'), /arx-sga-[\d.]+\.zip/);
+    assert.equal((await fetch(s.base + '/api/extensoes/nao-existe.zip')).status, 404);
+    assert.equal((await fetch(s.base + '/api/extensoes/..%2Fadmin.zip')).status, 404);
+    // escondida pela administração: some da lista e do download; com o botão desligado, a lista vem vazia
+    s.repo.estado.config.set('extensoes', { mostrar: true, ocultas: ['arx-sga'] });
+    assert.equal((await s.chamar('GET', '/api/extensoes')).corpo.find((e) => e.id === 'arx-sga'), undefined);
+    assert.equal((await fetch(s.base + '/api/extensoes/arx-sga.zip')).status, 404);
+    s.repo.estado.config.set('extensoes', { mostrar: false, ocultas: [] });
+    assert.deepEqual((await s.chamar('GET', '/api/extensoes')).corpo, []);
+    // a administração enxerga o catálogo inteiro para escolher
+    const admin = await s.chamar('GET', '/api/admin/config', { token: TOKEN_ADMIN });
+    assert.ok(admin.corpo.opcoes.extensoes.find((e) => e.id === 'arx-sga'));
   } finally { await s.fechar(); }
 });
 

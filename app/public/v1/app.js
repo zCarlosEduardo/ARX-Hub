@@ -95,6 +95,7 @@
     chamados: 'M4 4h16v12H8l-4 4z', resultados: 'M3 3v18h18|M8 17v-5M13 17V8M18 17v-9',
     painel: 'M3 3h7v9H3z|M14 3h7v5h-7z|M14 12h7v9h-7z|M3 16h7v5H3z', grade: 'M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z',
     lista: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', ponto: 'M5 12h.01M12 12h.01M19 12h.01',
+    extensao: 'M9 3h6v3a2 2 0 1 0 4 0V3h2v6h-3a2 2 0 1 0 0 4h3v8H3v-8h3a2 2 0 1 0 0-4H3V3h6',
     admin: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6|M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
   };
   const ic = (nome, t = 16) => e('svg', { viewBox: '0 0 24 24', width: t, height: t, fill: 'none', stroke: 'currentColor', strokeWidth: nome === 'ponto' ? 2.6 : 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
@@ -241,7 +242,8 @@
     // Abas fixas ao lado do Painel: "Chamados" (chamados.js) e "Resultados"
     // (resultados.js). Cada uma só monta na primeira vez que é aberta.
     const [abaFixa, setAbaFixa] = useState('painel');
-    const [abasMontadas, setAbasMontadas] = useState({});
+    // Chamados já monta escondida ao abrir o Hub: busca a lista sozinha e a aba mostra o número de prontos sem precisar abrir
+    const [abasMontadas, setAbasMontadas] = useState({ chamados: true });
     const abrirAbaFixa = (qual) => { setActiveTabId(null); setAbaFixa(qual); setAbasMontadas((m) => (m[qual] ? m : Object.assign({}, m, { [qual]: true }))); };
     const abrirPainel = () => abrirAbaFixa('painel');
     const abrirChamados = () => abrirAbaFixa('chamados');
@@ -813,6 +815,15 @@
       if (abaFixa === 'chamados') return window.ChamadosCache && window.ChamadosCache.store.buscar();
       setRecargas((r) => ({ ...r, [abaFixa]: (r[abaFixa] || 0) + 1 }));
     }
+    // Extensões de navegador para baixar (Administração > Extensões): botão na barra de endereço com o passo a passo
+    const [extensoes, setExtensoes] = useState([]);
+    const [verExtensoes, setVerExtensoes] = useState(false);
+    useEffect(() => {
+      const carregar = () => api('/api/extensoes').then((l) => setExtensoes(Array.isArray(l) ? l : [])).catch(() => setExtensoes([]));
+      carregar();
+      window.addEventListener('arx-config-extensoes', carregar); // a administração salvou: atualiza na hora
+      return () => window.removeEventListener('arx-config-extensoes', carregar);
+    }, []);
     // quantos chamados estão prontos para rodar (chamados.js avisa) aparece na aba Chamados
     const [prontosChamados, setProntosChamados] = useState(0);
     useEffect(() => {
@@ -919,6 +930,7 @@
         ]),
         // ajuda.js (?), alertas.js (sino) e acessos.js (Meus acessos): componentes próprios, os mesmos do Hub
         e('div', { key: 'dir', className: 'lado dir' }, [
+          extensoes.length ? e('button', { key: 'ext', type: 'button', className: 'icone-btn', title: 'Extensões para o navegador', 'aria-label': 'Extensões para o navegador', onClick: () => setVerExtensoes(true) }, ic('extensao')) : null,
           window.AjudaBotao ? e(window.AjudaBotao, { key: 'ajuda', aba: activeTabId === null ? abaFixa : null }) : null,
           window.AlertasSino ? e(window.AlertasSino, { key: 'alertas' }) : null,
           window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'acessos' }) : null,
@@ -1068,6 +1080,28 @@
     // ---- modal (v2: layout novo, tudo em uma coluna) ----
     let modal = null;
     if (modalOpen && modalForm) modal = e(FormAutomacaoV2, { key: 'form-auto', form: modalForm, modo: modalMode, setCampo: setModalField, fechar: closeModal, salvar: saveAutomation, testar: testConnection, teste: testState });
+
+    // ---- extensões para baixar ----
+    const janelaExtensoes = verExtensoes ? e(window.ExemploUI.Modal, {
+      titulo: 'Extensões para o navegador', largura: 640, fechar: () => setVerExtensoes(false),
+      descricao: 'Funcionam no Chrome e no Edge. Instale uma vez em cada computador.',
+      rodape: [e('button', { key: 'f', type: 'button', className: 'btn texto', onClick: () => setVerExtensoes(false) }, 'Fechar')],
+    }, [
+      ...extensoes.map((x) => e('div', { key: x.id, className: 'linha' }, [
+        e('span', { key: 'i', className: 'auto-ic' }, ic('extensao', 20)),
+        e('div', { key: 'n', className: 'nome' }, [e('b', { key: 'b' }, x.nome + (x.versao ? ' ' + x.versao : '')), e('small', { key: 's', style: { whiteSpace: 'normal' } }, x.descricao || 'Sem descrição')]),
+        e('a', { key: 'a', className: 'btn primario', href: '/api/extensoes/' + encodeURIComponent(x.id) + '.zip', download: '' }, 'Baixar'),
+      ])),
+      e('section', { key: 'como', className: 'caixa-instalar' }, [
+        e('h4', { key: 'h' }, 'Como instalar'),
+        e('ol', { key: 'o' }, [
+          e('li', { key: 1 }, 'Baixe o arquivo e extraia numa pasta que não vai ser apagada (por exemplo, uma pasta "Extensões ARX" dentro de Documentos).'),
+          e('li', { key: 2 }, ['Abra ', e('code', { key: 'c' }, 'chrome://extensions'), ' (no Edge, ', e('code', { key: 'e' }, 'edge://extensions'), ') e ligue o Modo do desenvolvedor.']),
+          e('li', { key: 3 }, 'Clique em Carregar sem compactação e escolha a pasta extraída.'),
+          e('li', { key: 4 }, 'Fixe o ícone na barra do navegador. Para atualizar, baixe de novo, troque os arquivos da mesma pasta e clique em Recarregar no cartão da extensão.'),
+        ]),
+      ]),
+    ]) : null;
 
     // ---- confirm dialog ----
     let confirmModal = null;
@@ -1337,6 +1371,7 @@
         ...viewerNodes,
       ]),
       modal,
+      janelaExtensoes,
       confirmModal,
       glpiFab,
       glpiModal,

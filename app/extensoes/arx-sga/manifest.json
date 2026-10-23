@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "ARX SGA",
+  "version": "1.0.0",
+  "description": "Entra sozinho no SGA Hinova com os logins guardados (cifrados) e resolve o erro de cookies acumulados.",
+  "permissions": ["storage", "cookies"],
+  "host_permissions": ["https://*.hinova.com.br/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "ARX SGA", "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["https://*.hinova.com.br/sga/*"],
+      "js": ["regras.js", "conteudo.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

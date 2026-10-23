@@ -1841,3 +1841,8 @@ button.exu-kpi:hover { background: var(--hover); }
 /* botão do GLPI arrastável */
 .glpi-fab { touch-action: none; }
 .glpi-fab.arrastando { cursor: grabbing; transform: none; transition: none; }
+/* janela "Extensões para o navegador": passo a passo de instalação */
+.caixa-instalar { padding: 16px 18px; border-radius: 16px; background: var(--ground); }
+.caixa-instalar h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.caixa-instalar ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); }
+.caixa-instalar code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }

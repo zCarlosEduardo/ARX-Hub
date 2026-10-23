@@ -129,6 +129,8 @@ function configPadrao() {
     // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
     // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
     ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
+    // extensões de navegador para baixar (app/extensoes): mostrar = botão "Extensões" no Hub; ocultas = ids escondidas
+    extensoes: { mostrar: true, ocultas: [] },
     whatsapp: {
       ativo: false,
       modo: 'observacao',
@@ -172,6 +174,16 @@ function validarAutomacoes(b) {
   const marca = c.marca === undefined ? padrao.marca : c.marca;
   if (typeof marca !== 'string' || marca.trim().length > 30) return { erro: 'automacoes.marca deve ser um texto de até 30 caracteres' };
   return { valor: { cadastro, endereco, novaAba, marca: marca.trim() } };
+}
+
+function validarExtensoes(b) {
+  const padrao = configPadrao().extensoes;
+  const c = b && typeof b === 'object' ? b : {};
+  const mostrar = c.mostrar === undefined ? padrao.mostrar : c.mostrar;
+  if (typeof mostrar !== 'boolean') return { erro: 'extensoes.mostrar deve ser verdadeiro ou falso' };
+  const ocultas = c.ocultas === undefined ? padrao.ocultas : c.ocultas;
+  if (!Array.isArray(ocultas) || ocultas.some((x) => typeof x !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(x))) return { erro: 'extensoes.ocultas deve ser uma lista de ids de extensão' };
+  return { valor: { mostrar, ocultas: [...new Set(ocultas)] } };
 }
 
 function validarIa(b) {
@@ -295,7 +307,7 @@ function validarWhatsapp(b) {
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
 function validarSecao(chave, corpo) {
-  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp, ia: validarIa };
+  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp, ia: validarIa, extensoes: validarExtensoes };
   const r = validadores[chave] ? validadores[chave](corpo) : { erro: 'seção de configuração desconhecida' };
   return r.erro ? { ok: false, error: r.erro } : { ok: true, valor: r.valor };
 }
