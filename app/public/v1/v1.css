@@ -1887,3 +1887,7 @@ button.exu-kpi:hover { background: var(--hover); }
   .cv-lista { max-height: 220px; }
   .cv-conversa { height: 70vh; }
 }
+.cv-sugestao { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--ground); }
+.cv-sugestao p { flex: 1; margin: 0; font-size: 13px; line-height: 18px; color: var(--muted); }
+.cv-sugestao.erro p { color: var(--pill-negative-ink); }
+.cv-sugestao .exu-btn { flex: none; }

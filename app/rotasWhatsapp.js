@@ -294,7 +294,30 @@ function criarRotasWhatsapp(deps) {
       res.json({ atualizado: !!novo });
     }));
 
-    // ---- Conversas (administradores): ler as conversas guardadas pelo robô, responder e abrir chamado com as mensagens marcadas
+    // ---- Conversas: ler as conversas guardadas pelo robô, responder e abrir chamado com as mensagens marcadas. Ligadas e com
+    // quem pode ver na Administração (só administradores, administradores e grupos do GLPI marcados, ou todos com token).
+    const podeConversas = (cfg, usuario, ehAdmin) => cfg.conversas.ativo && (ehAdmin || cfg.conversas.quem === 'todos'
+      || (cfg.conversas.quem === 'grupos' && ((usuario && usuario.grupos) || []).some((g) => cfg.conversas.grupos.includes(g))));
+    async function exigirConversas(req) {
+      const { usuario, admin: ehAdmin } = await admin.quemE(req);
+      const cfg = (await admin.configAtual()).whatsapp;
+      if (!cfg.conversas.ativo) throw new ErroHttp(403, 'As Conversas estão desligadas. Ligue em Administração > WhatsApp > Conversas e respostas.');
+      if (!podeConversas(cfg, usuario, !!ehAdmin)) throw new ErroHttp(403, 'Você não tem acesso às Conversas do WhatsApp.');
+      return cfg;
+    }
+
+    // a aba só aparece para quem pode ver; sem token ou com token recusado, simplesmente não aparece
+    app.get('/api/whatsapp/conversas/acesso', asyncHandler(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      let r;
+      try {
+        r = await admin.quemE(req);
+      } catch {
+        return res.json({ pode: false });
+      }
+      res.json({ pode: podeConversas((await admin.configAtual()).whatsapp, r.usuario, !!r.admin) });
+    }));
+
     const exigirRobo = () => {
       if (!deps.robo) throw new ErroHttp(503, 'O robô do WhatsApp não está configurado neste Hub.');
       return deps.robo;
@@ -303,15 +326,44 @@ function criarRotasWhatsapp(deps) {
     const erroRobo = (err) => new ErroHttp(502, `O robô do WhatsApp não respondeu: ${truncar(err.message, 200)}`);
 
     app.get('/api/whatsapp/conversas', asyncHandler(async (req, res) => {
-      await admin.exigirAdmin(req);
-      const cfg = (await admin.configAtual()).whatsapp;
+      const cfg = await exigirConversas(req);
       res.set('Cache-Control', 'no-store');
       const lista = await exigirRobo().conversas().catch((err) => { throw erroRobo(err); });
-      res.json({ ativo: cfg.conversas.ativo, conversas: lista });
+      // tipos e respostas vão junto: quem vê as Conversas pode não ser administrador (não lê a configuração)
+      res.json({ ativo: true, conversas: lista, respostas: cfg.respostas, tipos: TIPOS_SOLICITACAO.map((t) => ({ chave: t.chave, nome: t.nome })) });
+    }));
+
+    app.post('/api/whatsapp/conversas/sugerir', asyncHandler(async (req, res) => {
+      const cfg = await exigirConversas(req);
+      const cfgIa = (await admin.configAtual()).ia || {};
+      if (!cfgIa.ligada || !deps.ia || !deps.ia.sugerirChamado) throw new ErroHttp(503, 'A IA local está desligada. Ligue em Administração > IA local.');
+      const b = req.body && typeof req.body === 'object' ? req.body : {};
+      const jid = jidValido(b.jid);
+      const ids = Array.isArray(b.ids) ? b.ids.filter((x) => typeof x === 'string').slice(0, 30) : [];
+      if (!jid || !ids.length) throw new ErroHttp(400, 'Marque ao menos uma mensagem.');
+      const marcadas = (await exigirRobo().mensagens(jid, 0, 300).catch((err) => { throw erroRobo(err); })).filter((m) => ids.includes(m.id)).sort((x, y) => x.quando - y.quando);
+      const textos = marcadas.map((m) => m.texto).filter(Boolean);
+      if (!textos.length) throw new ErroHttp(400, 'As mensagens marcadas não têm texto para a IA ler (áudio e imagem sem legenda não contam).');
+      const { tipo: tipoRegra } = await classificar(textos.join('\n')).catch(() => ({ tipo: null }));
+      let s;
+      try {
+        s = await deps.ia.sugerirChamado({ mensagens: textos, tipoRegra });
+      } catch (err) {
+        throw new ErroHttp(502, `A IA local não respondeu: ${truncar(err.message, 200)}`);
+      }
+      if (!s) throw new ErroHttp(502, 'A IA local não respondeu.');
+      // categoria: a do grupo configurado vale mais que a votada pelos chamados parecidos
+      const grupo = cfg.grupos.find((g) => g.jid === jid && g.categoriaId);
+      const tipo = s.tipo && NOME_TIPO.has(s.tipo) ? s.tipo : null;
+      res.json({
+        titulo: s.titulo || '', tipo, tipoNome: tipo ? NOME_TIPO.get(tipo) : 'Sem automação', confianca: s.confianca || 0, motivo: s.motivo || '',
+        categoria: grupo ? { id: grupo.categoriaId, nome: grupo.categoriaLabel, origem: 'grupo' } : s.categoria ? { id: null, nome: s.categoria.nome, origem: 'parecidos', fatia: s.categoria.fatia } : null,
+        parecidos: Array.isArray(s.parecidos) ? s.parecidos.slice(0, 3) : [],
+      });
     }));
 
     app.get('/api/whatsapp/conversas/mensagens', asyncHandler(async (req, res) => {
-      await admin.exigirAdmin(req);
+      await exigirConversas(req);
       const jid = jidValido(req.query.jid);
       if (!jid) throw new ErroHttp(400, 'conversa inválida');
       const antesDe = Number(req.query.antesDe) || 0;
@@ -326,7 +378,7 @@ function criarRotasWhatsapp(deps) {
     }));
 
     app.get('/api/whatsapp/midia/:id', asyncHandler(async (req, res) => {
-      await admin.exigirAdmin(req);
+      await exigirConversas(req);
       if (!/^[A-Za-z0-9_-]{4,80}$/.test(req.params.id)) throw new ErroHttp(400, 'id inválido');
       const m = await exigirRobo().midia(req.params.id).catch((err) => { throw erroRobo(err); });
       if (!m) throw new ErroHttp(404, 'Mídia não encontrada (pode ter passado do prazo de guarda).');
@@ -335,7 +387,7 @@ function criarRotasWhatsapp(deps) {
     }));
 
     app.post('/api/whatsapp/conversas/responder', asyncHandler(async (req, res) => {
-      await admin.exigirAdmin(req);
+      await exigirConversas(req);
       const b = req.body && typeof req.body === 'object' ? req.body : {};
       const jid = jidValido(b.jid);
       const texto = typeof b.texto === 'string' ? b.texto.trim() : '';
@@ -344,7 +396,7 @@ function criarRotasWhatsapp(deps) {
     }));
 
     app.post('/api/whatsapp/conversas/chamado', asyncHandler(async (req, res) => {
-      await admin.exigirAdmin(req);
+      await exigirConversas(req);
       const token = String(req.get('X-Glpi-Token') || '').trim();
       const b = req.body && typeof req.body === 'object' ? req.body : {};
       const jid = jidValido(b.jid);

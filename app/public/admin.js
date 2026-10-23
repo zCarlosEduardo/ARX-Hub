@@ -381,6 +381,7 @@
       const novo = await api('PUT', '/api/admin/config/whatsapp', corpo);
       setW({ ...novo, remetentesTexto: novo.remetentesAutorizados.join('\n') });
       aoSalvar({ ...config, whatsapp: novo });
+      window.dispatchEvent(new Event('arx-config-conversas')); // a aba Conversas aparece ou some sem recarregar
     });
     const mudar = (fn) => setW((x) => fn(copia(x)));
     const tipos = (opcoes && opcoes.tipos) || [];
@@ -390,7 +391,10 @@
     useEffect(() => {
       fetch('/api/glpi/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userToken: tokenAtual() }) })
         .then((r) => r.json()).then((d) => setCategorias(Array.isArray(d.categories) ? d.categories : [])).catch(() => setCategorias([]));
+      api('GET', '/api/admin/grupos-glpi').then((g) => setGruposGlpi(Array.isArray(g) ? g : [])).catch(() => setGruposGlpi([]));
     }, []);
+    const [gruposGlpi, setGruposGlpi] = useState(null);
+    const [buscaGrupo, setBuscaGrupo] = useState('');
     const campoTexto = (valor, onChange, placeholder, extra = {}) => e('input', { className: 'field-input', value: valor || '', onChange: (ev) => onChange(ev.target.value), placeholder, style: { ...S().input, ...extra } });
 
     const chips = (lista, aoAlternar, classe) => e('div', { className: 'admin-chips' }, tipos.map((t) => {
@@ -460,11 +464,23 @@
           ])))),
         botao('+ Adicionar categoria', () => mudar((x) => (x.privado.categorias.push({ apelido: '', categoriaId: null, categoriaLabel: '' }), x)), 'sec', { key: 'add', alignSelf: 'flex-start' }),
       ]),
-      secao('conversas', 'Conversas e respostas', 'O robô guarda as mensagens (com imagens e áudios) por 7 dias. Na aba Conversas do Hub, os administradores marcam mensagens e abrem o chamado com elas. A IA local também lê as mensagens anteriores da mesma pessoa.', [
+      secao('conversas', 'Conversas e respostas', 'Liga a aba Conversas do Hub: o robô guarda as mensagens (com imagens e áudios) por 7 dias, e quem tem acesso marca mensagens e abre o chamado com elas, com sugestão da IA local. A IA também lê as mensagens anteriores da mesma pessoa.', [
         e('div', { key: 'a', className: 'admin-chaves' }, [
-          caixa(w.conversas.ativo, (v) => mudar((x) => ((x.conversas.ativo = v), x)), 'Guardar as conversas', { key: 'at', fontWeight: 600 }),
+          caixa(w.conversas.ativo, (v) => mudar((x) => ((x.conversas.ativo = v), x)), 'Aba Conversas ligada (guarda as conversas)', { key: 'at', fontWeight: 600 }),
           caixa(w.conversas.privado, (v) => mudar((x) => ((x.conversas.privado = v), x)), 'Guardar também as conversas privadas com o chip', { key: 'pv' }),
         ]),
+        campo('quem', 'Quem pode ver a aba Conversas', selecao(w.conversas.quem || 'admins', (v) => mudar((x) => ((x.conversas.quem = v), x)), [['admins', 'Só administradores'], ['grupos', 'Administradores e os grupos do GLPI marcados'], ['todos', 'Todos que entram com o token do GLPI']]),
+          'Quem vê pode ler as mensagens das pessoas, responder na conversa e abrir chamado com o próprio token.'),
+        w.conversas.quem === 'grupos' ? campo('gv', 'Grupos do GLPI que veem', gruposGlpi === null ? dica('Carregando os grupos do GLPI…') : !gruposGlpi.length ? dica('Não consegui ler os grupos do GLPI com o seu token.') : e('div', { className: 'admin-editor-grupos' }, [
+          e('input', { key: 'b', className: 'field-input', value: buscaGrupo, onChange: (ev) => setBuscaGrupo(ev.target.value), placeholder: 'Buscar grupo', style: S().input }),
+          e('div', { key: 'l', className: 'admin-grupos-lista' }, gruposGlpi.filter((g) => !buscaGrupo.trim() || g.label.toLowerCase().includes(buscaGrupo.trim().toLowerCase())).map((g) => {
+            const sel = (w.conversas.grupos || []).includes(g.id);
+            return e('label', { key: g.id, className: 'admin-marcar' }, [
+              e('input', { key: 'c', type: 'checkbox', checked: sel, onChange: () => mudar((x) => ((x.conversas.grupos = sel ? x.conversas.grupos.filter((k) => k !== g.id) : [...(x.conversas.grupos || []), g.id]), x)) }),
+              e('span', { key: 't' }, g.label),
+            ]);
+          })),
+        ]), `${(w.conversas.grupos || []).length === 1 ? '1 grupo marcado' : `${(w.conversas.grupos || []).length} grupos marcados`}.`) : null,
         campo('g', 'Outros grupos para guardar (além dos grupos atendidos)', gruposVisiveis.length
           ? e('div', { className: 'admin-chips' }, gruposVisiveis.map((gv) => {
             const sel = w.conversas.jids.includes(gv.jid);

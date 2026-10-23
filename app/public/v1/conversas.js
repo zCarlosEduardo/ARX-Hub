@@ -82,6 +82,40 @@
       return n;
     });
     const requerente = (lookup.users || []).find((u) => String(u.id) === f.requerenteId);
+
+    // Sugestão da IA local: título, tipo (inclusive "sem automação") e categoria (a do grupo ou a dos chamados parecidos).
+    // Só preenche: a pessoa confere e abre. A categoria votada vem pelo nome e é achada na lista do GLPI quando ela chega.
+    const [sugestao, setSugestao] = useState({ carregando: false, erro: '', dados: null });
+    async function sugerir() {
+      setSugestao({ carregando: true, erro: '', dados: null });
+      try {
+        const d = await api('POST', '/api/whatsapp/conversas/sugerir', { jid: conversa.jid, ids: marcadas.map((m) => m.id) });
+        setSugestao({ carregando: false, erro: '', dados: d });
+        setF((x) => {
+          const n = { ...x, titulo: d.titulo || x.titulo, tipo: d.tipo || '' };
+          if (!x.respostaMexida) n.resposta = (respostas.porTipo || {})[n.tipo] || respostas.abertura;
+          return n;
+        });
+      } catch (err) {
+        setSugestao({ carregando: false, erro: err.message, dados: null });
+      }
+    }
+    useEffect(() => {
+      const c = sugestao.dados && sugestao.dados.categoria;
+      if (!c || !lookup.categories) return;
+      const sem = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+      const achada = c.id ? lookup.categories.find((k) => k.id === c.id) : lookup.categories.find((k) => sem(k.label) === sem(c.nome)) || lookup.categories.find((k) => sem(k.label).endsWith(sem(c.nome)));
+      if (achada) setF((x) => ({ ...x, categoriaId: String(achada.id) }));
+    }, [sugestao.dados, lookup.categories]);
+    const notaSugestao = () => {
+      const d = sugestao.dados;
+      if (sugestao.carregando) return 'A IA está lendo as mensagens…';
+      if (sugestao.erro) return sugestao.erro;
+      if (!d) return 'A IA local sugere título, tipo e categoria a partir das mensagens marcadas. Confira antes de abrir.';
+      const cat = d.categoria ? (d.categoria.origem === 'grupo' ? ' Categoria do grupo.' : ` Categoria mais comum nos chamados parecidos (${Math.round((d.categoria.fatia || 0) * 100)}%).`) : ' Sem categoria sugerida: escolha abaixo.';
+      return `Sugestão da IA (${Math.round((d.confianca || 0) * 100)}% de confiança): ${d.tipoNome}.${d.motivo ? ' ' + d.motivo : ''}${cat}`;
+    };
+
     async function abrir() {
       setEstado({ enviando: true, erro: '' });
       try {
@@ -106,6 +140,10 @@
         e('button', { key: 'a', type: 'button', className: 'exu-btn primario', disabled: estado.enviando || !f.titulo.trim() || !f.categoriaId, onClick: abrir }, estado.enviando ? 'Abrindo…' : 'Abrir chamado'),
       ],
     }, [
+      e('div', { key: 'ia', className: 'cv-sugestao' + (sugestao.erro ? ' erro' : '') }, [
+        e('p', { key: 'p', role: sugestao.erro ? 'alert' : 'status' }, notaSugestao()),
+        e('button', { key: 'b', type: 'button', className: 'exu-btn', disabled: sugestao.carregando, onClick: sugerir }, sugestao.carregando ? 'Sugerindo…' : sugestao.dados ? 'Sugerir de novo' : 'Sugerir com a IA'),
+      ]),
       campo('titulo', 'Título', e('input', { key: 'i', id: 'cv-titulo', value: f.titulo, maxLength: 250, onChange: (ev) => mudar('titulo', ev.target.value) })),
       campo('categoria', 'Categoria', e('select', { key: 's', id: 'cv-categoria', value: f.categoriaId, onChange: (ev) => mudar('categoriaId', ev.target.value) }, [
         e('option', { key: '', value: '' }, lookup.categories ? 'Escolha a categoria' : 'Carregando…'),
@@ -139,7 +177,6 @@
     const [aviso, setAviso] = useState(null); // { tipo, texto }
     const [janela, setJanela] = useState(false);
     const [lookup, setLookup] = useState({});
-    const [cfg, setCfg] = useState({ opcoes: {}, respostas: { abertura: '', porTipo: {} } });
     const fimRef = useRef(null);
     const atualRef = useRef(null);
     atualRef.current = atual;
@@ -153,7 +190,6 @@
 
     useEffect(() => {
       carregarLista();
-      api('GET', '/api/admin/config').then((d) => setCfg({ opcoes: d.opcoes || {}, respostas: d.config.whatsapp.respostas || { abertura: '', porTipo: {} } })).catch(() => {});
       // com a aba visível, a lista e a conversa aberta se atualizam a cada 15 s
       const t = setInterval(() => {
         if (document.hidden) return;
@@ -238,7 +274,7 @@
       ]),
       corpo,
       janela && conversa ? e(JanelaChamado, {
-        key: 'j', conversa, marcadas: selecionadas, lookup, opcoes: cfg.opcoes, respostas: cfg.respostas, fechar: () => setJanela(false),
+        key: 'j', conversa, marcadas: selecionadas, lookup, opcoes: { tipos: lista.tipos || [] }, respostas: lista.respostas || { abertura: '', porTipo: {} }, fechar: () => setJanela(false),
         aoAbrir: (r) => {
           setJanela(false);
           setMarcadas({});
@@ -253,5 +289,37 @@
     ]);
   }
 
+  /**
+   * true quando a pessoa (token do GLPI do cofre) pode ver a aba: Conversas ligadas e ela é admin, está num grupo do GLPI
+   * liberado ou a aba é de todos (o servidor decide). Confere de novo quando o token muda ou a Administração salva.
+   */
+  function usePodeConversas() {
+    const [pode, setPode] = useState(false);
+    useEffect(() => {
+      let vivo = true;
+      async function checar() {
+        const t = token();
+        if (!t) return setPode(false);
+        try {
+          const resp = await fetch('/api/whatsapp/conversas/acesso', { headers: { 'X-Glpi-Token': t }, cache: 'no-store' });
+          const d = await resp.json().catch(() => ({}));
+          if (vivo) setPode(resp.ok && !!d.pode);
+        } catch {
+          if (vivo) setPode(false); // sem resposta: a aba simplesmente não aparece
+        }
+      }
+      checar();
+      const parar = window.ArxAcessosHub ? window.ArxAcessosHub.aoMudar(checar) : () => {};
+      window.addEventListener('arx-config-conversas', checar);
+      return () => {
+        vivo = false;
+        parar();
+        window.removeEventListener('arx-config-conversas', checar);
+      };
+    }, []);
+    return pode;
+  }
+
   window.ConversasView = ConversasView;
+  window.usePodeConversas = usePodeConversas;
 })();

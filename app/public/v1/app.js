@@ -200,6 +200,8 @@
     // Quem gerencia (admin, ou todos se a administração liberar) cadastra, edita, remove e vê as URLs reais. Para os
     // outros, a aba Automações da administração diz se o endereço aparece mascarado ou some e se há "Abrir em nova aba".
     const ehAdmin = (window.useEhAdmin || (() => false))();
+    // Conversas do WhatsApp: quem vê é configurado na Administração (o servidor decide)
+    const podeConversas = (window.usePodeConversas || (() => false))();
     const [cfgAuto, setCfgAuto] = useState({ cadastro: 'admins', endereco: 'mascarado', novaAba: true });
     useEffect(() => {
       api('/api/config-publica').then((c) => c && c.automacoes && setCfgAuto(c.automacoes)).catch(() => { /* sem config: valem os padrões */ });
@@ -897,8 +899,7 @@
         fixa('painel', 'painel', 'Painel'),
         fixa('chamados', 'chamados', 'Chamados', prontosChamados),
         fixa('resultados', 'resultados', 'Resultados'),
-        // Conversas do WhatsApp: só para administradores (mensagens das pessoas; o servidor confere)
-        ehAdmin ? fixa('conversas', 'conversas', 'Conversas') : null,
+        podeConversas ? fixa('conversas', 'conversas', 'Conversas') : null,
         // a Administração só aparece para quem é administrador (identificado pelo token do GLPI, admin.js)
         ehAdmin ? fixa('admin', 'admin', 'Administração') : null,
         e('div', {

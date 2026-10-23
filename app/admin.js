@@ -142,7 +142,8 @@ function configPadrao() {
       privado: { ativo: false, tipos: [], responder: false, reagir: true, explicarDuvida: true, categorias: [] },
       reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
       // Conversas no Hub: o robô guarda as mensagens dos grupos atendidos, dos grupos extras (jids) e, se ligado, do privado
-      conversas: { ativo: false, privado: false, jids: [] },
+      // quem vê a aba: 'admins', 'grupos' (administradores e os grupos do GLPI marcados) ou 'todos' (quem entra com o token do GLPI)
+      conversas: { ativo: false, privado: false, jids: [], quem: 'admins', grupos: [] },
       // resposta enviada à pessoa quando o chamado é aberto pelas Conversas: a do tipo escolhido ou a geral
       respostas: { abertura: 'Recebemos seu pedido. Chamado {chamado} aberto.', porTipo: {} },
     },
@@ -313,7 +314,12 @@ function validarWhatsapp(b) {
   if (!Array.isArray(jidsBrutos) || jidsBrutos.length > 100) return { erro: 'whatsapp.conversas.jids deve ser uma lista de até 100 grupos' };
   const jids = [...new Set(jidsBrutos.map((j) => texto(j, 120)))];
   if (jids.some((j) => !/^[0-9-]{5,100}@g\.us$/.test(j))) return { erro: 'cada grupo das Conversas deve ser um identificador que termina em @g.us' };
-  const conversas = { ativo: cv.ativo === true, privado: cv.privado === true, jids };
+  const quem = cv.quem === undefined ? 'admins' : cv.quem;
+  if (!['admins', 'grupos', 'todos'].includes(quem)) return { erro: 'whatsapp.conversas.quem deve ser admins, grupos ou todos' };
+  const gruposVer = cv.grupos === undefined ? [] : cv.grupos;
+  if (!Array.isArray(gruposVer) || gruposVer.length > 200 || gruposVer.some((g) => !Number.isInteger(Number(g)) || Number(g) < 1)) return { erro: 'whatsapp.conversas.grupos deve ser uma lista de grupos do GLPI' };
+  if (quem === 'grupos' && !gruposVer.length) return { erro: 'escolha ao menos um grupo do GLPI que pode ver as Conversas' };
+  const conversas = { ativo: cv.ativo === true, privado: cv.privado === true, jids, quem, grupos: [...new Set(gruposVer.map(Number))] };
 
   const rp = w.respostas && typeof w.respostas === 'object' ? w.respostas : {};
   const abertura = rp.abertura === undefined ? padrao.respostas.abertura : texto(rp.abertura, 500);

@@ -504,7 +504,14 @@ const rotasWhatsapp = criarRotasWhatsapp({
   repo: repoWhatsapp(pool),
   admin: rotasAdmin,
   // IA local: valida o tipo da mensagem e escreve a resposta que daria (desligada ou fora: null, segue a regra)
-  ia: { whatsapp: (corpo) => rotasIa.chamarIa('/api/whatsapp', 'POST', corpo).then((r) => (r.ok ? r.dados : null)) },
+  ia: {
+    whatsapp: (corpo) => rotasIa.chamarIa('/api/whatsapp', 'POST', corpo).then((r) => (r.ok ? r.dados : null)),
+    // sugestão de chamado nas Conversas: sob demanda e com modelo que pode ser maior, então espera mais
+    sugerirChamado: (corpo) => rotasIa.chamarIa('/api/sugerir-chamado', 'POST', corpo, 90000).then((r) => {
+      if (!r.ok) throw new Error((r.dados && r.dados.error) || 'sem resposta');
+      return r.dados;
+    }),
+  },
   glpi,
   classificar: classificarMensagem,
   tokenBot: process.env.WHATSAPP_BOT_TOKEN || '',

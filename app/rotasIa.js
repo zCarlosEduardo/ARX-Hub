@@ -23,7 +23,7 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
     }
   }
   const controle = (acao, metodo = 'GET') => chamar(`${CONTROLE_URL}/api/${acao}`, { metodo, cabecalhos: { 'X-IA-Controle-Token': env.IA_CONTROLE_TOKEN || '' }, ms: 70000 });
-  const ia = (caminho, metodo = 'GET', corpo) => chamar(`${IA_URL}${caminho}`, { metodo, corpo, cabecalhos: { 'X-IA-Token': env.IA_TOKEN || '' }, ms: 10000 });
+  const ia = (caminho, metodo = 'GET', corpo, ms = 10000) => chamar(`${IA_URL}${caminho}`, { metodo, corpo, cabecalhos: { 'X-IA-Token': env.IA_TOKEN || '' }, ms });
 
   async function gravarLigada(ligada, usuario) {
     const atual = await admin.configAtual();

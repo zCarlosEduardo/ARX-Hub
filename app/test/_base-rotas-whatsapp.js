@@ -12,7 +12,7 @@ const TOKEN_BOT = 'segredo-do-robo';
 const TOKEN_SERVICO = 'token-de-servico-777777';
 const USUARIOS = {
   [TOKEN_ADMIN]: { id: 7, login: 'carlos.alonso', nome: 'Carlos Eduardo de Souza Alonso', nomes: ['CARLOS EDUARDO DE SOUZA ALONSO'] },
-  [TOKEN_OPERADOR]: { id: 9, login: 'operador', nome: 'Operador', nomes: ['OPERADOR'] },
+  [TOKEN_OPERADOR]: { id: 9, login: 'operador', nome: 'Operador', nomes: ['OPERADOR'], grupos: [33] },
 };
 
 function repoAdminMemoria() {

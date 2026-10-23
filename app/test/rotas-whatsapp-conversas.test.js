@@ -76,6 +76,8 @@ test('Conversas: responder e abrir chamado com as mensagens marcadas, anexo e re
 test('Conversas sem o robô configurado respondem 503; a configuração rejeita grupo inválido e tipo inexistente', async () => {
   const t = await subir();
   try {
+    assert.equal((await t.comoAdmin('GET', '/api/whatsapp/conversas')).status, 403, 'desligadas');
+    await t.configurar({ conversas: { ativo: true } });
     assert.equal((await t.comoAdmin('GET', '/api/whatsapp/conversas')).status, 503);
     assert.equal((await t.comoAdmin('PUT', '/api/admin/config/whatsapp', { conversas: { ativo: true, jids: ['nao-e-grupo'] } })).status, 400);
     assert.equal((await t.comoAdmin('PUT', '/api/admin/config/whatsapp', { respostas: { abertura: 'ok', porTipo: { inventado: 'x' } } })).status, 400);
@@ -92,6 +94,51 @@ test('o contexto das mensagens anteriores chega à IA local', async () => {
     assert.equal((await t.comoAdmin('PUT', '/api/admin/config/ia', { ligada: true })).status, 200);
     await t.mensagem({ contexto: ['meu cpf é 000.000.000-00', 123] });
     assert.deepEqual(recebidos[0].contexto, ['meu cpf é 000.000.000-00']);
+  } finally {
+    t.fechar();
+  }
+});
+
+test('quem vê as Conversas: só admins, admins e grupos do GLPI marcados, ou todos com token', async () => {
+  const t = await subir({ robo: roboFalso() });
+  try {
+    const acesso = async (como) => (await t[como]('GET', '/api/whatsapp/conversas/acesso')).json.pode;
+    assert.equal((await t.chamar('GET', '/api/whatsapp/conversas/acesso')).json.pode, false, 'sem token');
+    assert.equal(await acesso('comoAdmin'), false, 'desligadas: ninguém vê');
+    await t.configurar({ conversas: { ativo: true, quem: 'admins' } });
+    assert.deepEqual([await acesso('comoAdmin'), await acesso('comoOperador')], [true, false]);
+    assert.equal((await t.comoAdmin('PUT', '/api/admin/config/whatsapp', { conversas: { ativo: true, quem: 'grupos', grupos: [] } })).status, 400, 'grupos sem grupo marcado');
+    await t.configurar({ conversas: { ativo: true, quem: 'grupos', grupos: [44] } });
+    assert.equal(await acesso('comoOperador'), false, 'outro grupo');
+    await t.configurar({ conversas: { ativo: true, quem: 'grupos', grupos: [33] } });
+    assert.equal(await acesso('comoOperador'), true);
+    assert.equal((await t.comoOperador('GET', '/api/whatsapp/conversas')).status, 200);
+    const l = await t.comoOperador('GET', '/api/whatsapp/conversas');
+    assert.ok(l.json.tipos.length && l.json.respostas.abertura, 'quem não é admin recebe tipos e respostas junto');
+    await t.configurar({ conversas: { ativo: true, quem: 'todos' } });
+    assert.equal(await acesso('comoOperador'), true);
+  } finally {
+    t.fechar();
+  }
+});
+
+test('sugerir com a IA: desligada avisa; ligada devolve título, tipo e a categoria do grupo antes da votada', async () => {
+  const pedidos = [];
+  const ia = { async whatsapp() { return null; }, async sugerirChamado(c) { pedidos.push(c); return { titulo: 'Desbloqueio do usuário do SGA', tipo: 'desbloquear_usuario_sga', confianca: 0.9, motivo: 'Pede desbloquear.', categoria: { nome: 'ARX > Valle', fatia: 0.6 }, parecidos: ['Usuário bloqueado'] }; } };
+  const t = await subir({ robo: roboFalso(), ia });
+  try {
+    await t.configurar({ conversas: { ativo: true } });
+    const corpo = { jid: G, ids: ['MSG001', 'MSG002', 'MSG003'] };
+    assert.equal((await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', corpo)).status, 503, 'IA desligada');
+    await t.comoAdmin('PUT', '/api/admin/config/ia', { ligada: true });
+    assert.equal((await t.comoOperador('POST', '/api/whatsapp/conversas/sugerir', corpo)).status, 403);
+    const r = await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', corpo);
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(r.json.titulo, 'Desbloqueio do usuário do SGA');
+    assert.equal(r.json.tipo, 'desbloquear_usuario_sga');
+    assert.deepEqual(r.json.categoria, { id: 45, nome: 'Tech', origem: 'grupo' }, 'o grupo tem categoria configurada');
+    assert.deepEqual(pedidos[0].mensagens, ['Preciso desbloquear meu SGA', 'print', 'bom dia'], 'só o texto, em ordem');
+    assert.equal((await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', { jid: G, ids: [] })).status, 400);
   } finally {
     t.fechar();
   }
