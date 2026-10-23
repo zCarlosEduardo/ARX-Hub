@@ -38,7 +38,7 @@
     // Com uma janela aberta, a página de trás não rola (as janelas do Hub já fecham com clique no fundo).
     document.addEventListener('DOMContentLoaded', function () {
       new MutationObserver(function () {
-        document.body.classList.toggle('v1-modal-aberto', !!document.querySelector('.exu-modal-fundo, [aria-modal="true"], .v1-veu'));
+        document.body.classList.toggle('v1-modal-aberto', !!document.querySelector('.exu-modal-fundo, [aria-modal="true"]'));
       }).observe(document.body, { childList: true, subtree: true });
     });
   </script>
@@ -59,6 +59,7 @@
   <script src="/chamados-cache.js" defer></script>
   <script src="/chamados-auto.js" defer></script>
   <script src="/v1/chamados.js" defer></script>
+  <script src="/v1/charts.js" defer></script>
   <script src="/v1/resultados.js" defer></script>
   <script src="/arx-ajuda.js" defer></script>
   <script src="/ajuda.js" defer></script>

@@ -640,6 +640,9 @@
         await api('/api/auto/assumir', { clienteId: CLIENTE_ID, quem: lista.usuario && lista.usuario.nome });
         setErroAuto('');
         mudarAuto({ ativo: true });
+        // avisa quantos computadores (pessoas) estão no automático agora, este incluído
+        const nomes = await api('/api/auto').then((x) => (x.computadores || []).map((c) => c.por)).catch(() => null);
+        if (nomes) { setComputadoresAuto(nomes); avisar('Modo automático ligado. ' + window.ChamadosAuto.descreverAuto({ computadores: nomes, limite: auto.limite }).computadores, 'ok'); }
       } catch (err) {
         setErroAuto(err.message);
         mudarAuto({ ativo: false });
@@ -658,8 +661,16 @@
       const t = setInterval(renovar, 30000);
       const soltar = () => { try { fetch(SERVICO + '/api/auto/soltar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clienteId: CLIENTE_ID }) }); } catch { /* sem rede */ } };
       window.addEventListener('beforeunload', soltar);
-      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); setComputadoresAuto([]); };
+      return () => { clearInterval(t); window.removeEventListener('beforeunload', soltar); soltar(); };
     }, [auto.ativo]); // eslint-disable-line
+    // quem está no automático (todos os computadores), mesmo com a chave deste desligada: aparece ao lado da chave
+    useEffect(() => {
+      if (!pronto) return undefined;
+      const ler = () => { if (!document.hidden) api('/api/auto').then((x) => setComputadoresAuto((x.computadores || []).map((c) => c.por))).catch(() => { /* sem resposta: mantém a contagem anterior */ }); };
+      ler();
+      const t = setInterval(ler, 30000);
+      return () => clearInterval(t);
+    }, [pronto, auto.ativo]);
 
     // Robô do WhatsApp: com o automático ligado, este navegador também abre os chamados que chegaram pelos grupos
     // (fila no Hub). O chamado é aberto com o token de quem está com o automático e o requerente do pedido; depois o
@@ -793,7 +804,17 @@
       return () => window.removeEventListener('resize', medir);
     }, [exibir, pronto, auto.ativo, modoTeste]);
 
+    // a aba Chamados da moldura mostra quantos estão prontos (app.js ouve o evento); o número é calculado mais abaixo
+    const prontosRef = useRef(0);
+    const avisadoRef = useRef(-1);
+    useEffect(() => {
+      if (avisadoRef.current === prontosRef.current) return;
+      avisadoRef.current = prontosRef.current;
+      window.dispatchEvent(new CustomEvent('arx-chamados-prontos', { detail: prontosRef.current }));
+    });
+
     if (!pronto) {
+      prontosRef.current = 0;
       return e('div', { className: 'exu-tela' }, e(Hub.EditorAcessos, { exigirChamados: true, moldura: 'card' }));
     }
 
@@ -999,6 +1020,7 @@
     // prontos pra rodar agora: sem pendência, sem resultado nesta tela e sem execução em andamento;
     // nenhum enquanto a lista for a guardada (só a lista confirmada pelo servidor roda)
     const prontosTodos = lista.guardado ? [] : possiveis.filter((i) => !falta(i) && !deveExcluirDoAutomatico(i) && !resultados[i.id] && !execDoChamado(i.id));
+    prontosRef.current = prontosTodos.length;
     const comErro = itensDaEntidade.filter((i) => ['erro', 'nao_rodou', 'repetir'].includes(situacao(i)));
     const solucionados = itensDaEntidade.filter((i) => ['concluido', 'teste', 'pendencia'].includes(situacao(i)));
     const VISOES = [
@@ -1056,8 +1078,8 @@
       e('div', { key: 't' }, [
         e('h1', { key: 'h', className: 'v1-h1' }, 'Chamados'),
         e('p', { key: 'p' }, lista.usuario ? [
-          (mostrarEntidade ? plural(lista.entidades.length, 'entidade', 'entidades') : 'Entidade ' + (lista.entidades[0] || 'Sistemas')) + ' · ' + plural(abertosNaTela, 'aberto', 'abertos') + ' · aprovação como ' + lista.usuario.nome,
-          lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`) : null,
+          (mostrarEntidade ? plural(lista.entidades.length, 'entidade', 'entidades') : 'Entidade ' + (lista.entidades[0] || 'Sistemas')) + ', ' + plural(abertosNaTela, 'aberto', 'abertos') + ', aprovação como ' + lista.usuario.nome,
+          lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, `, ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`) : '.',
           lista.aoVivo ? e('span', { key: 'av', title: 'Atualização automática ligada', role: 'img', 'aria-label': 'Atualização automática ligada', className: 'v2c-ao-vivo' }) : null,
           e('span', { key: 'vivo', 'aria-live': 'polite', style: { marginLeft: 8 } }, lista.guardado && !lista.erro ? 'Atualizando…' : ''),
         ] : 'Chamados do GLPI (entidade Sistemas) que as automações resolvem.'),
@@ -1073,16 +1095,20 @@
             else { setErroAuto(''); setConfirmar({ tipo: 'auto' }); }
           } }), 'Automático',
         ]),
+        // quantas pessoas (computadores) estão com o automático ligado agora, com os nomes ao passar o mouse
+        computadoresAuto.length ? e('span', { key: 'qa', className: 'pill pos', title: computadoresAuto.filter(Boolean).join(', ') || undefined },
+          computadoresAuto.length === 1 ? '1 computador no automático' : computadoresAuto.length + ' computadores no automático') : null,
         e('div', { key: 'pv', className: 'exu-contador', role: 'group', 'aria-label': 'Chamados ao mesmo tempo no automático', title: 'Quantos chamados o automático roda ao mesmo tempo' }, [
           e('button', { key: 'm', type: 'button', disabled: auto.limite <= 1, onClick: () => mudarAuto({ limite: Math.max(1, auto.limite - 1) }), 'aria-label': 'Diminuir' }, '−'),
           e('span', { key: 'n', 'aria-live': 'polite' }, [e('b', { key: 'b' }, String(auto.limite)), ' por vez']),
           e('button', { key: 'p', type: 'button', disabled: auto.limite >= 20, onClick: () => mudarAuto({ limite: Math.min(20, auto.limite + 1) }), 'aria-label': 'Aumentar' }, '+'),
         ]),
-        e('button', { key: 'cfg', type: 'button', className: 'exu-btn', onClick: () => Hub.abrirEditor(), title: 'Meus acessos', 'aria-label': 'Meus acessos' }, Icon('Settings', 14, 'currentColor')),
-        e('button', { key: 'rf', type: 'button', className: 'exu-btn', disabled: lista.carregando, onClick: buscar, title: 'Atualizar a lista', 'aria-label': 'Atualizar a lista' }, e('span', { style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 14, 'currentColor'))),
-        e('button', { key: 'todos', type: 'button', className: 'exu-btn primario', disabled: !prontosTodos.length, onClick: () => setConfirmar({ itens: prontosTodos, manual: false }) }, [Icon('Activity', 14, 'currentColor'), `Rodar prontos (${prontosTodos.length})`]),
+        e('button', { key: 'cfg', type: 'button', className: 'icone-btn', onClick: () => Hub.abrirEditor(), title: 'Meus acessos', 'aria-label': 'Meus acessos' }, Icon('Settings', 16, 'currentColor')),
+        e('button', { key: 'rf', type: 'button', className: 'icone-btn', disabled: lista.carregando, onClick: buscar, title: 'Atualizar a lista', 'aria-label': 'Atualizar a lista' }, e('span', { style: { display: 'flex', animation: lista.carregando ? 'spin 1s linear infinite' : 'none' } }, Icon('RefreshCw', 16, 'currentColor'))),
+        e('button', { key: 'todos', type: 'button', className: 'exu-btn primario', disabled: !prontosTodos.length, onClick: () => setConfirmar({ itens: prontosTodos, manual: false }) }, `Rodar prontos (${prontosTodos.length})`),
       ]),
     ]);
+    const avisoTeste = modoTeste ? e('p', { key: 'aviso-teste', className: 'aviso-teste' }, 'Em teste a automação lê e preenche, mas não escreve no GLPI.') : null;
 
     const kpi = (v, rot, n, det) => e('button', { key: v, type: 'button', className: 'exu-kpi' + (visao === v ? ' marcado' : ''), 'aria-pressed': visao === v ? 'true' : 'false', onClick: () => trocarVisao(visao === v ? 'disponiveis' : v) },
       [e('div', { key: 'r', className: 'exu-kpi-rot' }, rot), e('div', { key: 'v', className: 'exu-kpi-val' }, String(n)), e('div', { key: 'd', className: 'exu-kpi-det' }, det)]);
@@ -1113,6 +1139,34 @@
       e('span', { key: 't', className: 'exu-tipo' + (item.tipo ? '' : ' vazio') }, item.tipoNome || 'Sem automação'),
       item.ia && !item.ia.concorda ? e('span', { key: 'ia', className: 'exc-ia', title: 'A IA local sugere outro tipo' }, [Icon('Bot', 12, 'currentColor'), 'IA']) : null,
     ];
+    // o que explica a situação, embaixo do selo: o que falta, o erro, o motivo de só manual ou de não rodar
+    const detalheSit = (item) => {
+      const res = resultados[item.id];
+      const exec = execDoChamado(item.id);
+      if (exec) return (exec.linhas[exec.linhas.length - 1] || 'Em execução…').replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
+      if (res) return String(res.texto || '').split('\n')[0].slice(0, 160);
+      const s = situacao(item);
+      if (s === 'falta') return lista.guardado ? TEXTO_AGUARDANDO : falta(item);
+      if (s === 'confirmar') return avisoConfianca(item) ? String(item.motivoConfianca || '').trim() || 'Reconhecido só pela descrição' : 'Sempre manual';
+      if (s === 'manual') return item.problemas[0];
+      if (s === 'dispensado') return motivos[item.id] || null;
+      return null;
+    };
+    // ação da linha: Rodar quem está pronto, Rodar novamente quem deu erro, e o resto abre o chamado para escolher
+    const acaoLinha = (item) => {
+      const s = situacao(item);
+      const rodarEste = () => setConfirmar({ itens: [item], manual: true });
+      if (s === 'pronto') return e('button', { type: 'button', className: 'exu-btn', onClick: rodarEste }, 'Rodar');
+      if (['erro', 'nao_rodou', 'repetir'].includes(s)) {
+        return e('button', { type: 'button', className: 'exu-btn', onClick: () => {
+          setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; });
+          if (!item.problemas.length && !lista.guardado && !falta(item)) rodarEste(); else setAberto(item.id);
+        } }, 'Rodar novamente');
+      }
+      if (s === 'falta') return e('button', { type: 'button', className: 'exu-btn texto', onClick: () => setAberto(item.id) }, 'Escolher');
+      if (s === 'confirmar') return e('button', { type: 'button', className: 'exu-btn texto', onClick: () => setAberto(item.id) }, 'Conferir e rodar');
+      return null;
+    };
     const abrirCom = (item) => ({ onClick: () => setAberto(item.id), onKeyDown: (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === ev.currentTarget) { ev.preventDefault(); setAberto(item.id); } }, tabIndex: 0 });
     const vazio = e('div', { key: 'v', className: 'exc-vazio' }, [
       Icon('Inbox', 30, 'var(--muted-soft)', 1.3),
@@ -1122,7 +1176,7 @@
     const emLista = e('div', { key: 'tab', ref: corpoRef, className: 'exc-tabela', role: 'table', 'aria-label': 'Chamados' }, [
       e('div', { key: 'h', className: 'exc-cab', role: 'row' }, [
         e('span', { key: 'm', className: 'exc-marcar' }, e('input', { type: 'checkbox', checked: todosMarcados, onChange: () => setMarcados(todosMarcados ? marcados.filter((id) => !fatia.some((i) => i.id === id)) : [...new Set([...marcados, ...fatia.map((i) => i.id)])]), 'aria-label': 'Marcar a página' })),
-        e('span', { key: 'c' }, 'Chamado'), e('span', { key: 't' }, 'Tipo'), e('span', { key: 'a' }, 'Categoria'), e('span', { key: 'h' }, 'Aberto há'), e('span', { key: 's' }, 'Situação'),
+        e('span', { key: 'c' }, 'Chamado'), e('span', { key: 't' }, 'Tipo'), e('span', { key: 'a' }, 'Categoria'), e('span', { key: 'h' }, 'Aberto há'), e('span', { key: 's' }, 'Situação'), e('span', { key: 'x', className: 'sr' }, 'Ação'),
       ]),
       fatia.length ? fatia.map((item) => e('div', Object.assign({
         key: item.id, role: 'row', className: 'exc-linha' + (marcados.includes(item.id) ? ' selecionada' : '') + (aberto === item.id ? ' aberta' : ''),
@@ -1130,12 +1184,14 @@
         e('span', { key: 'm', className: 'exc-marcar', onClick: (ev) => ev.stopPropagation() }, e('input', { type: 'checkbox', checked: marcados.includes(item.id), onChange: () => alternar(item.id), 'aria-label': 'Marcar chamado ' + item.id })),
         e('div', { key: 't', className: 'exc-titulo' }, [
           e('b', { key: 'b' }, [e('span', { key: 'i', className: 'exc-id' }, '#' + item.id), e('span', { key: 't' }, item.titulo)]),
-          e('small', { key: 's' }, (item.requerente || 'Requerente não informado') + ' · ' + item.statusNome),
+          e('small', { key: 's' }, (item.requerente || 'Requerente não informado') + ', ' + item.statusNome),
+          e('small', { key: 'e', className: 'so-estreito' }, (item.tipoNome || 'Sem automação') + ', ' + (item.categoria || 'Sem categoria') + ', aberto há ' + tempoRelativo(item.abertoEm)),
         ]),
         e('div', { key: 'tp', className: 'exc-celula' }, tipoCel(item)),
         e('div', { key: 'a', className: 'exc-celula', title: item.categoria }, item.categoria || 'Sem categoria'),
-        e('div', { key: 'h', className: 'exc-celula' }, tempoRelativo(item.abertoEm)),
-        e('div', { key: 's' }, selo(item)),
+        e('div', { key: 'h', className: 'exc-celula num' }, tempoRelativo(item.abertoEm)),
+        e('div', { key: 's', className: 'exc-sit' }, [selo(item), detalheSit(item) ? e('small', { key: 'd' }, detalheSit(item)) : null]),
+        e('div', { key: 'x', className: 'exc-acao', onClick: (ev) => ev.stopPropagation() }, acaoLinha(item)),
       ])) : vazio,
     ]);
     const emCartoes = fatia.length ? e('div', { key: 'cart', ref: corpoRef, className: 'exc-cartoes' }, fatia.map((item) => e('div', Object.assign({
@@ -1261,7 +1317,7 @@
       });
     })() : verChamado ? e(VerChamado, { key: 'ver-chamado', item: verChamado, userToken: acessos.userToken, onFechar: () => setVerChamado(null) }) : null;
 
-    return e('div', { className: 'exu-tela v3c-tela' }, [cabecalho, ...avisosTopo, kpis, abas, barra, corpo, paginacao, ...extras, lote, janelaConfirmar, gaveta, avisos]);
+    return e('div', { className: 'exu-tela v3c-tela' }, [cabecalho, avisoTeste, ...avisosTopo, kpis, abas, barra, corpo, paginacao, ...extras, lote, janelaConfirmar, gaveta, avisos]);
   }
 
   window.ChamadosView = ChamadosView;
