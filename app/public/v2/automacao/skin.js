@@ -1,4 +1,4 @@
-// Hub v2: layout novo nas telas das automações abertas pela /v2/ (o proxy injeta este script com ?v2=1).
+// Layout novo nas telas das automações abertas pelo Hub (o proxy injeta este script com ?v2=1).
 // Todas: título no modelo novo e números dos passos discretos. Gerar foto de perfil: tela nova inteira, usando a API da
 // própria automação (/api/foto.png para a prévia sem gravar, /api/start para gerar e /api/execucoes para o histórico).
 (function () {
@@ -88,14 +88,12 @@
     });
   }
 
-  // v3 abre com so=v3: Foto de perfil e Alt. Status têm tela própria; as demais do kit, o layout padrão
+  // Foto de perfil e Alt. Status têm tela própria; as demais do kit, o layout padrão
   const ehFoto = !!(document.getElementById('previaBox') && document.getElementById('nome') && document.getElementById('departamento'));
   const ehAltStatus = !!(document.getElementById('acaoGlobal') && document.getElementById('cpfsInput') && document.getElementById('resultsTable'));
-  const params = new URLSearchParams(location.search);
-  const ehV3 = params.get('so') === 'v3';
   // campos com rótulo visível mas sem ligação (label sem "for"): o leitor de tela não anunciava o nome. Só acrescenta
   // aria-label, sem mexer na estrutura, então vale também nas telas montadas pelo React
-  if (ehV3) nomearCampos();
+  nomearCampos();
   // telas montadas pelo React (Cadastro de voluntário e de colaborador, em Python): mover ou editar nós que o React
   // controla quebra a tela; nelas fica só o estilo
   if (document.getElementById('root')) return;
@@ -106,8 +104,8 @@
 
   if (ehFoto) fotoNova();
   else if (ehAltStatus) altStatusNova();
-  else if (ehV3) layoutPadrao();
-  if (ehV3) acessosDoHubDiscretos();
+  else layoutPadrao();
+  acessosDoHubDiscretos();
 
   // Logins que vieram do Hub (o app.js põe o selo "Preenchido pelo Hub" ao lado do campo, via ArxAcessos.marcarCampo):
   // usuário e senha somem e fica só "Acesso do Hub", com "Usar outro login" para quem precisar trocar. Sem o selo

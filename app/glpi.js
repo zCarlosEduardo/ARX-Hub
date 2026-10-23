@@ -221,4 +221,4 @@ async function identificarUsuario(userToken) {
   });
 }
 
-module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicket, createTicketComAnexos, lerAnexos, ticketUrl, sanitizar, identificarUsuario, listarGrupos };
+module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicketComAnexos, lerAnexos, ticketUrl, sanitizar, identificarUsuario, listarGrupos };

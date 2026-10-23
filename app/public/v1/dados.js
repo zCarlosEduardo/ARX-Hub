@@ -5,24 +5,24 @@ window.V1 = (() => {
 
   // execuções de hoje por robô: [hora, ok]; o painel desenha um ponto por execução na linha do dia
   const robos = [
-    { id: 'foto', nome: 'Foto de perfil', grupo: 'Interno', sistemas: ['Interno'], status: 'online', runs: [['08:12', 1], ['09:40', 1], ['11:05', 1], ['13:58', 1]] },
-    { id: 'alt-usuario', nome: 'Alt. Status Usuário', grupo: 'SGA e PowerCRM', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['08:30', 1], ['10:15', 1], ['13:20', 1]] },
-    { id: 'alt-voluntario', nome: 'Alt. Status Voluntário', grupo: 'SGA e PowerCRM', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['09:02', 1]] },
-    { id: 'cad-voluntario', nome: 'Cadastro de Voluntário', grupo: 'SGA e PowerCRM', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['08:45', 1], ['10:50', 1], ['12:10', 0]] },
-    { id: 'cad-colaborador', nome: 'Cadastro de Colaborador Interno', grupo: 'SGA e PowerCRM', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['09:25', 1]] },
-    { id: 'senha', nome: 'Altera Senha', grupo: 'SGA', sistemas: ['SGA'], status: 'online', runs: [['08:05', 1], ['09:10', 1], ['10:20', 1], ['11:40', 0], ['11:52', 0], ['12:30', 0], ['14:05', 1]] },
-    { id: 'relatorios', nome: 'Relatórios do SGA', grupo: 'SGA', sistemas: ['SGA'], status: 'online', runs: [['07:30', 1], ['12:00', 1]] },
-    { id: 'modelo', nome: 'Cadastro de Modelo', grupo: 'SGA', sistemas: ['SGA'], status: 'online', runs: [] },
-    { id: 'grupos', nome: 'Grupos de Permissão', grupo: 'SGA', sistemas: ['SGA'], status: 'online', runs: [['10:40', 1]] },
-    { id: 'vistoria', nome: 'Sincronizar Vistoria', grupo: 'SGA e PowerCRM', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['09:55', 1], ['13:15', 1]] },
-    { id: 'regionais', nome: 'Criar Regionais', grupo: 'PowerCRM', sistemas: ['PowerCRM'], status: 'online', runs: [] },
-    { id: 'tabelas', nome: 'Criar Tabelas', grupo: 'PowerCRM', sistemas: ['PowerCRM'], status: 'online', runs: [] },
-    { id: 'planilha', nome: 'Converter Planilha', grupo: 'Interno', sistemas: ['PowerCRM', 'SGA'], status: 'online', runs: [['11:20', 1]] },
-    { id: 'cooperativas', nome: 'Atualizar Cooperativas', grupo: 'Banco de dados', sistemas: ['SGA', 'PowerCRM'], status: 'online', runs: [['07:00', 1]] },
-    { id: 'permissoes', nome: 'Gerenciar Permissões', grupo: 'Banco de dados', sistemas: ['Interno'], status: 'online', runs: [] },
-    { id: 'buscar-grupos', nome: 'Buscar grupos do SGA', grupo: 'Banco de dados', sistemas: ['SGA'], status: 'online', runs: [['07:05', 1]] },
-    { id: 'buscar-regionais', nome: 'Buscar Regionais', grupo: 'Banco de dados', sistemas: ['PowerCRM'], status: 'online', runs: [['07:10', 1]] },
-    { id: 'buscar-tabelas', nome: 'Buscar Tabelas', grupo: 'Banco de dados', sistemas: ['PowerCRM'], status: 'online', runs: [['07:15', 1]] },
+    { id: 'foto', nome: 'Foto de perfil', sistemas: ['Interno'], runs: [['08:12', 1], ['09:40', 1], ['11:05', 1], ['13:58', 1]] },
+    { id: 'alt-usuario', nome: 'Alt. Status Usuário', sistemas: ['SGA', 'PowerCRM'], runs: [['08:30', 1], ['10:15', 1], ['13:20', 1]] },
+    { id: 'alt-voluntario', nome: 'Alt. Status Voluntário', sistemas: ['SGA', 'PowerCRM'], runs: [['09:02', 1]] },
+    { id: 'cad-voluntario', nome: 'Cadastro de Voluntário', sistemas: ['SGA', 'PowerCRM'], runs: [['08:45', 1], ['10:50', 1], ['12:10', 0]] },
+    { id: 'cad-colaborador', nome: 'Cadastro de Colaborador Interno', sistemas: ['SGA', 'PowerCRM'], runs: [['09:25', 1]] },
+    { id: 'senha', nome: 'Altera Senha', sistemas: ['SGA'], runs: [['08:05', 1], ['09:10', 1], ['10:20', 1], ['11:40', 0], ['11:52', 0], ['12:30', 0], ['14:05', 1]] },
+    { id: 'relatorios', nome: 'Relatórios do SGA', sistemas: ['SGA'], runs: [['07:30', 1], ['12:00', 1]] },
+    { id: 'modelo', nome: 'Cadastro de Modelo', sistemas: ['SGA'], runs: [] },
+    { id: 'grupos', nome: 'Grupos de Permissão', sistemas: ['SGA'], runs: [['10:40', 1]] },
+    { id: 'vistoria', nome: 'Sincronizar Vistoria', sistemas: ['SGA', 'PowerCRM'], runs: [['09:55', 1], ['13:15', 1]] },
+    { id: 'regionais', nome: 'Criar Regionais', sistemas: ['PowerCRM'], runs: [] },
+    { id: 'tabelas', nome: 'Criar Tabelas', sistemas: ['PowerCRM'], runs: [] },
+    { id: 'planilha', nome: 'Converter Planilha', sistemas: ['PowerCRM', 'SGA'], runs: [['11:20', 1]] },
+    { id: 'cooperativas', nome: 'Atualizar Cooperativas', banco: true, sistemas: ['SGA', 'PowerCRM'], runs: [['07:00', 1]] },
+    { id: 'permissoes', nome: 'Gerenciar Permissões', banco: true, sistemas: ['Interno'], runs: [] },
+    { id: 'buscar-grupos', nome: 'Buscar grupos do SGA', banco: true, sistemas: ['SGA'], runs: [['07:05', 1]] },
+    { id: 'buscar-regionais', nome: 'Buscar Regionais', banco: true, sistemas: ['PowerCRM'], runs: [['07:10', 1]] },
+    { id: 'buscar-tabelas', nome: 'Buscar Tabelas', banco: true, sistemas: ['PowerCRM'], runs: [['07:15', 1]] },
   ];
 
   // fila do GLPI (entidade Sistemas): situação decide a aba em Chamados
@@ -59,10 +59,10 @@ window.V1 = (() => {
   const porPessoa = [['Automático (fila)', 61], ['Patrícia Lemos', 14], ['Rodrigo Salles', 9], ['Camila Rocha', 6], ['André Viana', 4]];
 
   const execucoesAlt = [
-    { job: 'a91f2c7e', quando: 'Hoje 13:20', quem: 'Patrícia Lemos', acao: 'Inativar', alvo: '3 pessoas', empresas: 'Ancore, Valle', res: 'ok', teste: false },
-    { job: '5c0d81b3', quando: 'Hoje 10:15', quem: 'Automático (fila)', acao: 'Ativar', alvo: '1 pessoa', empresas: 'Unik', res: 'ok', teste: false },
+    { job: 'a91f2c7e', quando: 'Hoje 13:20', quem: 'Patrícia Lemos', acao: 'Inativar', alvo: '3 pessoas', empresas: 'Ancore, Valle', res: 'ok' },
+    { job: '5c0d81b3', quando: 'Hoje 10:15', quem: 'Automático (fila)', acao: 'Ativar', alvo: '1 pessoa', empresas: 'Unik', res: 'ok' },
     { job: 'e47a90d2', quando: 'Hoje 08:30', quem: 'Rodrigo Salles', acao: 'Inativar', alvo: '2 pessoas', empresas: 'Valle', res: 'ok', teste: true },
-    { job: '7b3e15f9', quando: 'Ontem 17:42', quem: 'Camila Rocha', acao: 'Inativar', alvo: '1 pessoa', empresas: 'Exodo', res: 'erro', erro: 'CPF não encontrado no SGA', teste: false },
+    { job: '7b3e15f9', quando: 'Ontem 17:42', quem: 'Camila Rocha', acao: 'Inativar', alvo: '1 pessoa', empresas: 'Exodo', res: 'erro', erro: 'CPF não encontrado no SGA' },
   ];
   const fotos = [
     { nome: 'Juliana Prado', depto: 'Cadastro', quando: 'Hoje 13:58' },
@@ -71,17 +71,20 @@ window.V1 = (() => {
     { nome: 'Otávio Reis', depto: 'Comercial', quando: 'Hoje 08:12' },
   ];
   const relatorios = [
-    { job: 'r0c3a9b1', quando: 'Hoje 12:00', tipo: 'Boletos', empresas: 'Ancore, Valle, Unik', linhas: 18432, teste: false },
-    { job: 'r77e2d40', quando: 'Hoje 07:30', tipo: 'Fotografia de veículos', empresas: 'Ancore', linhas: 9210, teste: false },
-    { job: 'r1b9f6c8', quando: 'Ontem 16:05', tipo: 'Veículos', empresas: 'Coopera Truck', linhas: 2871, teste: false },
+    { job: 'r0c3a9b1', quando: 'Hoje 12:00', tipo: 'Boletos', empresas: 'Ancore, Valle, Unik', linhas: 18432 },
+    { job: 'r77e2d40', quando: 'Hoje 07:30', tipo: 'Fotografia de veículos', empresas: 'Ancore', linhas: 9210 },
+    { job: 'r1b9f6c8', quando: 'Ontem 16:05', tipo: 'Veículos', empresas: 'Coopera Truck', linhas: 2871 },
   ];
   const empresasSga = ['Ancore', 'Ancore Máquinas', 'Ancore Dourados', 'Valle', 'Unik', 'Coopera Truck', 'Tech Protege', 'Exodo', 'Speed', 'Royale'];
 
   // ---- valores derivados (uma fonte por fato) ----
   const soma = (a) => a.reduce((s, v) => s + v, 0);
+  const falhas = (r) => r.runs.filter(([, ok]) => !ok);
   const runsHoje = soma(robos.map((r) => r.runs.length));
-  const errosHoje = soma(robos.map((r) => r.runs.filter(([, ok]) => !ok).length));
-  const conta = (sit) => chamados.filter((c) => sit === 'todos' ? c.sit !== 'resolvido' : c.sit === sit).length;
+  const errosHoje = soma(robos.map((r) => falhas(r).length));
+  // 'todos' = tudo o que ainda está aberto; a contagem das abas e a lista de cada aba saem da mesma regra
+  const filtra = (sit) => chamados.filter((c) => (sit === 'todos' ? c.sit !== 'resolvido' : c.sit === sit));
+  const conta = (sit) => filtra(sit).length;
   const resolvidosMes = soma(resolvidosDia);
   const errosMes = soma(errosDia);
   const atendidosMes = resolvidosMes + errosMes;
@@ -94,7 +97,7 @@ window.V1 = (() => {
   console.assert(robos.length === 18, '18 robôs');
 
   return {
-    agora, robos, chamados, ABAS, conta, dias, resolvidosDia, errosDia, porTipo, motivosErro, porAssoc, porPessoa,
+    agora, robos, chamados, ABAS, filtra, conta, falhas, dias, resolvidosDia, errosDia, porTipo, motivosErro, porAssoc, porPessoa,
     execucoesAlt, fotos, relatorios, empresasSga, runsHoje, errosHoje, resolvidosMes, errosMes, atendidosMes,
   };
 })();
