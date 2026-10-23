@@ -112,7 +112,9 @@ function criarRotasWhatsapp(deps) {
     const { tipo: tipoRegra } = await classificar(texto);
     // IA local ligada: valida o tipo pelo contexto e diz a resposta que daria (sempre registrada para conferir)
     const cfgIa = (await admin.configAtual()).ia || {};
-    const analiseIa = cfgIa.ligada && deps.ia ? await deps.ia.whatsapp({ mensagem: texto, tipoRegra }).catch(() => null) : null;
+    // mensagens anteriores da mesma pessoa (o robô manda quando guarda a conversa): a IA lê junto para pegar o que faltou
+    const contexto = Array.isArray(b.contexto) ? b.contexto.filter((x) => typeof x === 'string').slice(-6).map((x) => x.slice(0, 1000)) : [];
+    const analiseIa = cfgIa.ligada && deps.ia ? await deps.ia.whatsapp({ mensagem: texto, contexto, tipoRegra }).catch(() => null) : null;
     const { tipo } = W.tipoComIa({ tipoRegra, ia: analiseIa, cfg: cfgIa });
     const comIa = (r) => (analiseIa ? { ...r, ia: { tipo: analiseIa.tipo, confianca: analiseIa.confianca, motivo: analiseIa.motivo, resposta: analiseIa.resposta, tipoRegra } } : r);
     const respostaIa = cfgIa.whatsappModo === 'responder' && analiseIa && analiseIa.resposta ? analiseIa.resposta : null;
@@ -221,7 +223,7 @@ function criarRotasWhatsapp(deps) {
       exigirBot(req);
       const c = (await admin.configAtual()).whatsapp;
       res.set('Cache-Control', 'no-store');
-      res.json({ ativo: c.ativo, modo: c.modo, numeros: c.numeros, reacoes: c.reacoes, privado: { ativo: c.privado.ativo, responder: c.privado.responder, reagir: c.privado.reagir }, grupos: c.grupos.filter((g) => g.ativo).map((g) => ({ id: g.id, nome: g.nome, jid: g.jid, numeroId: g.numeroId, responder: g.responder, reagir: g.reagir })) });
+      res.json({ ativo: c.ativo, modo: c.modo, numeros: c.numeros, reacoes: c.reacoes, conversas: c.conversas, privado: { ativo: c.privado.ativo, responder: c.privado.responder, reagir: c.privado.reagir }, grupos: c.grupos.filter((g) => g.ativo).map((g) => ({ id: g.id, nome: g.nome, jid: g.jid, numeroId: g.numeroId, responder: g.responder, reagir: g.reagir })) });
     }));
 
     app.post('/api/whatsapp/bot/mensagem', asyncHandler(async (req, res) => {
@@ -290,6 +292,103 @@ function criarRotasWhatsapp(deps) {
       if (!pedido) return res.json({ atualizado: false }); // chamado que não veio do WhatsApp
       const novo = await repo.mudarStatus(pedido.id, b.ok ? 'concluido' : 'erro', { erro: b.ok ? '' : truncar(String(b.texto || ''), 300), deSituacoes: ['aberto'] });
       res.json({ atualizado: !!novo });
+    }));
+
+    // ---- Conversas (administradores): ler as conversas guardadas pelo robô, responder e abrir chamado com as mensagens marcadas
+    const exigirRobo = () => {
+      if (!deps.robo) throw new ErroHttp(503, 'O robô do WhatsApp não está configurado neste Hub.');
+      return deps.robo;
+    };
+    const jidValido = (j) => (typeof j === 'string' && /^[0-9A-Za-z.:_-]{3,100}@(g\.us|s\.whatsapp\.net|lid)$/.test(j) ? j : null);
+    const erroRobo = (err) => new ErroHttp(502, `O robô do WhatsApp não respondeu: ${truncar(err.message, 200)}`);
+
+    app.get('/api/whatsapp/conversas', asyncHandler(async (req, res) => {
+      await admin.exigirAdmin(req);
+      const cfg = (await admin.configAtual()).whatsapp;
+      res.set('Cache-Control', 'no-store');
+      const lista = await exigirRobo().conversas().catch((err) => { throw erroRobo(err); });
+      res.json({ ativo: cfg.conversas.ativo, conversas: lista });
+    }));
+
+    app.get('/api/whatsapp/conversas/mensagens', asyncHandler(async (req, res) => {
+      await admin.exigirAdmin(req);
+      const jid = jidValido(req.query.jid);
+      if (!jid) throw new ErroHttp(400, 'conversa inválida');
+      const antesDe = Number(req.query.antesDe) || 0;
+      const lista = await exigirRobo().mensagens(jid, antesDe).catch((err) => { throw erroRobo(err); });
+      // quem tem vínculo com usuário do GLPI já vem com ele: é o requerente sugerido ao abrir o chamado
+      const vinculos = await repo.listarVinculos();
+      res.set('Cache-Control', 'no-store');
+      res.json(lista.map((m) => {
+        const v = m.deMim ? null : W.acharVinculo(vinculos, m.remetente);
+        return { ...m, remetente: m.deMim ? '' : mascararTelefone(m.remetente), vinculo: v ? { glpiId: v.glpiId, nome: v.nome } : null };
+      }));
+    }));
+
+    app.get('/api/whatsapp/midia/:id', asyncHandler(async (req, res) => {
+      await admin.exigirAdmin(req);
+      if (!/^[A-Za-z0-9_-]{4,80}$/.test(req.params.id)) throw new ErroHttp(400, 'id inválido');
+      const m = await exigirRobo().midia(req.params.id).catch((err) => { throw erroRobo(err); });
+      if (!m) throw new ErroHttp(404, 'Mídia não encontrada (pode ter passado do prazo de guarda).');
+      res.set({ 'Content-Type': m.mime || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" });
+      res.send(m.conteudo);
+    }));
+
+    app.post('/api/whatsapp/conversas/responder', asyncHandler(async (req, res) => {
+      await admin.exigirAdmin(req);
+      const b = req.body && typeof req.body === 'object' ? req.body : {};
+      const jid = jidValido(b.jid);
+      const texto = typeof b.texto === 'string' ? b.texto.trim() : '';
+      if (!jid || !texto || texto.length > 2000) throw new ErroHttp(400, 'Informe a conversa e um texto de até 2000 caracteres.');
+      res.json(await exigirRobo().enviar(jid, texto).catch((err) => { throw erroRobo(err); }));
+    }));
+
+    app.post('/api/whatsapp/conversas/chamado', asyncHandler(async (req, res) => {
+      await admin.exigirAdmin(req);
+      const token = String(req.get('X-Glpi-Token') || '').trim();
+      const b = req.body && typeof req.body === 'object' ? req.body : {};
+      const jid = jidValido(b.jid);
+      const ids = Array.isArray(b.ids) ? [...new Set(b.ids.filter((x) => typeof x === 'string'))].slice(0, 100) : [];
+      const titulo = typeof b.titulo === 'string' ? b.titulo.trim().slice(0, 250) : '';
+      const categoriaId = Number(b.categoriaId);
+      const requerenteId = b.requerenteId == null || b.requerenteId === '' ? null : Number(b.requerenteId);
+      const resposta = typeof b.resposta === 'string' ? b.resposta.trim().slice(0, 2000) : '';
+      if (!jid || !ids.length) throw new ErroHttp(400, 'Marque ao menos uma mensagem.');
+      if (!titulo) throw new ErroHttp(400, 'Informe o título do chamado.');
+      if (!Number.isInteger(categoriaId) || categoriaId < 1) throw new ErroHttp(400, 'Escolha a categoria do chamado.');
+      if (requerenteId !== null && (!Number.isInteger(requerenteId) || requerenteId < 1)) throw new ErroHttp(400, 'Requerente inválido.');
+      if (b.tipo && !NOME_TIPO.has(b.tipo)) throw new ErroHttp(400, 'Tipo de solicitação inválido.');
+      const robo = exigirRobo();
+      const todas = await robo.mensagens(jid, 0, 300).catch((err) => { throw erroRobo(err); });
+      const marcadas = todas.filter((m) => ids.includes(m.id));
+      if (!marcadas.length) throw new ErroHttp(404, 'As mensagens marcadas não estão mais guardadas.');
+      const anexos = [];
+      let total = 0;
+      for (const m of marcadas.filter((x) => x.midia && x.midia.disponivel)) {
+        const arq = await robo.midia(m.id).catch(() => null);
+        if (!arq || total + arq.conteudo.length > 25 * 1024 * 1024) continue; // o que não couber fica citado só no texto
+        total += arq.conteudo.length;
+        anexos.push({ nome: W.nomeAnexo(m), tipo: (arq.mime || 'application/octet-stream').split(';')[0], conteudo: arq.conteudo });
+      }
+      const descricao = W.descricaoConversa(marcadas, { conversa: typeof b.conversa === 'string' ? b.conversa.slice(0, 120) : '' });
+      let r;
+      try {
+        r = await glpi.createTicketComAnexos(token, { titulo, descricao, categoriaId, requerenteId }, anexos);
+      } catch (err) {
+        throw new ErroHttp(502, truncar(limpar(err.message, token), 300));
+      }
+      if (deps.registrarHistorico) await deps.registrarHistorico({ id: r.id, titulo, descricao, pedido: { solicitante: '' } }).catch(() => {});
+      let respondido = false;
+      let erroResposta = '';
+      if (resposta) {
+        try {
+          await robo.enviar(jid, W.textoResposta(resposta, { ticketId: r.id, solicitante: typeof b.solicitante === 'string' ? b.solicitante.slice(0, 120) : '', tipo: NOME_TIPO.get(b.tipo) || '' }));
+          respondido = true;
+        } catch (err) {
+          erroResposta = truncar(err.message, 200);
+        }
+      }
+      res.json({ ticketId: r.id, falhas: r.falhas || [], respondido, erroResposta });
     }));
 
     // ---- administração

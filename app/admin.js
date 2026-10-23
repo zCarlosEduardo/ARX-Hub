@@ -141,6 +141,10 @@ function configPadrao() {
       remetentesAutorizados: [],
       privado: { ativo: false, tipos: [], responder: false, reagir: true, explicarDuvida: true, categorias: [] },
       reacoes: { aFazer: '⏳', andamento: '🔍', sucesso: '✅', erro: '⚠️', duvida: '❓' },
+      // Conversas no Hub: o robô guarda as mensagens dos grupos atendidos, dos grupos extras (jids) e, se ligado, do privado
+      conversas: { ativo: false, privado: false, jids: [] },
+      // resposta enviada à pessoa quando o chamado é aberto pelas Conversas: a do tipo escolhido ou a geral
+      respostas: { abertura: 'Recebemos seu pedido. Chamado {chamado} aberto.', porTipo: {} },
     },
   };
 }
@@ -302,7 +306,27 @@ function validarWhatsapp(b) {
     if (typeof v !== 'string' || !v.trim() || [...v.trim()].length > 4) return { erro: `a reação "${chave}" deve ser um emoji` };
     reacoes[chave] = v.trim();
   }
-  return { valor: { ativo, modo, operacao, respostaModelo, numeros, grupos, remetentesAutorizados, privado, reacoes } };
+  const cv = w.conversas && typeof w.conversas === 'object' ? w.conversas : {};
+  if (cv.ativo !== undefined && typeof cv.ativo !== 'boolean') return { erro: 'whatsapp.conversas.ativo deve ser verdadeiro ou falso' };
+  if (cv.privado !== undefined && typeof cv.privado !== 'boolean') return { erro: 'whatsapp.conversas.privado deve ser verdadeiro ou falso' };
+  const jidsBrutos = cv.jids === undefined ? [] : cv.jids;
+  if (!Array.isArray(jidsBrutos) || jidsBrutos.length > 100) return { erro: 'whatsapp.conversas.jids deve ser uma lista de até 100 grupos' };
+  const jids = [...new Set(jidsBrutos.map((j) => texto(j, 120)))];
+  if (jids.some((j) => !/^[0-9-]{5,100}@g\.us$/.test(j))) return { erro: 'cada grupo das Conversas deve ser um identificador que termina em @g.us' };
+  const conversas = { ativo: cv.ativo === true, privado: cv.privado === true, jids };
+
+  const rp = w.respostas && typeof w.respostas === 'object' ? w.respostas : {};
+  const abertura = rp.abertura === undefined ? padrao.respostas.abertura : texto(rp.abertura, 500);
+  if (!abertura || abertura.length > 500) return { erro: 'a resposta geral ao abrir o chamado precisa ter de 1 a 500 caracteres' };
+  const porTipoBruto = rp.porTipo && typeof rp.porTipo === 'object' && !Array.isArray(rp.porTipo) ? rp.porTipo : {};
+  const porTipo = {};
+  for (const [k, v] of Object.entries(porTipoBruto)) {
+    if (!CHAVES_TIPOS.has(k)) return { erro: `o tipo "${k}" das respostas não existe` };
+    const t = texto(v, 500);
+    if (t.length > 500) return { erro: 'cada resposta por tipo pode ter até 500 caracteres' };
+    if (t) porTipo[k] = t;
+  }
+  return { valor: { ativo, modo, operacao, respostaModelo, numeros, grupos, remetentesAutorizados, privado, reacoes, conversas, respostas: { abertura, porTipo } } };
 }
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */

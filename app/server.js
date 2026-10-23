@@ -480,7 +480,27 @@ async function classificarMensagem(texto) {
   if (!r.ok) throw new Error(`classificador respondeu ${r.status}`);
   return r.json();
 }
+// Conversas: o Hub lê do robô pela rede interna, com o mesmo segredo do robô (WHATSAPP_BOT_TOKEN)
+const URL_ROBO = (process.env.WHATSAPP_BOT_URL || 'http://whatsapp-observador:4024').replace(/\/+$/, '');
+async function chamarRobo(caminho, { metodo = 'GET', corpo, binario = false } = {}) {
+  const r = await fetch(URL_ROBO + caminho, {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json', 'X-Bot-Token': process.env.WHATSAPP_BOT_TOKEN || '' },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+    signal: AbortSignal.timeout(binario ? 60000 : 10000),
+  });
+  if (binario && r.status === 404) return null;
+  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).error) || `robô respondeu ${r.status}`);
+  return binario ? { mime: r.headers.get('content-type') || '', conteudo: Buffer.from(await r.arrayBuffer()) } : r.json();
+}
+const robo = process.env.WHATSAPP_BOT_TOKEN ? {
+  conversas: () => chamarRobo('/api/conversas'),
+  mensagens: (jid, antesDe, limite = 80) => chamarRobo(`/api/conversas/mensagens?jid=${encodeURIComponent(jid)}&limite=${limite}${antesDe ? `&antesDe=${antesDe}` : ''}`),
+  midia: (id) => chamarRobo(`/api/midia?id=${encodeURIComponent(id)}`, { binario: true }),
+  enviar: (jid, texto) => chamarRobo('/api/enviar', { metodo: 'POST', corpo: { jid, texto } }),
+} : null;
 const rotasWhatsapp = criarRotasWhatsapp({
+  robo,
   repo: repoWhatsapp(pool),
   admin: rotasAdmin,
   // IA local: valida o tipo da mensagem e escreve a resposta que daria (desligada ou fora: null, segue a regra)

@@ -58,7 +58,7 @@ function repoWhatsMemoria() {
   };
 }
 
-async function subir({ servico = true, bot = true, tipoPorTexto } = {}) {
+async function subir({ servico = true, bot = true, tipoPorTexto, robo = null, ia = null } = {}) {
   const repoAdm = repoAdminMemoria();
   const repo = repoWhatsMemoria();
   const abertos = [];
@@ -74,6 +74,12 @@ async function subir({ servico = true, bot = true, tipoPorTexto } = {}) {
       return id;
     },
     async statusChamado(token, id) { return statusDosChamados.get(id) || 1; },
+    async createTicketComAnexos(token, dados, anexos) {
+      if (falhaGlpi) throw new Error(falhaGlpi);
+      const id = 1000 + abertos.length;
+      abertos.push({ token, ...dados, id, anexos });
+      return { id, anexados: anexos.length, falhas: [] };
+    },
   };
   const classificar = async (texto) => {
     if (tipoPorTexto) return tipoPorTexto(texto);
@@ -82,7 +88,7 @@ async function subir({ servico = true, bot = true, tipoPorTexto } = {}) {
     return { tipo: null, tipoNome: '' };
   };
   const admin = criarRotasAdmin({ repo: repoAdm, glpi, asyncHandler, ErroHttp });
-  const wa = criarRotasWhatsapp({ repo, admin, glpi, classificar, tokenBot: bot ? TOKEN_BOT : '', tokenServico: servico ? TOKEN_SERVICO : '', asyncHandler, ErroHttp });
+  const wa = criarRotasWhatsapp({ repo, admin, glpi, classificar, tokenBot: bot ? TOKEN_BOT : '', tokenServico: servico ? TOKEN_SERVICO : '', asyncHandler, ErroHttp, robo, ia });
   const app = express();
   app.use(express.json());
   admin.registrar(app);

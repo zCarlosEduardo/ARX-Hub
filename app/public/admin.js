@@ -460,6 +460,24 @@
           ])))),
         botao('+ Adicionar categoria', () => mudar((x) => (x.privado.categorias.push({ apelido: '', categoriaId: null, categoriaLabel: '' }), x)), 'sec', { key: 'add', alignSelf: 'flex-start' }),
       ]),
+      secao('conversas', 'Conversas e respostas', 'O robô guarda as mensagens (com imagens e áudios) por 7 dias. Na aba Conversas do Hub, os administradores marcam mensagens e abrem o chamado com elas. A IA local também lê as mensagens anteriores da mesma pessoa.', [
+        e('div', { key: 'a', className: 'admin-chaves' }, [
+          caixa(w.conversas.ativo, (v) => mudar((x) => ((x.conversas.ativo = v), x)), 'Guardar as conversas', { key: 'at', fontWeight: 600 }),
+          caixa(w.conversas.privado, (v) => mudar((x) => ((x.conversas.privado = v), x)), 'Guardar também as conversas privadas com o chip', { key: 'pv' }),
+        ]),
+        campo('g', 'Outros grupos para guardar (além dos grupos atendidos)', gruposVisiveis.length
+          ? e('div', { className: 'admin-chips' }, gruposVisiveis.map((gv) => {
+            const sel = w.conversas.jids.includes(gv.jid);
+            return e('button', { key: gv.jid, type: 'button', className: 'wa-conversa', 'aria-pressed': sel, style: S().chip(sel), onClick: () => mudar((x) => ((x.conversas.jids = sel ? x.conversas.jids.filter((j) => j !== gv.jid) : [...x.conversas.jids, gv.jid]), x)) }, gv.nome || gv.jid);
+          }))
+          : dica('O robô ainda não informou os grupos (confira em Conexão e pedidos).')),
+        campo('ab', 'Resposta ao abrir o chamado pelas Conversas', campoTexto(w.respostas.abertura, (v) => mudar((x) => ((x.respostas.abertura = v), x)), 'Recebemos seu pedido. Chamado {chamado} aberto.'), 'Use {chamado}, {solicitante} e {tipo}. Vale para os tipos sem resposta própria; pode ser editada antes de enviar.'),
+        campo('pt', 'Resposta por tipo de solicitação (vazio = a de cima)', e('div', { className: 'admin-lista' }, tipos.map((t) =>
+          e('div', { key: t.chave, className: 'wa-resposta-tipo', style: { display: 'grid', gridTemplateColumns: 'minmax(0, 200px) minmax(0, 1fr)', alignItems: 'center', gap: 12 } }, [
+            e('div', { key: 'n', className: 'admin-dica' }, t.nome),
+            campoTexto((w.respostas.porTipo || {})[t.chave] || '', (v) => mudar((x) => ((x.respostas.porTipo = { ...(x.respostas.porTipo || {}), [t.chave]: v }), x)), w.respostas.abertura),
+          ])))),
+      ]),
       secao('rem', 'Quem pode pedir e reações', null, [
         campo('t', 'Telefones autorizados', e('textarea', { className: 'field-input wa-remetentes', value: w.remetentesTexto, onChange: (ev) => mudar((x) => ((x.remetentesTexto = ev.target.value), x)), rows: 3, placeholder: 'Um telefone por linha, com DDI e DDD', style: { ...S().input, resize: 'vertical' } }), 'Vazio = qualquer pessoa dos grupos acima.'),
         campo('r', 'Reações usadas nas mensagens', e('div', { className: 'admin-grade-reacoes' }, [['aFazer', 'A fazer'], ['andamento', 'Em andamento'], ['sucesso', 'Deu certo'], ['erro', 'Deu erro'], ['duvida', 'Faltou dado']].map(([k, t]) =>

@@ -80,6 +80,28 @@ function montarChamado({ texto, vinculo, grupo, tipoNome }) {
   return { titulo, descricao: t ? `${t}\n\n${origem}` : origem };
 }
 
+const NOMES_MIDIA = { imagem: 'imagem', audio: 'áudio', video: 'vídeo', documento: 'documento' };
+const EXT_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
+const quandoBr = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+
+/** Nome do anexo de uma mensagem com mídia: o nome do documento ou "whatsapp-<tipo>-<data>.<ext>". */
+function nomeAnexo(m) {
+  const mime = String((m.midia && m.midia.mime) || '').split(';')[0];
+  if (m.midia && m.midia.nome) return String(m.midia.nome).replace(/[\\/\u0000-\u001f]/g, '_').slice(0, 200);
+  const data = new Date(m.quando || 0).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  return `whatsapp-${m.tipo || 'arquivo'}-${data}-${String(m.id).slice(-6)}.${EXT_MIME[mime] || 'bin'}`;
+}
+
+/** Descrição do chamado aberto pelas Conversas: as mensagens marcadas em ordem, com quem mandou e quando. */
+function descricaoConversa(mensagens, { conversa } = {}) {
+  const linhas = [...mensagens].sort((a, b) => a.quando - b.quando).map((m) => {
+    const quem = m.deMim ? 'Robô' : (m.vinculo && m.vinculo.nome) || m.nome || 'Não informado';
+    const midia = m.midia ? ` [${NOMES_MIDIA[m.tipo] || 'arquivo'}${m.midia.disponivel ? ' em anexo' : ': arquivo não guardado'}]` : '';
+    return `[${quandoBr(m.quando)}] ${quem}:${m.texto ? ` ${m.texto}` : ''}${midia}`;
+  });
+  return `Mensagens do WhatsApp${conversa ? ` (${conversa})` : ''}:\n\n${linhas.join('\n')}\n\nAberto pelo ARX Hub a partir das Conversas do WhatsApp.`;
+}
+
 /** Situação do pedido -> reação na mensagem (null = não reage). */
 function reacaoDoStatus(status, reacoes) {
   const r = reacoes || {};
@@ -111,4 +133,4 @@ function tipoComIa({ tipoRegra, ia, cfg }) {
   return { tipo: regra, origem: 'regra' };
 }
 
-module.exports = { chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta, tipoComIa };
+module.exports = { nomeAnexo, descricaoConversa, chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta, tipoComIa };

@@ -92,7 +92,7 @@
   const TRACOS = {
     voltar: 'm15 18-6-6 6-6', avancar: 'm9 18 6-6-6-6', mais: 'M12 5v14M5 12h14', x: 'M18 6 6 18M6 6l12 12',
     recarregar: 'M21 12a9 9 0 1 1-3-6.7L21 8|M21 3v5h-5', busca: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14|m20 20-3.5-3.5',
-    chamados: 'M4 4h16v12H8l-4 4z', resultados: 'M3 3v18h18|M8 17v-5M13 17V8M18 17v-9',
+    chamados: 'M4 4h16v12H8l-4 4z', conversas: 'M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z', resultados: 'M3 3v18h18|M8 17v-5M13 17V8M18 17v-9',
     painel: 'M3 3h7v9H3z|M14 3h7v5h-7z|M14 12h7v9h-7z|M3 16h7v5H3z', grade: 'M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z',
     lista: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', ponto: 'M5 12h.01M12 12h.01M19 12h.01',
     extensao: 'M9 3h6v3a2 2 0 1 0 4 0V3h2v6h-3a2 2 0 1 0 0 4h3v8H3v-8h3a2 2 0 1 0 0-4H3V3h6',
@@ -251,7 +251,7 @@
     // endereço direto de uma aba fixa (?aba=chamados|resultados|admin): atalho salvo e teste da tela
     useEffect(() => {
       const aba = new URLSearchParams(location.search).get('aba');
-      if (['chamados', 'resultados', 'admin'].includes(aba)) abrirAbaFixa(aba);
+      if (['chamados', 'conversas', 'resultados', 'admin'].includes(aba)) abrirAbaFixa(aba);
     }, []);
 
     // ---- GLPI quick-ticket widget ----
@@ -872,7 +872,7 @@
     ]) : null;
 
     // ---- moldura de navegador: faixa de abas (fixas + automações abertas) e barra de endereço ----
-    const NOMES_FIXOS = { painel: 'Painel', chamados: 'Chamados', resultados: 'Resultados', admin: 'Administração' };
+    const NOMES_FIXOS = { painel: 'Painel', chamados: 'Chamados', resultados: 'Resultados', conversas: 'Conversas', admin: 'Administração' };
     const abaAberta = activeTabId ? automations.find((x) => x.id === activeTabId) : null;
     const fixa = (chave, icone, rot, conta) => e('button', {
       key: chave, type: 'button', className: 'aba fixa' + (conta ? ' com-conta' : ''), onClick: () => abrirAbaFixa(chave),
@@ -897,6 +897,8 @@
         fixa('painel', 'painel', 'Painel'),
         fixa('chamados', 'chamados', 'Chamados', prontosChamados),
         fixa('resultados', 'resultados', 'Resultados'),
+        // Conversas do WhatsApp: só para administradores (mensagens das pessoas; o servidor confere)
+        ehAdmin ? fixa('conversas', 'conversas', 'Conversas') : null,
         // a Administração só aparece para quem é administrador (identificado pelo token do GLPI, admin.js)
         ehAdmin ? fixa('admin', 'admin', 'Administração') : null,
         e('div', {
@@ -1361,6 +1363,9 @@
         e('div', { key: 'panel', style: { display: abaFixaAtiva('painel') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
         abasMontadas.chamados && window.ChamadosView
           ? e('div', { key: 'chamados', style: { display: abaFixaAtiva('chamados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ChamadosView))
+          : null,
+        abasMontadas.conversas && window.ConversasView
+          ? e('div', { key: 'conversas', style: { display: abaFixaAtiva('conversas') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ConversasView))
           : null,
         abasMontadas.admin && window.AdminView
           ? e('div', { key: 'admin', style: { display: abaFixaAtiva('admin') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.AdminView, { key: recargas.admin || 0 }))

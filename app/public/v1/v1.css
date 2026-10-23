@@ -1846,3 +1846,44 @@ button.exu-kpi:hover { background: var(--hover); }
 .caixa-instalar h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
 .caixa-instalar ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); }
 .caixa-instalar code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+
+/* Conversas do WhatsApp (conversas.js): lista à esquerda, conversa com mensagens marcáveis à direita */
+.cv-grade { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.cv-lista { display: grid; gap: 2px; padding: 8px; max-height: calc(100vh - 230px); overflow-y: auto; }
+.cv-item { display: grid; gap: 2px; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.cv-item:hover { background: var(--hover); }
+.cv-item[aria-current="true"] { background: var(--raised); }
+.cv-item-nome { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.cv-item-nome b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-item-ultima { color: var(--muted); font-size: 12px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-hora { color: var(--faint); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.cv-conversa { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 230px); min-height: 420px; }
+.cv-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cv-acoes { display: flex; gap: 8px; }
+.cv-mensagens { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.cv-msg { display: flex; align-items: flex-start; gap: 10px; }
+.cv-msg input { flex: none; margin-top: 12px; accent-color: var(--text); }
+.cv-msg.minha { justify-content: flex-end; }
+.cv-balao { display: grid; gap: 6px; max-width: min(560px, 85%); padding: 10px 12px; border-radius: 14px; background: var(--ground); cursor: pointer; }
+.cv-msg.minha .cv-balao { background: var(--raised); cursor: default; }
+.cv-msg.marcada .cv-balao { box-shadow: 0 0 0 2px var(--text); }
+.cv-balao p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-quem { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.cv-quem b { font-weight: 500; }
+.cv-midia img { display: block; max-width: 100%; max-height: 260px; border-radius: 10px; }
+.cv-midia audio, .cv-midia video { max-width: 100%; }
+.cv-midia video { max-height: 260px; border-radius: 10px; }
+.cv-midia-falta { color: var(--faint); font-size: 12px; }
+.cv-responder { display: flex; align-items: flex-end; gap: 8px; }
+.cv-responder textarea { flex: 1; min-height: 44px; max-height: 160px; padding: 10px 12px; border: 1px solid var(--control); border-radius: 14px; background: var(--ground); color: var(--text); font: inherit; resize: vertical; }
+.cv-responder textarea:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 1px; }
+.cv-aviso { margin: 0; padding: 8px 12px; border-radius: 12px; font-size: 13px; background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
+.cv-aviso.ok { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
+.cv-aviso.erro { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+.cv-aviso.alerta { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
+.cv-escolha { min-height: 240px; }
+@media (max-width: 860px) {
+  .cv-grade { grid-template-columns: minmax(0, 1fr); }
+  .cv-lista { max-height: 220px; }
+  .cv-conversa { height: 70vh; }
+}
