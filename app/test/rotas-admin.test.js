@@ -68,7 +68,7 @@ test('config-publica não exige login e devolve o padrão (cofre ativo, sessão 
     assert.equal(r.status, 200);
     assert.deepEqual(r.corpo, {
       cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
-      automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
+      automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
       ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
     });
   } finally { await s.fechar(); }

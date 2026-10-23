@@ -236,6 +236,8 @@
         campo('en', 'Endereço para quem não gerencia', selecao(c.endereco, (v) => setC({ ...c, endereco: v }), [['mascarado', 'Mascarado (xxx.xxx.xxx.xxx:4016)'], ['oculto', 'Oculto (não aparece)']], { maxWidth: 360 }),
           'As telas sempre abrem pelo proxy do Hub: o navegador nunca recebe o endereço real de quem não gerencia.'),
         caixa(c.novaAba, (v) => setC({ ...c, novaAba: v }), 'Quem não gerencia pode abrir a automação em nova aba (pelo proxy, sem o endereço real)', { key: 'na' }),
+        campo('mc', 'Nome na barra de abas', e('input', { className: 'field-input', value: c.marca || '', maxLength: 30, onChange: (ev) => setC({ ...c, marca: ev.target.value }), placeholder: 'Ex.: ARX Aut', style: { ...S().input, maxWidth: 360 } }),
+          'Aparece no começo da barra de abas do Hub. Vazio deixa a barra sem nome.'),
       ], rodape(acesso.salvar, acesso.salvando, acesso.erro, acesso.ok)),
       e(ListaAutomacoes, { key: 'lista' }),
     ]);
