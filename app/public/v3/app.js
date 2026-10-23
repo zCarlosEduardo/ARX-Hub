@@ -189,7 +189,7 @@
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
     // v3: as automações ganham a tela nova (o proxy injeta o estilo com ?v2=1); icone e cor são os do cadastro no Hub,
     // para o título da automação ficar igual ao cartão
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&so=v3&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
       (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
