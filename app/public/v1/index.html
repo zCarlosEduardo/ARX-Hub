@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ARX Painel</title>
+  <title>ARX Hub</title>
   <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- taste-skill-ignore: Geist Mono só nos números de chamado e ids -->
@@ -14,6 +14,10 @@
   <!-- ARX Hub v1: só visual, com dados de exemplo (dados.js). Nenhum botão fala com o servidor. -->
   <div id="raiz"></div>
   <script src="charts.js"></script>
+  <!-- o icons.js do Hub monta os ícones com React.createElement: aqui um React mínimo que só guarda a árvore -->
+  <script>window.React = { createElement: (t, p, ...c) => ({ t, p: p || {}, c: c.flat() }), cloneElement: (n, p) => ({ ...n, p: { ...n.p, ...p } }) };</script>
+  <script src="/icons.js"></script>
+  <script src="automacoes.js"></script>
   <script src="dados.js"></script>
   <script src="v1.js"></script>
 </body>
