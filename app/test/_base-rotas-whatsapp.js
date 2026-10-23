@@ -74,6 +74,7 @@ async function subir({ servico = true, bot = true, tipoPorTexto, robo = null, ia
       return id;
     },
     async statusChamado(token, id) { return statusDosChamados.get(id) || 1; },
+    async fetchLookup() { return { categories: [{ id: 2, label: 'ARX - Demandas Internas' }, { id: 45, label: 'Tech' }, { id: 46, label: 'Valle' }], users: [] }; },
     async createTicketComAnexos(token, dados, anexos) {
       if (falhaGlpi) throw new Error(falhaGlpi);
       const id = 1000 + abertos.length;

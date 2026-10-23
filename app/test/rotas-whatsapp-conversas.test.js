@@ -124,7 +124,7 @@ test('quem vê as Conversas: só admins, admins e grupos do GLPI marcados, ou to
 
 test('sugerir com a IA: desligada avisa; ligada devolve título, tipo e a categoria do grupo antes da votada', async () => {
   const pedidos = [];
-  const ia = { async whatsapp() { return null; }, async sugerirChamado(c) { pedidos.push(c); return { titulo: 'Desbloqueio do usuário do SGA', tipo: 'desbloquear_usuario_sga', confianca: 0.9, motivo: 'Pede desbloquear.', categoria: { nome: 'ARX > Valle', fatia: 0.6 }, parecidos: ['Usuário bloqueado'] }; } };
+  const ia = { async whatsapp() { return null; }, async sugerirChamado(c) { pedidos.push(c); return { titulo: 'Desbloqueio do usuário do SGA', tipo: 'desbloquear_usuario_sga', associacao: 'Valle', confianca: 0.9, motivo: 'Pede desbloquear.', parecidos: ['Usuário bloqueado'] }; } };
   const t = await subir({ robo: roboFalso(), ia });
   try {
     await t.configurar({ conversas: { ativo: true } });
@@ -138,7 +138,29 @@ test('sugerir com a IA: desligada avisa; ligada devolve título, tipo e a catego
     assert.equal(r.json.tipo, 'desbloquear_usuario_sga');
     assert.deepEqual(r.json.categoria, { id: 45, nome: 'Tech', origem: 'grupo' }, 'o grupo tem categoria configurada');
     assert.deepEqual(pedidos[0].mensagens, ['Preciso desbloquear meu SGA', 'print', 'bom dia'], 'só o texto, em ordem');
+    assert.deepEqual(pedidos[0].associacoes, ['Tech', 'Valle'], 'a interna não é associação');
+    // grupo sem categoria configurada: vale a associação reconhecida pela IA (da lista)
+    await t.configurar({ conversas: { ativo: true }, grupos: [{ id: 'g1', nome: 'Grupo Tech', jid: '1203@g.us', tipos: [] }] });
+    const r2 = await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', corpo);
+    assert.deepEqual(r2.json.categoria, { id: 46, nome: 'Valle', origem: 'ia' });
     assert.equal((await t.comoAdmin('POST', '/api/whatsapp/conversas/sugerir', { jid: G, ids: [] })).status, 400);
+  } finally {
+    t.fechar();
+  }
+});
+
+test('desconectar o número: só administrador, chama o robô e volta ao estado sem número', async () => {
+  const robo = { ...roboFalso(), desconectou: 0, async desconectar() { this.desconectou += 1; } };
+  const t = await subir({ robo });
+  try {
+    await t.comoBot('POST', '/api/whatsapp/bot/estado', { conectado: true, numero: '5531900000001', grupos: [] });
+    assert.equal((await t.comoOperador('POST', '/api/admin/whatsapp/desconectar')).status, 403);
+    assert.equal(robo.desconectou, 0);
+    const r = await t.comoAdmin('POST', '/api/admin/whatsapp/desconectar');
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(robo.desconectou, 1);
+    const painel = await t.comoAdmin('GET', '/api/admin/whatsapp/painel');
+    assert.deepEqual([painel.json.estado.conectado, painel.json.estado.numero], [false, '']);
   } finally {
     t.fechar();
   }

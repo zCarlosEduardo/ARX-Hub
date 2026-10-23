@@ -102,3 +102,19 @@ test('tipoComIa: concorda vale; discorda forte troca só para tipo liberado; cer
   assert.deepEqual(tipoComIa({ tipoRegra: 'senha_sistemas', ia: { tipo: 'sem_automacao', confianca: 0.95 }, cfg }), { tipo: null, origem: 'ia' });
   assert.deepEqual(tipoComIa({ tipoRegra: null, ia: { tipo: 'cadastro_usuario', confianca: 0.95 }, cfg }), { tipo: 'cadastro_usuario', origem: 'ia' });
 });
+
+test('categoriaSugerida: grupo, associação citada, IA (só da lista) e, sem associação, a interna', () => {
+  const categorias = [{ id: 2, label: '🛑 ARX - Demandas Internas' }, { id: 10, label: 'Ancore' }, { id: 11, label: 'Tech Protege' }, { id: 12, label: 'GTA' }, { id: 13, label: 'Canaã' }, { id: 14, label: 'Ancore Dourados' }];
+  const s = (o) => W.categoriaSugerida({ categorias, ...o });
+  assert.deepEqual(s({ grupoCategoriaId: 11, grupoCategoriaNome: 'Tech Protege', texto: 'ancore' }), { id: 11, nome: 'Tech Protege', origem: 'grupo' });
+  assert.equal(s({ texto: 'liberar plano do associado da ANCORE' }).id, 10);
+  assert.equal(s({ texto: 'plano da ancore dourados' }).id, 14, 'o nome mais longo vence');
+  assert.equal(s({ texto: 'cliente da techprotege' }).id, 11, 'nome de duas palavras escrito junto');
+  assert.equal(s({ texto: 'associado da canaa' }).id, 13, 'sem acento');
+  assert.equal(s({ texto: 'o agtaxx travou' }).origem, 'interna', 'nome curto só como palavra inteira');
+  assert.equal(s({ texto: 'liberar plano', conversa: 'Suporte GTA' }).id, 12, 'nome da conversa conta');
+  assert.deepEqual(s({ texto: 'plano da ancori', associacaoIa: 'Ancore' }), { id: 10, nome: 'Ancore', origem: 'ia' });
+  assert.equal(s({ texto: 'x', associacaoIa: 'Inventada' }).origem, 'interna');
+  assert.deepEqual(s({ texto: 'trocar a impressora do RH' }), { id: 2, nome: '🛑 ARX - Demandas Internas', origem: 'interna' });
+  assert.deepEqual(W.categoriaSugerida({ categorias: [], texto: 'x' }), { id: 2, nome: 'ARX - Demandas Internas', origem: 'interna' });
+});

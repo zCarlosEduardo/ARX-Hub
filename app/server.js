@@ -498,6 +498,7 @@ const robo = process.env.WHATSAPP_BOT_TOKEN ? {
   mensagens: (jid, antesDe, limite = 80) => chamarRobo(`/api/conversas/mensagens?jid=${encodeURIComponent(jid)}&limite=${limite}${antesDe ? `&antesDe=${antesDe}` : ''}`),
   midia: (id) => chamarRobo(`/api/midia?id=${encodeURIComponent(id)}`, { binario: true }),
   enviar: (jid, texto) => chamarRobo('/api/enviar', { metodo: 'POST', corpo: { jid, texto } }),
+  desconectar: () => chamarRobo('/api/desconectar', { metodo: 'POST', corpo: {} }),
 } : null;
 const rotasWhatsapp = criarRotasWhatsapp({
   robo,

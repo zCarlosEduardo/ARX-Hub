@@ -89,7 +89,7 @@
     async function sugerir() {
       setSugestao({ carregando: true, erro: '', dados: null });
       try {
-        const d = await api('POST', '/api/whatsapp/conversas/sugerir', { jid: conversa.jid, ids: marcadas.map((m) => m.id) });
+        const d = await api('POST', '/api/whatsapp/conversas/sugerir', { jid: conversa.jid, conversa: nomeConversa(conversa), ids: marcadas.map((m) => m.id) });
         setSugestao({ carregando: false, erro: '', dados: d });
         setF((x) => {
           const n = { ...x, titulo: d.titulo || x.titulo, tipo: d.tipo || '' };
@@ -112,7 +112,8 @@
       if (sugestao.carregando) return 'A IA está lendo as mensagens…';
       if (sugestao.erro) return sugestao.erro;
       if (!d) return 'A IA local sugere título, tipo e categoria a partir das mensagens marcadas. Confira antes de abrir.';
-      const cat = d.categoria ? (d.categoria.origem === 'grupo' ? ' Categoria do grupo.' : ` Categoria mais comum nos chamados parecidos (${Math.round((d.categoria.fatia || 0) * 100)}%).`) : ' Sem categoria sugerida: escolha abaixo.';
+      const ORIGEM = { grupo: 'Categoria do grupo.', texto: 'Associação citada nas mensagens.', ia: 'Associação reconhecida pela IA nas mensagens.', interna: 'Nenhuma associação citada: demanda interna da ARX.' };
+      const cat = d.categoria ? ' ' + (ORIGEM[d.categoria.origem] || '') : ' Sem categoria sugerida: escolha abaixo.';
       return `Sugestão da IA (${Math.round((d.confianca || 0) * 100)}% de confiança): ${d.tipoNome}.${d.motivo ? ' ' + d.motivo : ''}${cat}`;
     };
 

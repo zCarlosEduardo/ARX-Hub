@@ -84,6 +84,35 @@ const NOMES_MIDIA = { imagem: 'imagem', audio: 'áudio', video: 'vídeo', docume
 const EXT_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
 const quandoBr = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
 
+// A categoria do chamado é a associação; pedido que não é de nenhuma associação vai para a categoria interna da ARX.
+const CATEGORIA_INTERNA_ID = 2;
+const curtoCategoria = (label) => String(label || '').split('>').pop().trim();
+const palavras = (t) => ` ${String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+const ehInterna = (c) => c.id === CATEGORIA_INTERNA_ID || /DEMANDASINTERNAS/.test(chaveNome(c.label));
+
+/**
+ * Categoria sugerida para um chamado aberto pelas Conversas, nesta ordem: a configurada no grupo; a associação citada
+ * nas mensagens ou no nome da conversa (palavra inteira, a de nome mais longo); a que a IA reconheceu (mesmo escrita
+ * errado, mas só se existir na lista); senão a interna. `categorias` = lista do GLPI ({ id, label }).
+ * @returns {{ id: number|null, nome: string, origem: 'grupo'|'texto'|'ia'|'interna' }}
+ */
+function categoriaSugerida({ categorias = [], grupoCategoriaId = null, grupoCategoriaNome = '', texto = '', conversa = '', associacaoIa = '' }) {
+  if (grupoCategoriaId) return { id: grupoCategoriaId, nome: grupoCategoriaNome, origem: 'grupo' };
+  const associacoes = categorias.filter((c) => !ehInterna(c) && chaveNome(curtoCategoria(c.label)).length >= 3);
+  const onde = palavras(`${conversa}\n${texto}`);
+  const compacto = chaveNome(`${conversa} ${texto}`);
+  const citadas = associacoes.filter((c) => {
+    const nome = curtoCategoria(c.label);
+    // nome de várias palavras também vale escrito junto ("techprotege"); nome curto só como palavra inteira
+    return onde.includes(palavras(nome)) || (/\s/.test(nome.trim()) && compacto.includes(chaveNome(nome)));
+  }).sort((a, b) => chaveNome(curtoCategoria(b.label)).length - chaveNome(curtoCategoria(a.label)).length);
+  if (citadas.length) return { id: citadas[0].id, nome: citadas[0].label, origem: 'texto' };
+  const pelaIa = associacaoIa ? associacoes.find((c) => chaveNome(curtoCategoria(c.label)) === chaveNome(associacaoIa)) : null;
+  if (pelaIa) return { id: pelaIa.id, nome: pelaIa.label, origem: 'ia' };
+  const interna = categorias.find(ehInterna);
+  return { id: interna ? interna.id : CATEGORIA_INTERNA_ID, nome: interna ? interna.label : 'ARX - Demandas Internas', origem: 'interna' };
+}
+
 /** Nome do anexo de uma mensagem com mídia: o nome do documento ou "whatsapp-<tipo>-<data>.<ext>". */
 function nomeAnexo(m) {
   const mime = String((m.midia && m.midia.mime) || '').split(';')[0];
@@ -133,4 +162,4 @@ function tipoComIa({ tipoRegra, ia, cfg }) {
   return { tipo: regra, origem: 'regra' };
 }
 
-module.exports = { nomeAnexo, descricaoConversa, chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta, tipoComIa };
+module.exports = { categoriaSugerida, curtoCategoria, CATEGORIA_INTERNA_ID, nomeAnexo, descricaoConversa, chaveNome, extrairCategoria, acharCategoria, normalizarTelefone, chavesTelefone, mesmoTelefone, validarVinculo, acharVinculo, montarChamado, reacaoDoStatus, textoResposta, tipoComIa };

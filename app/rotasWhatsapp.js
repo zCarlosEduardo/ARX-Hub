@@ -18,7 +18,7 @@ const { TIPOS_SOLICITACAO } = require('./admin');
 // tipos que não dependem de associação: no privado não precisam de "Categoria X" (quem diz a associação é a categoria do GLPI)
 const TIPOS_SEM_CATEGORIA = new Set(['foto_perfil', 'senha_sistemas']);
 // tipos com categoria fixa no GLPI, em grupo ou no privado (a foto de perfil sempre vai para "ARX - Demandas internas")
-const CATEGORIA_FIXA = { foto_perfil: 2 };
+const CATEGORIA_FIXA = { foto_perfil: W.CATEGORIA_INTERNA_ID };
 const NOME_TIPO = new Map(TIPOS_SOLICITACAO.map((t) => [t.chave, t.nome]));
 const sem = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const mesmoHash = (a, b) => {
@@ -345,20 +345,24 @@ function criarRotasWhatsapp(deps) {
       const textos = marcadas.map((m) => m.texto).filter(Boolean);
       if (!textos.length) throw new ErroHttp(400, 'As mensagens marcadas não têm texto para a IA ler (áudio e imagem sem legenda não contam).');
       const { tipo: tipoRegra } = await classificar(textos.join('\n')).catch(() => ({ tipo: null }));
+      const conversa = typeof b.conversa === 'string' ? b.conversa.slice(0, 120) : '';
+      // categorias do GLPI com o token de quem pede (a categoria é a associação); sem elas fica só a interna
+      const token = String(req.get('X-Glpi-Token') || '').trim();
+      const categorias = glpi.fetchLookup ? ((await glpi.fetchLookup(token).catch(() => null)) || {}).categories || [] : [];
+      const associacoes = categorias.filter((c) => c.id !== W.CATEGORIA_INTERNA_ID).map((c) => W.curtoCategoria(c.label)).filter(Boolean);
       let s;
       try {
-        s = await deps.ia.sugerirChamado({ mensagens: textos, tipoRegra });
+        s = await deps.ia.sugerirChamado({ mensagens: textos, tipoRegra, associacoes, conversa });
       } catch (err) {
         throw new ErroHttp(502, `A IA local não respondeu: ${truncar(err.message, 200)}`);
       }
       if (!s) throw new ErroHttp(502, 'A IA local não respondeu.');
-      // categoria: a do grupo configurado vale mais que a votada pelos chamados parecidos
       const grupo = cfg.grupos.find((g) => g.jid === jid && g.categoriaId);
+      const categoria = W.categoriaSugerida({ categorias, grupoCategoriaId: grupo ? grupo.categoriaId : null, grupoCategoriaNome: grupo ? grupo.categoriaLabel : '', texto: textos.join('\n'), conversa, associacaoIa: s.associacao || '' });
       const tipo = s.tipo && NOME_TIPO.has(s.tipo) ? s.tipo : null;
       res.json({
         titulo: s.titulo || '', tipo, tipoNome: tipo ? NOME_TIPO.get(tipo) : 'Sem automação', confianca: s.confianca || 0, motivo: s.motivo || '',
-        categoria: grupo ? { id: grupo.categoriaId, nome: grupo.categoriaLabel, origem: 'grupo' } : s.categoria ? { id: null, nome: s.categoria.nome, origem: 'parecidos', fatia: s.categoria.fatia } : null,
-        parecidos: Array.isArray(s.parecidos) ? s.parecidos.slice(0, 3) : [],
+        categoria, parecidos: Array.isArray(s.parecidos) ? s.parecidos.slice(0, 3) : [],
       });
     }));
 
@@ -471,6 +475,16 @@ function criarRotasWhatsapp(deps) {
       if (!tel) throw new ErroHttp(400, 'telefone inválido');
       if (!(await repo.removerVinculo(tel))) throw new ErroHttp(404, 'não encontrado');
       res.status(204).end();
+    }));
+
+    // troca de número: o robô sai do WhatsApp, apaga a sessão e volta a mostrar o QR code (fica no histórico)
+    app.post('/api/admin/whatsapp/desconectar', asyncHandler(async (req, res) => {
+      const usuario = await admin.exigirAdmin(req);
+      const antes = estadoBot.numero || '';
+      await exigirRobo().desconectar().catch((err) => { throw erroRobo(err); });
+      estadoBot = { ...estadoBot, conectado: false, numero: '', qr: '' };
+      if (admin.anotar) await admin.anotar(usuario, 'whatsapp.desconectar', 'Robô do WhatsApp', { numero: antes ? `***${antes.slice(-4)}` : '' }, { numero: '' });
+      res.json({ ok: true });
     }));
   }
 

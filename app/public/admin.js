@@ -587,6 +587,18 @@
 
   function AbaConexao() {
     const { painel, erro, recarregar } = usePainelWhatsapp(8000);
+    // troca de número em dois cliques: "Desconectar este número" e depois "Sim, desconectar"
+    const [troca, setTroca] = useState({ confirmar: false, enviando: false, erro: '' });
+    async function desconectar() {
+      setTroca({ confirmar: true, enviando: true, erro: '' });
+      try {
+        await api('POST', '/api/admin/whatsapp/desconectar');
+        setTroca({ confirmar: false, enviando: false, erro: '' });
+        recarregar();
+      } catch (err) {
+        setTroca({ confirmar: true, enviando: false, erro: err.message });
+      }
+    }
     if (erro && !painel) return mensagem(erro);
     if (!painel) return dica('Carregando…');
     const est = painel.estado;
@@ -603,6 +615,15 @@
         e('span', { key: 't', style: { flex: 1 } }, situacao),
         botao('Atualizar', recarregar, 'sec', { key: 'b', padding: '5px 10px' }),
       ]),
+      est.botConfigurado && !semSinal && est.conectado ? e('div', { key: 'troca', className: 'wa-trocar-numero', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13 } }, troca.confirmar ? [
+        e('span', { key: 't', style: { flex: 1, minWidth: 220 } }, `Desconectar${est.numero ? ` o número ${est.numero}` : ''}? O robô para de ler os grupos até alguém ler o QR code novo. As conversas guardadas continuam até vencer o prazo.`),
+        botao('Cancelar', () => setTroca({ confirmar: false, enviando: false, erro: '' }), 'sec', { key: 'c', padding: '5px 10px' }),
+        botao(troca.enviando ? 'Desconectando…' : 'Sim, desconectar', desconectar, 'perigo', { key: 's', padding: '5px 10px', disabled: troca.enviando }),
+        troca.erro ? e('span', { key: 'e', className: 'admin-erro', role: 'alert', style: { flexBasis: '100%' } }, troca.erro) : null,
+      ] : [
+        e('span', { key: 't', style: { flex: 1, color: 'var(--muted)' } }, 'Para trocar o número do robô, desconecte este e leia o QR code novo com o outro chip.'),
+        botao('Desconectar este número', () => setTroca({ confirmar: true, enviando: false, erro: '' }), 'perigo', { key: 'b', padding: '5px 10px' }),
+      ]) : null,
       est.qr && !est.conectado && !semSinal ? e('img', { key: 'qr', className: 'wa-qr', src: est.qr, alt: 'QR code para conectar o WhatsApp', style: { width: 240, height: 240, background: '#fff', padding: 8, borderRadius: 10, border: '1px solid var(--border)', alignSelf: 'flex-start' } }) : null,
       painel.disponivel && painel.disponivel.so_abrir === false ? dica('O modo "só abrir o chamado" precisa do token de um usuário de serviço do GLPI no servidor (HUB_GLPI_TOKEN_SERVICO). Hoje não está configurado.') : null,
       ]),
