@@ -42,21 +42,23 @@ app.use((req, res, next) => (req.path === '/api/glpi/ticket' ? jsonComAnexos : j
 const { calcularVersao, injetarVersaoNoHtml } = require('./versao');
 const pastaPublic = path.join(__dirname, 'public');
 const versaoFront = calcularVersao(pastaPublic);
-let indexComVersao = null;
-app.get('/api/versao', (req, res) => {
+// o /v1/ consulta a versão pelo próprio caminho (api/versao relativo à página) e também sai com ?v=<versão>
+const indexComVersao = {};
+app.get(['/api/versao', '/v1/api/versao'], (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ versao: versaoFront });
 });
-app.get(['/', '/index.html'], (req, res, next) => {
+app.get(['/', '/index.html', '/v1/', '/v1/index.html'], (req, res, next) => {
+  const arquivo = req.path.startsWith('/v1/') ? 'v1/index.html' : 'index.html';
   try {
-    if (!indexComVersao) {
-      indexComVersao = injetarVersaoNoHtml(require('fs').readFileSync(path.join(pastaPublic, 'index.html'), 'utf8'), versaoFront);
+    if (!indexComVersao[arquivo]) {
+      indexComVersao[arquivo] = injetarVersaoNoHtml(require('fs').readFileSync(path.join(pastaPublic, arquivo), 'utf8'), versaoFront);
     }
   } catch {
     return next(); // sem index.html: o static responde 404
   }
   res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-  res.send(indexComVersao);
+  res.send(indexComVersao[arquivo]);
 });
 
 // O layout novo (antes em /v3/) virou o Hub principal; endereços salvos de /v3/ vão para /. A versão anterior

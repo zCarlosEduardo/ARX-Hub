@@ -1,0 +1,86 @@
+/* Hub v1: desenho da maquete nas telas das automações abertas pelo /v1/ (o proxy injeta este arquivo com ?v1=1, depois
+   do skin.css). Mesmo estilo do Hub v1 (true-black-flat): fundo quase preto, elevação só por claridade, cartões sem
+   borda nem sombra, controles em pílula e o principal em pílula branca. Só troca o desenho: a automação não muda. */
+:root[data-theme="dark"] {
+  --bg: #0c0d0f; --card: #15171a; --popover: #1c1f23; --field-bg: #0c0d0f; --log-bg: #0c0d0f;
+  --text: #ffffff; --muted: #b4b4b4; --muted-soft: #949494;
+  --border: #1f2226; --border-hover: #30343a; --border-hover-strong: #3a3e44;
+  --secondary: #24272b; --hover-bg: #1c1f23; --hover-bg-soft: #181a1e;
+  --primary: #ffffff; --primary-hover: #e6e6e6; --primary-fg: #000000;
+  --accent: #5bd68a; --accent-soft: #15281d; --accent-fg: #5bd68a; --accent-strong: #ffffff; --on-accent: #000000;
+  --success: #5bd68a; --error: #ef5b61; --error-tint: #2c1a1d; --error-border: rgba(239, 91, 97, 0.35);
+  --warn: #e5a93b; --warn-tint: #2b2414; --focus-ring: #ffffff; --ring-border: #ffffff;
+  --radius: 12px; --radius-card: 20px; --shadow-card: none; --shadow-card-hover: none;
+  --v1-control: #3a3e44; --v1-raised: #24272b;
+}
+:root { --v1-control: #cfd3d8; --v1-raised: #e8e9ec; }
+html, body { background: var(--bg); }
+body { font-size: 14px; }
+.wrap { max-width: 1256px; padding: 32px 24px 96px; }
+
+/* título: ícone na cor do cadastro sem quadro, nome, situação em pílula ao lado e subtítulo */
+header.page-header { align-items: flex-end; margin-bottom: 22px; }
+.v2-icone { width: auto; height: auto; background: none; box-shadow: none; border-radius: 0; }
+.v2-titulo { gap: 10px; }
+.page-title h1 { font-size: 20px !important; line-height: 26px; font-weight: 600; }
+.page-title .subtitle { margin-top: 6px; font-size: 14px !important; color: var(--muted); }
+.badge { height: 22px; padding: 0 9px; border: 0 !important; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--v1-raised); color: var(--text); }
+.badge::before { display: none; }
+.badge.ok, .badge.online, .badge.pronto, .badge.success { background: var(--accent-soft); color: var(--accent); }
+.badge.erro, .badge.error, .badge.offline { background: var(--error-tint); color: var(--error); }
+
+/* cartões: superfície um tom acima do fundo, sem borda nem sombra */
+.card { border: 0 !important; border-radius: 20px; background: var(--card); box-shadow: none !important; padding: 22px; }
+.card:hover { box-shadow: none; }
+.card h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
+.grid { gap: 14px; }
+.v2-num { display: none; }
+
+/* abas sublinhadas em branco, contagem discreta */
+.v2f-abas, .v2p-abas { gap: 22px; border-bottom-color: var(--border); }
+.v2f-aba { height: auto; padding: 10px 0; color: var(--muted); font-size: 14px; font-weight: 400; }
+.v2f-aba[aria-selected="true"] { color: var(--text); font-weight: 500; }
+.v2f-aba[aria-selected="true"]::after { left: 0; right: 0; border-radius: 0; background: var(--text); }
+.v2f-aba .n { min-width: 0; height: auto; padding: 0; background: none; color: var(--muted-soft); font-size: 14px; font-weight: 400; }
+
+/* campos */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea {
+  border: 1px solid var(--v1-control) !important; border-radius: 12px !important; background-color: var(--bg) !important; color: var(--text);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select { min-height: 40px; }
+input:focus, select:focus, textarea:focus { border-color: var(--text) !important; box-shadow: none !important; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--text); }
+label, .v2f-campo > label { font-size: 14px; font-weight: 500; }
+.hint, .v2f-ajuda { font-size: 13px; color: var(--muted-soft); line-height: 18px; }
+
+/* botões em pílula: o principal branco, os outros um tom acima */
+.primary-btn, .v2f-btn.primario { height: 36px; padding: 0 16px; border: 0 !important; border-radius: 999px !important; background: var(--primary) !important; color: var(--primary-fg) !important; font-weight: 500; box-shadow: none !important; filter: none !important; }
+.primary-btn:hover:not(:disabled), .v2f-btn.primario:hover:not(:disabled) { background: var(--primary-hover) !important; }
+.v2f-btn, .secondary-btn, .ghost-btn, button.btn-secondary { height: 36px; padding: 0 16px; border: 0 !important; border-radius: 999px !important; background: var(--v1-raised) !important; color: var(--text) !important; font-weight: 500; }
+.v2f-btn:hover:not(:disabled), .secondary-btn:hover:not(:disabled) { background: var(--v1-control) !important; }
+.stop-btn { border-radius: 999px !important; }
+.v2f-chip { height: 30px; padding: 0 12px; border-color: var(--v1-control); background: none; color: var(--muted); font-size: 13px; }
+.v2f-chip:hover { color: var(--text); border-color: var(--muted); }
+header.page-header button, header.page-header a.btn { border-radius: 999px !important; }
+
+/* opções de ação (Alt. Status), resumo e marcações */
+.v2a-acoes button { border: 1px solid transparent; border-radius: 12px; background: var(--bg); }
+.v2a-acoes button:hover { background: var(--hover-bg); border-color: transparent; }
+.v2a-acoes button[aria-pressed="true"] { background: var(--v1-raised); border-color: var(--muted); box-shadow: none; }
+.v2a-acoes button[data-acao="bloquear"][aria-pressed="true"] { background: var(--error-tint); border-color: var(--error); box-shadow: none; }
+.v2a-resumo { border: 0; border-radius: 14px; background: var(--bg); }
+.empresa-checklist, .cred-empresas-grid { border: 0 !important; border-radius: 12px; background: var(--bg); }
+.empresa-checklist .checkbox-label:has(input:checked), .cred-empresas-grid .checkbox-label:has(input:checked) { background: var(--v1-raised); color: var(--text); font-weight: 500; }
+.v3-hub-acesso { border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+
+/* andamento, prévia, log e tabelas */
+.v2f-passos li i { border-color: var(--v1-control); }
+.v2f-passos li.feito i { border-color: var(--accent); background: var(--accent); color: #000; }
+.v2f-previa { border: 0; border-radius: 16px; background: var(--v1-raised); }
+.v2f-selo { border: 0; background: var(--v1-raised); }
+.v2f-mini { border: 0; border-radius: 14px; background: var(--card); }
+.log, .v2c-log, pre.log { border: 0 !important; border-radius: 12px !important; background: var(--bg) !important; color: var(--muted); font-size: 12px; }
+table th { font-size: 12px !important; font-weight: 400 !important; color: var(--muted-soft) !important; text-transform: none !important; letter-spacing: 0 !important; }
+table td { border-bottom-color: var(--border) !important; }
+.v2f-sit, .v2f-tag { height: 22px; padding: 0 9px; font-size: 12px; font-weight: 500; }
+details.v2f-tec summary, .tecnico summary { color: var(--muted); }

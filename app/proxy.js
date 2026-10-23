@@ -45,9 +45,12 @@ const PASTA_V2 = path.join(__dirname, 'public', 'v2', 'automacao');
 const ARQUIVOS_V2 = {
   'skin.css': [path.join(PASTA_V2, 'skin.css'), 'text/css; charset=utf-8'],
   'skin.js': [path.join(PASTA_V2, 'skin.js'), 'application/javascript; charset=utf-8'],
+  // Hub v1 (?v1=1): o desenho da maquete por cima do skin.css
+  'skin-v1.css': [path.join(PASTA_V2, 'skin-v1.css'), 'text/css; charset=utf-8'],
   'icons.js': [path.join(__dirname, 'public', 'icons.js'), 'application/javascript; charset=utf-8'],
 };
-const TAGS_V2 = '<link rel="stylesheet" href="/__arx-v2/skin.css"><script src="/__arx-v2/skin.js" defer></script>';
+// darkreader-lock: extensões de modo escuro (Dark Reader e parecidas) não repintam a tela; o tema vem do Hub
+const tagsV2 = (v1) => '<meta name="darkreader-lock"><link rel="stylesheet" href="/__arx-v2/skin.css">' + (v1 ? '<link rel="stylesheet" href="/__arx-v2/skin-v1.css">' : '') + '<script src="/__arx-v2/skin.js" defer></script>';
 
 function servirV2(req, res) {
   const nome = req.url.slice('/__arx-v2/'.length).split('?')[0];
@@ -68,9 +71,10 @@ function servirV2(req, res) {
 
 /** Página HTML sem compressão: põe as tags do v2 antes do </head> (ou no começo, se não houver). */
 const podeInjetar = (resposta) => /text\/html/i.test(resposta.headers['content-type'] || '') && !resposta.headers['content-encoding'];
-function comTagsV2(html) {
+function comTagsV2(html, v1) {
+  const tags = tagsV2(v1);
   const i = html.search(/<\/head>/i);
-  return i >= 0 ? html.slice(0, i) + TAGS_V2 + html.slice(i) : TAGS_V2 + html;
+  return i >= 0 ? html.slice(0, i) + tags + html.slice(i) : tags + html;
 }
 
 /**
@@ -102,7 +106,7 @@ function repassar(req, res, destino, caminho, prefixo, extras = {}) {
         const partes = [];
         resposta.on('data', (c) => partes.push(c));
         resposta.on('end', () => {
-          const corpo = Buffer.from(comTagsV2(Buffer.concat(partes).toString('utf8')), 'utf8');
+          const corpo = Buffer.from(comTagsV2(Buffer.concat(partes).toString('utf8'), extras.injetarV2 === 'v1'), 'utf8');
           saida['content-length'] = String(corpo.length);
           res.writeHead(resposta.statusCode, saida);
           res.end(corpo);
@@ -195,12 +199,13 @@ function lerCookie(cabecalho, nome) {
   return null;
 }
 
-/** Tira `passe` e `v2` da query: são do Hub e não vão para a automação. */
+/** Tira `passe`, `v2` e `v1` da query: são do Hub e não vão para a automação. */
 function semPasse(url) {
-  if (!/[?&](passe|v2)=/.test(url)) return url;
+  if (!/[?&](passe|v2|v1)=/.test(url)) return url;
   const u = new URL(url, 'http://x');
   u.searchParams.delete('passe');
   u.searchParams.delete('v2');
+  u.searchParams.delete('v1');
   return u.pathname + u.search;
 }
 
@@ -239,7 +244,9 @@ function criarProxyAutomacoes({ buscarDestino, passes = null, observador = null 
 
     const a = alvo(destino, achado, semPasse(req.url));
     if (!a) return { status: 404, texto: 'Esta automação não tem tela ao vivo.' };
-    const v2 = achado.porCaminho && req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('v2') === '1';
+    const q = new URL(req.url, 'http://x').searchParams;
+    // 'v1' = layout novo com o desenho do Hub v1; true = só o layout novo
+    const v2 = achado.porCaminho && req.method === 'GET' && q.get('v2') === '1' && (q.get('v1') === '1' ? 'v1' : true);
     return { achado, destino, alvo: a, setCookie, quem: acesso ? acesso.usuario : null, v2 };
   }
 

@@ -62,3 +62,16 @@ test('v2: /__arx-v2/ serve só os arquivos da lista', async () => {
     assert.equal((await fetch(`${s.base}/__arx-v2/qualquer.js`)).status, 404);
   } finally { await s.fim(); }
 });
+
+test('v1: com ?v1=1 a página também recebe o desenho da maquete (skin-v1.css), e o v1 não vai para a automação', async () => {
+  const s = await subir();
+  try {
+    const corpo = await (await fetch(`${s.base}/a/7/?v2=1&v1=1`)).text();
+    assert.match(corpo, /<link rel="stylesheet" href="\/__arx-v2\/skin\.css"><link rel="stylesheet" href="\/__arx-v2\/skin-v1\.css">/);
+    assert.equal(s.vistos[0], '/');
+    assert.doesNotMatch(await (await fetch(`${s.base}/a/7/?v2=1`)).text(), /skin-v1/);
+    const css = await fetch(`${s.base}/__arx-v2/skin-v1.css`);
+    assert.equal(css.status, 200);
+    assert.match(css.headers.get('content-type'), /text\/css/);
+  } finally { await s.fim(); }
+});
