@@ -68,10 +68,11 @@
   ]);
   // valor com a unidade menor ao lado, como na maquete (8,5 h; 2 min 4 s)
   const comUnidades = (texto) => (/\d/.test(texto) ? String(texto).split(/(\d[\d.,]*)/).filter(Boolean).map((p, i) => (/^\d/.test(p) ? p : e('small', { key: i }, p.trim()))) : texto);
+  // variação contra o período anterior (null quando não dá para comparar: sem dado ou anterior zerado)
+  const variacao = (atual, anterior, pontos) => (anterior == null || !isFinite(anterior) || atual == null ? null
+    : pontos ? (atual - anterior) * 100 : anterior === 0 ? null : ((atual - anterior) / anterior) * 100);
   function Variacao({ atual, anterior, menorMelhor, pontos }) {
-    if (anterior == null || !isFinite(anterior) || atual == null) return null;
-    const v = pontos ? (atual - anterior) * 100 : anterior === 0 ? null : ((atual - anterior) / anterior) * 100;
-    if (v == null) return null;
+    const v = variacao(atual, anterior, pontos);
     const bom = menorMelhor ? v <= 0 : v >= 0;
     return e('span', { className: bom ? 'bom' : 'mau' }, (v > 0 ? '+' : v < 0 ? '−' : '') + (pontos ? Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' p.p.' : pct(Math.abs(v))));
   }
@@ -187,7 +188,7 @@
     const horasEcoAnt = v.tempoEconomizado && v.tempoEconomizado.anteriorMin != null ? v.tempoEconomizado.anteriorMin / 60 : null;
     const abrir = (x) => setVer({ id: Number(x.glpiTicketId), titulo: x.titulo, categoria: x.categoria, tipo: x.tipo, tipoNome: x.titulo, link: 'https://suporte.mutualle.com.br/front/ticket.form.php?id=' + x.glpiTicketId });
     const teclaAbrir = (x) => (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(x); } };
-    const comparar = (atual, anterior, menorMelhor, pontos) => (ant ? [e(Variacao, { key: 'v', atual, anterior, menorMelhor, pontos }), ' em relação ao período anterior'] : null);
+    const comparar = (atual, anterior, menorMelhor, pontos) => (ant && variacao(atual, anterior, pontos) != null ? [e(Variacao, { key: 'v', atual, anterior, menorMelhor, pontos }), ' em relação ao período anterior'] : null);
     const total = t.total + (mt ? mt.execucoes : 0);
 
     if (!t.total && !(mt && mt.execucoes)) return e(Vazio, { texto: 'Nenhuma execução neste período com esses filtros.' });
