@@ -898,8 +898,8 @@
         cfgAuto.marca ? e('span', { key: 'marca', className: 'marca' }, cfgAuto.marca) : null,
         fixa('painel', 'painel', 'Painel'),
         fixa('chamados', 'chamados', 'Chamados', prontosChamados),
-        fixa('resultados', 'resultados', 'Resultados'),
         podeConversas ? fixa('conversas', 'conversas', 'Conversas') : null,
+        fixa('resultados', 'resultados', 'Resultados'),
         // a Administração só aparece para quem é administrador (identificado pelo token do GLPI, admin.js)
         ehAdmin ? fixa('admin', 'admin', 'Administração') : null,
         e('div', {
