@@ -607,9 +607,10 @@
   const S = {
     card: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, display: 'flex', flexDirection: 'column', animation: 'fadeInUp 0.3s ease both' },
     label: { fontSize: 11.5, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 },
-    input: { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', color: 'var(--text)', fontSize: 13.5, boxSizing: 'border-box', fontFamily: 'inherit' },
-    btnPrim: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
-    btnSec: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 14px', background: 'var(--secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+    // v1: campos e botões no desenho da maquete (a administração usa os mesmos)
+    input: { width: '100%', height: 40, background: 'var(--ground)', border: '1px solid var(--control)', borderRadius: 12, padding: '0 14px', color: 'var(--text)', fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit' },
+    btnPrim: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 36, padding: '0 16px', background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none', borderRadius: 999, fontWeight: 500, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' },
+    btnSec: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 36, padding: '0 16px', background: 'var(--raised)', color: 'var(--text)', border: 'none', borderRadius: 999, fontWeight: 500, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' },
     link: { background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 },
     chip: (sel) => ({ padding: '4px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (sel ? 'var(--accent)' : 'var(--border)'), background: sel ? 'var(--accent-soft)' : 'transparent', color: sel ? 'var(--accent)' : 'var(--muted)' }),
   };

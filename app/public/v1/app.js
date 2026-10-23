@@ -31,8 +31,6 @@
     return out;
   }
 
-  // v2: situação escrita no selo (não só a cor)
-  const STATUS_V2 = { online: 'No ar', offline: 'Fora do ar', checking: 'Verificando' };
   const lerLocal = (k, padrao) => { try { return localStorage.getItem(k) || padrao; } catch (err) { return padrao; } };
   const gravarLocal = (k, v) => { try { localStorage.setItem(k, v); } catch (err) { /* sem armazenamento: vale só nesta aba */ } };
   const STATUS_META = {
@@ -90,59 +88,94 @@
     ]);
   }
 
+  // Ícones da moldura (os mesmos traços da maquete); os das automações vêm do icons.js do Hub.
+  const TRACOS = {
+    voltar: 'm15 18-6-6 6-6', avancar: 'm9 18 6-6-6-6', mais: 'M12 5v14M5 12h14', x: 'M18 6 6 18M6 6l12 12',
+    recarregar: 'M21 12a9 9 0 1 1-3-6.7L21 8|M21 3v5h-5', busca: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14|m20 20-3.5-3.5',
+    chamados: 'M4 4h16v12H8l-4 4z', resultados: 'M3 3v18h18|M8 17v-5M13 17V8M18 17v-9',
+    painel: 'M3 3h7v9H3z|M14 3h7v5h-7z|M14 12h7v9h-7z|M3 16h7v5H3z', grade: 'M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z',
+    lista: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', ponto: 'M5 12h.01M12 12h.01M19 12h.01',
+    admin: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6|M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
+  };
+  const ic = (nome, t = 16) => e('svg', { viewBox: '0 0 24 24', width: t, height: t, fill: 'none', stroke: 'currentColor', strokeWidth: nome === 'ponto' ? 2.6 : 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+    TRACOS[nome].split('|').map((d, i) => e('path', { key: i, d })));
+  // selo de sistema (SGA, PowerCRM...) na cor do cadastro
+  const chipCategoria = (c) => e('span', { key: c.key, className: 'pill cat', style: { '--cor': c.color } }, c.label);
+
   // Ícones que o Hub sabe desenhar (cartões do Hub atual também), sem os de interface.
   const ICONES_V2 = Icons_NAMES().filter((n) => !['X', 'Plus', 'Search', 'MoreHorizontal', 'Pencil', 'Copy', 'ExternalLink', 'Trash2', 'Maximize2', 'Loader2', 'ChevronDown', 'ArrowLeft', 'RefreshCw', 'WifiOff', 'AlertCircle'].includes(n));
   function Icons_NAMES() { return (window.Icons.NAMES || ICON_CHOICES).slice(); }
   const CORES_V2 = [...COLOR_CHOICES, '#0EA5E9', '#EC4899', '#6366F1', '#F97316', '#84CC16', '#64748B'];
 
-  // Nova automação / Editar automação: layout novo, uma coluna só (prévia, dados, aparência e testes).
+  // Cartão de automação do Painel (também a prévia do formulário).
+  function CartaoAuto({ a, urlCurta, abrir, menu }) {
+    const meta = STATUS_META[a.status] || STATUS_META.checking;
+    const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
+    return e('article', {
+      className: 'cartao auto', role: abrir ? 'button' : undefined, tabIndex: abrir ? 0 : undefined, 'aria-label': abrir ? 'Abrir ' + a.name : undefined,
+      onClick: abrir, onKeyDown: abrir ? (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrir(); } } : undefined,
+    }, [
+      e('header', { key: 'h' }, [
+        e('span', { key: 'i', className: 'auto-ic', style: { color: a.color } }, Icon(a.icon || 'Workflow', 20, a.color || 'currentColor')),
+        e('span', { key: 's', className: 'pill ' + (a.status === 'online' ? 'pos' : a.status === 'offline' ? 'neg' : 'warn') }, meta.label),
+        menu ? menu.botao : null,
+      ]),
+      cats.length ? e('div', { key: 'c', className: 'chips' }, cats.map(chipCategoria)) : null,
+      e('h3', { key: 'n' }, a.name || 'Nome da automação'),
+      e('p', { key: 'd', className: 'desc' }, a.description || 'Sem descrição'),
+      urlCurta ? e('p', { key: 'u', className: 'mono faint' }, urlCurta) : null,
+      e('button', { key: 'b', type: 'button', className: 'btn largo', tabIndex: -1, onClick: (ev) => { ev.stopPropagation(); if (abrir) abrir(); } }, 'Abrir'),
+      menu ? menu.lista : null,
+    ]);
+  }
+
+  // Nova automação / Editar automação: janela de duas colunas (dados à esquerda; ícone, cor e prévia à direita).
   function FormAutomacaoV2({ form, modo, setCampo, fechar, salvar, testar, teste }) {
     const { Modal } = window.ExemploUI;
     const [tocado, setTocado] = useState(false);
     const [buscaIcone, setBuscaIcone] = useState('');
     const cats = Array.isArray(form.categories) ? form.categories : [];
     const erros = { name: !String(form.name || '').trim() ? 'Informe o nome.' : '', url: !String(form.url || '').trim() ? 'Informe a URL.' : '' };
-    const campo = (rotulo, filho, ajuda, erro) => e('div', { className: 'exu-campo' }, [e('label', { key: 'l' }, rotulo), filho, erro ? e('p', { key: 'e', className: 'exu-campo-erro' }, erro) : ajuda ? e('p', { key: 'a', className: 'exu-campo-ajuda' }, ajuda) : null]);
+    const campo = (id, rotulo, filho, ajuda, erro) => e('div', { key: id, className: 'exu-campo' }, [
+      e('label', { key: 'l', htmlFor: 'fa-' + id }, rotulo), React.cloneElement(filho, { key: 'f', id: 'fa-' + id }),
+      erro ? e('p', { key: 'e', className: 'exu-campo-erro' }, erro) : ajuda ? e('p', { key: 'a', className: 'exu-campo-ajuda' }, ajuda) : null,
+    ]);
+    const grupo = (id, rotulo, filho) => e('div', { key: id, className: 'exu-campo', role: 'group', 'aria-label': rotulo }, [e('span', { key: 'l', className: 'rot' }, rotulo), filho]);
     const textoTeste = teste === 'testing' ? 'Testando…' : teste === 'online' ? 'Conexão bem-sucedida' : teste === 'offline' ? 'Falha na conexão' : 'Testar conexão';
-    const previaCats = cats.map((k) => CATEGORY_META[k]).filter(Boolean);
     return e(Modal, {
-      titulo: modo === 'new' ? 'Nova automação' : 'Editar automação', largura: 560, fechar,
+      titulo: modo === 'new' ? 'Nova automação' : 'Editar automação', largura: 860, fechar,
       descricao: modo === 'new' ? 'Ela aparece no Painel para quem tem acesso e o Hub passa a conferir se está no ar.' : 'As mudanças valem para todos que veem esta automação.',
       rodape: [
-        e('button', { key: 't', type: 'button', className: 'exu-btn' + (teste === 'online' ? ' v2-ok' : teste === 'offline' ? ' perigo' : ''), style: { marginRight: 'auto' }, disabled: teste === 'testing', onClick: testar },
-          [teste === 'testing' ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14)) : Icon(teste === 'offline' ? 'AlertCircle' : 'Activity', 14, 'currentColor'), textoTeste]),
-        e('button', { key: 'c', type: 'button', className: 'exu-btn', onClick: fechar }, 'Cancelar'),
-        e('button', { key: 's', type: 'button', className: 'exu-btn primario', onClick: () => { setTocado(true); if (!erros.name && !erros.url) salvar(); } }, modo === 'new' ? 'Cadastrar' : 'Salvar'),
+        e('button', { key: 't', type: 'button', className: 'btn' + (teste === 'online' ? ' ok-teste' : teste === 'offline' ? ' falha-teste' : ''), disabled: teste === 'testing', onClick: testar },
+          [teste === 'testing' ? e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 14)) : null, textoTeste]),
+        e('span', { key: 'e', style: { flex: 1 } }),
+        e('button', { key: 'c', type: 'button', className: 'btn texto', onClick: fechar }, 'Cancelar'),
+        e('button', { key: 's', type: 'button', className: 'btn primario', onClick: () => { setTocado(true); if (!erros.name && !erros.url) salvar(); } }, modo === 'new' ? 'Cadastrar' : 'Salvar'),
       ],
-    }, [
-      e('div', { key: 'p', className: 'exu-campo' }, [e('label', { key: 'l' }, 'Prévia do cartão'), e('div', { key: 'c', className: 'v2-previa' }, [
-        e('span', { key: 'i', className: 'v2-linha-ic', style: { background: (form.color || '#1E4A9E') + '22' } }, Icon(form.icon || 'Workflow', 18, form.color || '#1E4A9E')),
-        e('div', { key: 'n', style: { minWidth: 0, flex: 1 } }, [e('b', { key: 'b' }, form.name || 'Nome da automação'), e('small', { key: 's' }, form.description || 'A descrição aparece aqui, em até duas linhas.')]),
-        e('span', { key: 'st', className: 'v2-status online' }, [e('i', { key: 'i' }), 'No ar']),
-      ]), previaCats.length ? e('div', { key: 'k', className: 'v2-linha-cats' }, previaCats.map((c) => e('span', { key: c.key, style: { background: c.color + '22', color: 'color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))' } }, c.label))) : null]),
-      campo('Nome', e('input', { value: form.name || '', onChange: (ev) => setCampo('name', ev.target.value), placeholder: 'Ex.: Emissão de boletos', maxLength: 80, 'aria-invalid': !!(tocado && erros.name) }), null, tocado && erros.name),
-      campo('URL (vista pelo servidor do Hub)', e('input', { value: form.url || '', onChange: (ev) => setCampo('url', ev.target.value), placeholder: 'http://alterar-senha-sga:4016/', spellCheck: false, style: { fontFamily: 'var(--font-mono)', fontSize: 13 }, 'aria-invalid': !!(tocado && erros.url) }), 'O navegador nunca vê este endereço: a tela abre pelo proxy do Hub.', tocado && erros.url),
-      e('div', { key: 'cat', className: 'exu-campo' }, [
-        e('label', { key: 'l' }, ['Sistemas ', e('span', { key: 's', style: { fontWeight: 400, color: 'var(--muted)' } }, '(pode marcar mais de um)')]),
-        e('div', { key: 'c', className: 'ex-cats', role: 'group', 'aria-label': 'Sistemas' }, CATEGORY_CHOICES.map((c) => e('button', {
-          key: c.key, type: 'button', 'aria-pressed': cats.includes(c.key) ? 'true' : 'false', onClick: () => setCampo('categories', cats.includes(c.key) ? cats.filter((k) => k !== c.key) : [...cats, c.key]),
-        }, [e('i', { key: 'i', style: { background: c.color } }), c.label]))),
+    }, e('div', { className: 'duas-col' }, [
+      e('div', { key: 'esq' }, [
+        campo('nome', 'Nome', e('input', { value: form.name || '', onChange: (ev) => setCampo('name', ev.target.value), placeholder: 'Ex.: Emissão de boletos', maxLength: 80, 'aria-invalid': !!(tocado && erros.name) }), null, tocado && erros.name),
+        campo('desc', 'Descrição', e('textarea', { value: form.description || '', onChange: (ev) => setCampo('description', ev.target.value), maxLength: 160, placeholder: 'Finalidade da automação' }), (form.description || '').length + '/160, aparece no cartão em até duas linhas.'),
+        campo('url', 'URL (vista pelo servidor do Hub)', e('input', { value: form.url || '', onChange: (ev) => setCampo('url', ev.target.value), placeholder: 'http://alterar-senha-sga:4016/', spellCheck: false, className: 'mono', 'aria-invalid': !!(tocado && erros.url) }), 'O navegador nunca vê esse endereço: a tela abre pelo proxy do Hub.', tocado && erros.url),
+        e('div', { key: 'duas', className: 'exu-duas-col' }, [
+          campo('cont', 'Container Docker (opcional)', e('input', { value: form.container || '', onChange: (ev) => setCampo('container', ev.target.value), placeholder: 'boletos-service', className: 'mono' })),
+          campo('min', 'Minutos que um item levaria à mão (opcional)', e('input', { inputMode: 'decimal', value: form.minutosPorItem == null ? '' : form.minutosPorItem, onChange: (ev) => setCampo('minutosPorItem', ev.target.value), placeholder: '4' }), 'Base do tempo economizado das execuções manuais.'),
+        ]),
+        grupo('cat', 'Sistemas (pode marcar mais de um)', e('div', { className: 'chips' }, CATEGORY_CHOICES.map((c) => e('button', {
+          key: c.key, type: 'button', className: 'opcao-chip', 'aria-pressed': cats.includes(c.key) ? 'true' : 'false', onClick: () => setCampo('categories', cats.includes(c.key) ? cats.filter((k) => k !== c.key) : [...cats, c.key]),
+        }, [e('i', { key: 'i', style: { background: c.color } }), c.label])))),
       ]),
-      e('div', { key: 'cor', className: 'exu-campo' }, [
-        e('label', { key: 'l' }, 'Cor'),
-        e('div', { key: 'c', className: 'ex-cores', role: 'radiogroup', 'aria-label': 'Cor' }, CORES_V2.map((c) => e('button', { key: c, type: 'button', role: 'radio', 'aria-checked': form.color === c ? 'true' : 'false', 'aria-label': 'Cor ' + c, style: { background: c }, onClick: () => setCampo('color', c) }, form.color === c ? Icon('Activity', 12, '#fff', 2.5) : null))),
+      e('div', { key: 'dir' }, [
+        grupo('ic', 'Ícone', e('div', { style: { display: 'grid', gap: 8 } }, [
+          e('label', { key: 'b', className: 'busca-icone' }, [ic('busca', 14), e('input', { key: 'i', value: buscaIcone, onChange: (ev) => setBuscaIcone(ev.target.value), placeholder: 'Buscar ícone (em inglês)', 'aria-label': 'Buscar ícone' })]),
+          e('div', { key: 'g', className: 'icones', role: 'radiogroup', 'aria-label': 'Ícone' }, ICONES_V2.filter((n) => n.toLowerCase().includes(buscaIcone.toLowerCase())).map((n) => e('button', {
+            key: n, type: 'button', role: 'radio', 'aria-checked': form.icon === n ? 'true' : 'false', 'aria-pressed': form.icon === n ? 'true' : 'false', title: n, 'aria-label': n, onClick: () => setCampo('icon', n),
+          }, Icon(n, 18, form.icon === n ? (form.color || 'currentColor') : 'currentColor')))),
+        ])),
+        grupo('cor', 'Cor', e('div', { className: 'cores', role: 'radiogroup', 'aria-label': 'Cor' }, CORES_V2.map((c) => e('button', { key: c, type: 'button', role: 'radio', 'aria-checked': form.color === c ? 'true' : 'false', 'aria-label': 'Cor ' + c, style: { background: c }, onClick: () => setCampo('color', c) })))),
+        grupo('prev', 'Prévia do cartão', e('div', { className: 'previa-cartao' }, e(CartaoAuto, { a: { ...form, status: 'online', description: form.description || 'A descrição aparece aqui, em até duas linhas.' } }))),
       ]),
-      e('div', { key: 'ic', className: 'exu-campo' }, [
-        e('label', { key: 'l' }, 'Ícone'),
-        e('label', { key: 'b', className: 'exu-busca', style: { flex: 'none', height: 32 } }, [Icon('Search', 14, 'var(--muted-soft)'), e('input', { key: 'i', value: buscaIcone, onChange: (ev) => setBuscaIcone(ev.target.value), placeholder: 'Buscar ícone (em inglês)', 'aria-label': 'Buscar ícone' })]),
-        e('div', { key: 'g', className: 'exu-icones ex-icones-lista', role: 'radiogroup', 'aria-label': 'Ícone' }, ICONES_V2.filter((n) => n.toLowerCase().includes(buscaIcone.toLowerCase())).map((n) => e('button', {
-          key: n, type: 'button', role: 'radio', 'aria-checked': form.icon === n ? 'true' : 'false', 'aria-pressed': form.icon === n ? 'true' : 'false', title: n, 'aria-label': n, onClick: () => setCampo('icon', n),
-        }, Icon(n, 17, form.icon === n ? (form.color || 'currentColor') : 'currentColor')))),
-      ]),
-      campo('Descrição', e('textarea', { value: form.description || '', onChange: (ev) => setCampo('description', ev.target.value), maxLength: 160, placeholder: 'Finalidade da automação' }), (form.description || '').length + '/160 · aparece no cartão, em até duas linhas.'),
-      campo('Minutos que um item levaria à mão (opcional)', e('input', { inputMode: 'decimal', value: form.minutosPorItem == null ? '' : form.minutosPorItem, onChange: (ev) => setCampo('minutosPorItem', ev.target.value), placeholder: '4', style: { fontFamily: 'var(--font-mono)' } }), 'Base do tempo economizado das execuções manuais na aba Resultados (itens concluídos x minutos).'),
-      campo('Container Docker (opcional)', e('input', { value: form.container || '', onChange: (ev) => setCampo('container', ev.target.value), placeholder: 'boletos-service', style: { fontFamily: 'var(--font-mono)' } })),
-    ]);
+    ]));
   }
 
   function App() {
@@ -205,10 +238,6 @@
     const [tabsOverflow, setTabsOverflow] = useState({ any: false, left: false, right: false });
     const navRef = useRef(null);
     const tabsMenuRef = useRef(null);
-    // "Painel" fica fixo no início; quando as abas começam a não caber ele
-    // mostra só o ícone. Guarda com quantas abas isso aconteceu e só volta a
-    // mostrar o nome quando uma aba é fechada (evita ficar piscando).
-    const [panelCompactAt, setPanelCompactAt] = useState(null);
     // Abas fixas ao lado do Painel: "Chamados" (chamados.js) e "Resultados"
     // (resultados.js). Cada uma só monta na primeira vez que é aberta.
     const [abaFixa, setAbaFixa] = useState('painel');
@@ -387,12 +416,7 @@
         else if (right > el.scrollLeft + el.clientWidth) el.scrollTo({ left: right - el.clientWidth + 24, behavior: 'smooth' });
       }
       measureTabs();
-    }, [openTabs, activeTabId, automations, measureTabs, tabsOverflow.any, panelCompactAt]);
-
-    useEffect(() => {
-      if (tabsOverflow.any && panelCompactAt === null) setPanelCompactAt(openTabs.length);
-      else if (panelCompactAt !== null && openTabs.length < panelCompactAt) setPanelCompactAt(null);
-    }, [tabsOverflow.any, openTabs.length, panelCompactAt]);
+    }, [openTabs, activeTabId, automations, measureTabs, tabsOverflow.any]);
 
     // Fecha o menu de abas ao clicar fora dele.
     useEffect(() => {
@@ -722,7 +746,6 @@
     const total = automations.length;
     const online = automations.filter((a) => a.status === 'online').length;
     const offline = automations.filter((a) => a.status === 'offline').length;
-    const healthDotColor = offline > 0 ? 'var(--warn)' : 'var(--accent)';
 
     function closeMenus() {
       setMenuOpenId((id) => (id ? null : id));
@@ -742,37 +765,52 @@
       setTabsMenuOpen(false);
     }
 
-    // ---- single unified nav bar (logo + panel/tabs + search + health + add) ----
     const openTabItems = openTabs.map((id) => automations.find((x) => x.id === id)).filter(Boolean);
-    const panelCompact = panelCompactAt !== null;
-    const navScroll = e('div', {
-      key: 'nav', ref: navRef,
-      className: 'nav-scroll' + (tabsOverflow.left ? ' fade-left' : '') + (tabsOverflow.right ? ' fade-right' : ''),
-      onScroll: measureTabs,
-      // roda do mouse rola a faixa na horizontal
-      onWheel: (ev) => { if (tabsOverflow.any && ev.deltaY) navRef.current.scrollLeft += ev.deltaY; },
-      style: sx('display:flex;align-items:stretch;gap:2px;overflow-x:auto;min-width:0;flex:0 1 auto'),
-    }, [
-      ...openTabItems.map((a) => {
-        const id = a.id;
-        const active = activeTabId === id;
-        return e('div', {
-          key: id, className: 'tab-item' + (active ? ' active' : ''), title: a.name, 'data-active': active ? '1' : '0',
-          onClick: () => switchTab(id),
-          // botão do meio do mouse fecha a aba, como no navegador
-          onAuxClick: (ev) => { if (ev.button === 1) { ev.preventDefault(); closeTab(id); } },
-          style: { minWidth: active ? 170 : 140 },
-        }, [
-          e('span', { key: 'dot', style: { width: 6, height: 6, borderRadius: '50%', background: STATUS_META[a.status].color, flexShrink: 0 } }),
-          Icon(a.icon, 13, a.color),
-          e('span', { key: 'name', style: sx('flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap') }, a.name),
-          e('span', {
-            key: 'close', className: 'tab-close', title: 'Fechar aba', onClick: (ev) => { ev.stopPropagation(); closeTab(id); },
-            style: sx('display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:var(--muted-soft);flex-shrink:0'),
-          }, Icon('X', 13)),
-        ]);
-      }),
-    ]);
+
+    // ---- Voltar e Avançar da barra de endereço: o caminho entre as abas, como no navegador ----
+    const chaveAtual = activeTabId !== null ? 'a:' + activeTabId : 'f:' + abaFixa;
+    const historia = useRef({ pilha: ['f:painel'], pos: 0, andando: false });
+    const [, setVersaoHistoria] = useState(0);
+    useEffect(() => {
+      const h = historia.current;
+      if (h.andando) { h.andando = false; return; }
+      if (h.pilha[h.pos] === chaveAtual) return;
+      h.pilha = h.pilha.slice(0, h.pos + 1).concat(chaveAtual).slice(-50);
+      h.pos = h.pilha.length - 1;
+      setVersaoHistoria((v) => v + 1);
+    }, [chaveAtual]);
+    // uma aba de automação fechada some do caminho (pula para a anterior ou a seguinte)
+    const valeIr = (k) => !k.startsWith('a:') || openTabs.some((id) => String(id) === k.slice(2));
+    const destino = (passo) => { const h = historia.current; let p = h.pos + passo; while (p >= 0 && p < h.pilha.length && !valeIr(h.pilha[p])) p += passo; return p >= 0 && p < h.pilha.length ? p : -1; };
+    const podeVoltar = destino(-1) !== -1;
+    const podeAvancar = destino(1) !== -1;
+    function andar(passo) {
+      const p = destino(passo);
+      if (p === -1) return;
+      const h = historia.current;
+      const k = h.pilha[p];
+      h.pos = p;
+      h.andando = k !== chaveAtual;
+      if (k.startsWith('a:')) switchTab(openTabs.find((id) => String(id) === k.slice(2)));
+      else abrirAbaFixa(k.slice(2));
+      setVersaoHistoria((v) => v + 1);
+    }
+    // Recarregar: a automação aberta recarrega a tela; Chamados busca a lista de novo (sem perder execução em
+    // andamento); Painel, Resultados e Administração montam de novo
+    const [recargas, setRecargas] = useState({});
+    function recarregarAtual() {
+      if (activeTabId !== null) return startViewerLoad(activeTabId);
+      if (abaFixa === 'painel') return refresh();
+      if (abaFixa === 'chamados') return window.ChamadosCache && window.ChamadosCache.store.buscar();
+      setRecargas((r) => ({ ...r, [abaFixa]: (r[abaFixa] || 0) + 1 }));
+    }
+    // quantos chamados estão prontos para rodar (chamados.js avisa) aparece na aba Chamados
+    const [prontosChamados, setProntosChamados] = useState(0);
+    useEffect(() => {
+      const aoMudar = (ev) => setProntosChamados(Number(ev.detail) || 0);
+      window.addEventListener('arx-chamados-prontos', aoMudar);
+      return () => window.removeEventListener('arx-chamados-prontos', aoMudar);
+    }, []);
 
     // Menu "N abas": lista todas as abas abertas (útil quando não cabem na faixa).
     const tabsMenu = (tabsOverflow.any || tabsMenuOpen) && openTabItems.length ? e('div', { key: 'tabs-menu', ref: tabsMenuRef, style: { position: 'relative', flexShrink: 0 } }, [
@@ -816,98 +854,85 @@
     // ---- moldura de navegador: faixa de abas (fixas + automações abertas) e barra de endereço ----
     const NOMES_FIXOS = { painel: 'Painel', chamados: 'Chamados', resultados: 'Resultados', admin: 'Administração' };
     const abaAberta = activeTabId ? automations.find((x) => x.id === activeTabId) : null;
-    const fixa = (chave, icone, rot, abrir) => e('button', {
-      key: chave, type: 'button', className: 'panel-tab v1-aba' + (abaFixaAtiva(chave) ? ' ativa' : '') + (panelCompact ? ' compact' : ''), onClick: abrir,
-      title: rot, 'aria-label': rot, 'aria-current': abaFixaAtiva(chave) ? 'page' : undefined,
-    }, [Icon(icone, 15, 'currentColor'), e('span', { key: 't', className: 'panel-tab-label' }, rot)]);
-    const header = e('header', { className: 'v1-nav' }, [
-      e('div', { key: 'faixa', className: 'v1-faixa' }, [
-        cfgAuto.marca ? e('span', { key: 'marca', className: 'v1-marca' }, cfgAuto.marca) : null,
-        fixa('painel', 'LayoutDashboard', 'Painel', abrirPainel),
-        fixa('chamados', 'Headset', 'Chamados', abrirChamados),
-        fixa('resultados', 'BarChart3', 'Resultados', () => abrirAbaFixa('resultados')),
-        // admin.js: aba "Administração", só aparece para quem é administrador (identificado pelo token do GLPI)
-        window.AdminAba ? e(window.AdminAba, { key: 'admin', ativa: abaFixaAtiva('admin'), aoAbrir: () => abrirAbaFixa('admin'), compacto: panelCompact }) : null,
-        openTabItems.length ? e('span', { key: 'sep', className: 'tabs-sep' }) : null,
-        navScroll,
+    const fixa = (chave, icone, rot, conta) => e('button', {
+      key: chave, type: 'button', className: 'aba fixa' + (conta ? ' com-conta' : ''), onClick: () => abrirAbaFixa(chave),
+      title: rot, 'aria-label': conta ? rot + ': ' + conta + (conta === 1 ? ' pronto para rodar' : ' prontos para rodar') : rot, 'aria-current': abaFixaAtiva(chave) ? 'page' : undefined, 'data-active': abaFixaAtiva(chave) ? '1' : '0',
+    }, [ic(icone), conta ? e('span', { key: 'n', className: 'conta' }, String(conta)) : null]);
+    const abaDeAutomacao = (a) => e('div', {
+      key: a.id, role: 'button', tabIndex: 0, className: 'aba', title: a.name, 'aria-current': activeTabId === a.id ? 'page' : undefined, 'data-active': activeTabId === a.id ? '1' : '0',
+      onClick: () => switchTab(a.id),
+      onKeyDown: (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); switchTab(a.id); } },
+      // botão do meio do mouse fecha a aba, como no navegador
+      onAuxClick: (ev) => { if (ev.button === 1) { ev.preventDefault(); closeTab(a.id); } },
+    }, [
+      e('span', { key: 'p', className: 'ponto ' + (a.status || 'checking'), title: (STATUS_META[a.status] || STATUS_META.checking).label }),
+      e('span', { key: 'i', style: { display: 'flex' } }, Icon(a.icon, 14, a.color)),
+      e('span', { key: 'n', className: 'rot' }, a.name),
+      e('button', { key: 'x', type: 'button', className: 'fechar', title: 'Fechar ' + a.name, 'aria-label': 'Fechar ' + a.name, onClick: (ev) => { ev.stopPropagation(); closeTab(a.id); } }, ic('x', 12)),
+    ]);
+    const header = e('header', { className: 'navegador' }, [
+      e('nav', { key: 'faixa', className: 'faixa', 'aria-label': 'Abas' }, [
+        // nome configurável em Administração > Automações; vazio deixa a faixa sem nome
+        cfgAuto.marca ? e('span', { key: 'marca', className: 'marca' }, cfgAuto.marca) : null,
+        fixa('painel', 'painel', 'Painel'),
+        fixa('chamados', 'chamados', 'Chamados', prontosChamados),
+        fixa('resultados', 'resultados', 'Resultados'),
+        // a Administração só aparece para quem é administrador (identificado pelo token do GLPI, admin.js)
+        ehAdmin ? fixa('admin', 'admin', 'Administração') : null,
+        e('div', {
+          key: 'abertas', ref: navRef, className: 'abas-abertas', onScroll: measureTabs,
+          onWheel: (ev) => { if (tabsOverflow.any && ev.deltaY) navRef.current.scrollLeft += ev.deltaY; },
+        }, openTabItems.map(abaDeAutomacao)),
         tabsMenu,
-        e('button', { key: 'nova', type: 'button', className: 'v1-aba-nova', onClick: abrirPainel, title: 'Abrir outra automação', 'aria-label': 'Abrir outra automação' }, Icon('Plus', 16, 'currentColor')),
+        e('button', { key: 'nova', type: 'button', className: 'aba-nova', onClick: abrirPainel, title: 'Abrir outra automação', 'aria-label': 'Abrir outra automação' }, ic('mais')),
       ]),
-      e('div', { key: 'end', className: 'v1-endereco' }, [
-        e('div', { key: 'esq', className: 'v1-lado' }, e('span', { className: 'v1-no-ar', title: online + ' de ' + total + ' automações no ar' }, [
-          e('span', { key: 'dot', className: 'pulse-dot', style: { position: 'relative', width: 7, height: 7, borderRadius: '50%', background: healthDotColor, color: healthDotColor } }),
-          e('span', { key: 'label' }, online + '/' + total + ' online'),
-        ])),
-        e('label', { key: 'campo', className: 'v1-campo-endereco search-box hub-search' }, [
-          e('span', { key: 'tr', className: 'v1-trilha' }, [
+      e('div', { key: 'end', className: 'endereco' }, [
+        e('div', { key: 'esq', className: 'lado' }, [
+          e('button', { key: 'v', type: 'button', className: 'icone-btn', 'aria-label': 'Voltar', title: 'Voltar', disabled: !podeVoltar, onClick: () => andar(-1) }, ic('voltar')),
+          e('button', { key: 'a', type: 'button', className: 'icone-btn', 'aria-label': 'Avançar', title: 'Avançar', disabled: !podeAvancar, onClick: () => andar(1) }, ic('avancar')),
+          e('button', { key: 'r', type: 'button', className: 'icone-btn', 'aria-label': 'Recarregar', title: 'Recarregar', onClick: recarregarAtual }, ic('recarregar')),
+          e('span', { key: 'o', className: 'no-ar' + (offline ? ' com-falha' : ''), title: online + ' de ' + total + ' automações no ar' }, [e('i', { key: 'i', 'aria-hidden': 'true' }), online + '/' + total + ' online']),
+        ]),
+        e('label', { key: 'campo', className: 'campo-endereco' }, [
+          e('span', { key: 'tr', className: 'trilha' }, [
             e('span', { key: 's' }, 'Sistemas'), e('span', { key: 'b', 'aria-hidden': 'true' }, '/'),
+            abaAberta ? e('span', { key: 'a' }, 'Automações') : null, abaAberta ? e('span', { key: 'b2', 'aria-hidden': 'true' }, '/') : null,
             e('b', { key: 'n' }, abaAberta ? abaAberta.name : (NOMES_FIXOS[abaFixa] || 'Painel')),
           ]),
-          e('span', { key: 'busca', className: 'v1-busca' }, [
-            Icon('Search', 13, 'currentColor'),
+          e('span', { key: 'busca', className: 'busca' }, [
+            ic('busca', 13),
             e('input', {
-              key: 'input', ref: searchRef, value: search, onChange: (ev) => setSearch(ev.target.value),
-              placeholder: 'Buscar automação', 'aria-label': 'Buscar automações', type: 'search',
+              key: 'input', ref: searchRef, value: search, type: 'search', placeholder: 'Buscar', 'aria-label': 'Buscar automações',
+              onChange: (ev) => { setSearch(ev.target.value); if (ev.target.value && !abaFixaAtiva('painel')) abrirPainel(); },
             }),
             e('kbd', { key: 'kbd' }, 'Ctrl K'),
           ]),
         ]),
         // ajuda.js (?), alertas.js (sino) e acessos.js (Meus acessos): componentes próprios, os mesmos do Hub
-        e('div', { key: 'dir', className: 'v1-lado dir' }, [
+        e('div', { key: 'dir', className: 'lado dir' }, [
           window.AjudaBotao ? e(window.AjudaBotao, { key: 'ajuda', aba: activeTabId === null ? abaFixa : null }) : null,
           window.AlertasSino ? e(window.AlertasSino, { key: 'alertas' }) : null,
           window.MeusAcessosBotao ? e(window.MeusAcessosBotao, { key: 'acessos' }) : null,
-          podeGerenciar && e('button', { key: 'new', type: 'button', className: 'btn-primary v1-nova', onClick: openNewModal, title: 'Nova automação' }, [Icon('Plus', 15, 'currentColor', 2.25), e('span', { key: 't' }, 'Nova automação')]),
         ]),
       ]),
     ]);
 
-    // ---- automation card ----
-    function buildCard(a, i) {
-      const meta = STATUS_META[a.status] || STATUS_META.checking;
-      const isPulsing = a.status !== 'offline';
+    // ---- cartão de automação (Painel) ----
+    function buildCard(a) {
       const menuOpen = menuOpenId === a.id;
-      const urlShort = urlVisivel(a);
-      const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
-      return e('div', {
-        key: a.id, className: 'card', onClick: () => openAutomation(a.id),
-        style: { position: 'relative', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeInUp 0.3s ease both', animationDelay: Math.min(i, 10) * 35 + 'ms' },
-      }, [
-        e('div', { key: 'top', style: sx('display:flex;align-items:flex-start;justify-content:space-between') }, [
-          e('div', { key: 'icon', className: 'v1-auto-ic', style: { color: a.color } }, Icon(a.icon, 22, a.color)),
-          e('div', { key: 'actions', style: sx('display:flex;align-items:center;gap:2px') }, [
-            e('span', { key: 'dot', className: 'v1-status ' + (a.status || 'checking') }, meta.label),
-            // o menu só tem ações de admin (editar, abrir/copiar o endereço, remover)
-            podeGerenciar && e('button', {
-              key: 'menu', className: 'icon-btn', onClick: (ev) => { ev.stopPropagation(); setMenuOpenId(menuOpen ? null : a.id); },
-              style: sx('width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);border-radius:6px;cursor:pointer'),
-            }, Icon('MoreHorizontal', 17)),
-          ]),
-        ]),
-        e('div', { key: 'info' }, [
-          cats.length ? e('div', { key: 'cats', style: sx('display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px') }, cats.map((c) => e('span', {
-            key: c.key,
-            style: sx('display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:' + c.color + '22;color:color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))'),
-          }, c.label))) : null,
-          e('div', { key: 'name', style: sx("font-weight:600;font-size:14px") }, a.name),
-          e('div', { key: 'desc', style: sx('color:var(--muted);font-size:12.5px;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden') }, a.description),
-        ]),
-        urlShort ? e('div', { key: 'url', style: sx("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted-soft)") }, urlShort) : null,
-        e('button', {
-          key: 'open', className: 'card-open-btn', onClick: (ev) => { ev.stopPropagation(); openAutomation(a.id); },
-          style: sx('padding:8px;background:var(--secondary);border:1px solid var(--border);color:var(--text);border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer;margin-top:2px'),
-        }, 'Abrir'),
-        (podeGerenciar && menuOpen) ? e('div', {
-          key: 'popover', onClick: (ev) => ev.stopPropagation(),
-          style: sx('position:absolute;top:44px;right:10px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -8px rgba(0,0,0,0.12);z-index:5;overflow:hidden;min-width:170px'),
-        }, [
-          e('button', { key: 'edit', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); openEditModal({ ...a, url: urlReal(a) }); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Pencil', 14), ' Editar']),
-          e('button', { key: 'newtab', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); abrirEmNovaAba(a); setMenuOpenId(null); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('ExternalLink', 14), ' Abrir em nova aba']),
-          e('button', { key: 'copy', className: 'menu-item', onClick: (ev) => { ev.stopPropagation(); copyUrl(urlReal(a)); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Copy', 14), ' Copiar URL']),
-          e('div', { key: 'sep', style: { height: 1, background: 'var(--border)' } }),
-          e('button', { key: 'del', className: 'menu-item-danger', onClick: (ev) => { ev.stopPropagation(); deleteAutomation(a.id); }, style: sx('display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:transparent;border:none;color:var(--error);font-size:12.5px;cursor:pointer;text-align:left') }, [Icon('Trash2', 14), ' Remover']),
+      const item = (k, icone, texto, fazer, perigo) => e('button', { key: k, type: 'button', className: perigo ? 'perigo' : '', onClick: (ev) => { ev.stopPropagation(); fazer(); } }, [Icon(icone, 14, 'currentColor'), texto]);
+      // o menu só tem ações de quem gerencia (editar, abrir/copiar o endereço, remover)
+      const menu = podeGerenciar ? {
+        botao: e('button', { key: 'm', type: 'button', className: 'icone-btn', 'aria-label': 'Opções de ' + a.name, 'aria-expanded': menuOpen ? 'true' : 'false', onClick: (ev) => { ev.stopPropagation(); setMenuOpenId(menuOpen ? null : a.id); } }, ic('ponto')),
+        lista: menuOpen ? e('div', { key: 'menu', className: 'auto-menu', role: 'menu', onClick: (ev) => ev.stopPropagation() }, [
+          item('e', 'Pencil', 'Editar', () => openEditModal({ ...a, url: urlReal(a) })),
+          item('n', 'ExternalLink', 'Abrir em nova aba', () => { abrirEmNovaAba(a); setMenuOpenId(null); }),
+          item('c', 'Copy', 'Copiar URL', () => copyUrl(urlReal(a))),
+          e('hr', { key: 'hr' }),
+          item('r', 'Trash2', 'Remover', () => deleteAutomation(a.id), true),
         ]) : null,
-      ]);
+      } : null;
+      return e(CartaoAuto, { key: a.id, a, urlCurta: urlVisivel(a), abrir: () => openAutomation(a.id), menu });
     }
 
     // Automações de banco de dados (categoria "db") ficam numa seção própria, abaixo das demais.
@@ -916,62 +941,53 @@
     const dbList = visible.filter(isDb);
     // ---- automação em lista (Painel > Lista): uma linha por automação, abre com clique, Enter ou espaço ----
     function buildLinha(a) {
-      const meta = STATUS_META[a.status] || STATUS_META.checking;
       const cats = (a.categories || []).map((k) => CATEGORY_META[k]).filter(Boolean);
       return e('div', {
-        key: a.id, className: 'v2-linha', role: 'button', tabIndex: 0, 'aria-label': 'Abrir ' + a.name,
+        key: a.id, className: 'linha clicavel', role: 'button', tabIndex: 0, 'aria-label': 'Abrir ' + a.name,
         onClick: () => openAutomation(a.id),
         onKeyDown: (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openAutomation(a.id); } },
       }, [
-        e('span', { key: 'i', className: 'v2-linha-ic', style: { background: a.color + '22' } }, Icon(a.icon, 17, a.color)),
-        e('div', { key: 'n', className: 'v2-linha-nome' }, [e('b', { key: 'b' }, a.name), e('small', { key: 's' }, a.description || 'Sem descrição')]),
-        e('div', { key: 'c', className: 'v2-linha-cats' }, cats.map((c) => e('span', {
-          key: c.key, style: { background: c.color + '22', color: 'color-mix(in srgb, ' + c.color + ' var(--chip-mix), var(--text))' },
-        }, c.label))),
-        e('span', { key: 's', className: 'v2-status ' + (STATUS_META[a.status] ? a.status : 'checking') }, [e('i', { key: 'i', 'aria-hidden': true }), meta.label]),
+        e('span', { key: 'i', className: 'auto-ic' }, Icon(a.icon, 18, a.color)),
+        e('div', { key: 'n', className: 'nome' }, [e('b', { key: 'b' }, a.name), e('small', { key: 's' }, a.description || 'Sem descrição')]),
+        e('div', { key: 'c', className: 'chips some' }, cats.map(chipCategoria)),
+        e('span', { key: 's', className: 'pill ' + (a.status === 'online' ? 'pos' : a.status === 'offline' ? 'neg' : 'warn') }, (STATUS_META[a.status] || STATUS_META.checking).label),
         podeGerenciar ? e('button', {
-          key: 'e', type: 'button', className: 'icon-btn v2-linha-editar', title: 'Editar', 'aria-label': 'Editar ' + a.name,
+          key: 'e', type: 'button', className: 'icone-btn', title: 'Editar', 'aria-label': 'Editar ' + a.name,
           onClick: (ev) => { ev.stopPropagation(); openEditModal({ ...a, url: urlReal(a) }); },
         }, Icon('Pencil', 14)) : null,
       ]);
     }
     const cardGrid = (key, list) => (visaoPainel === 'lista'
-      ? e('div', { key, className: 'v2-lista' }, list.map(buildLinha))
-      : e('div', { key, style: sx('display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px') }, list.map(buildCard)));
-    const dbSection = dbList.length ? e('section', { key: 'db', className: 'db-section' }, [
-      e('div', { key: 'head', className: 'db-section-head' }, [
-        e('div', { key: 'icon', className: 'db-section-icon' }, Icon('Database', 18, 'var(--db-color)')),
-        e('div', { key: 'txt', style: { minWidth: 0 } }, [
-          e('div', { key: 't', style: sx('font-weight:600;font-size:15px;letter-spacing:-0.01em') }, 'Banco de Dados'),
-          e('div', { key: 's', style: sx('font-size:12.5px;color:var(--muted);margin-top:2px') }, 'Rotinas que alimentam e mantêm o banco-central.'),
-        ]),
-        e('span', { key: 'count', className: 'db-section-count' }, dbList.length + (dbList.length === 1 ? ' automação' : ' automações')),
+      ? e('div', { key, className: 'cartao' }, e('div', { className: 'linhas' }, list.map(buildLinha)))
+      : e('div', { key, className: 'autos' }, list.map(buildCard)));
+    const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+    const dbSection = dbList.length ? e('section', { key: 'db', className: 'secao banco', 'aria-labelledby': 't-banco' }, [
+      e('header', { key: 'h' }, [
+        e('div', { key: 't' }, [e('h2', { key: 'h', id: 't-banco' }, 'Banco de Dados'), e('p', { key: 'p' }, 'Rotinas que alimentam e mantêm o banco-central.')]),
+        e('span', { key: 'n', className: 'pill' }, plural(dbList.length, 'automação', 'automações')),
       ]),
       cardGrid('grid', dbList),
     ]) : null;
 
-    const panelBody = e('div', { style: sx('padding:28px 24px 96px;max-width:1200px;margin:0 auto') }, [
-      e('div', { key: 'head', style: sx('display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px') }, [
-        e('h1', { key: 't', onDoubleClick: toggleTheme, style: sx('font-weight:600;font-size:20px;line-height:26px;margin:0;user-select:none') }, 'Automações'),
-        e('div', { key: 's', style: sx('display:flex;align-items:center;gap:12px;flex-wrap:wrap') }, [
-          e('span', { key: 't', style: { color: 'var(--muted-soft)', fontSize: 12.5 } }, total + ' automações · ' + online + ' online · ' + offline + ' offline'),
-          e('div', { key: 'v', className: 'exu-seg', role: 'group', 'aria-label': 'Exibição das automações' }, [
-            e('button', { key: 'g', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'false' : 'true', onClick: () => trocarVisao('grade') }, [Icon('LayoutDashboard', 13, 'currentColor'), ' Cartões']),
-            e('button', { key: 'l', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista') }, [Icon('FileText', 13, 'currentColor'), ' Lista']),
+    const panelBody = e('div', { className: 'coluna' }, [
+      e('div', { key: 'head', className: 'titulo' }, [
+        e('div', { key: 't' }, [
+          e('h1', { key: 'h', onDoubleClick: toggleTheme, style: { userSelect: 'none' } }, 'Automações'),
+          e('p', { key: 'p', className: 'sub' }, plural(total, 'automação', 'automações') + ', ' + online + ' online, ' + offline + ' offline.'),
+        ]),
+        e('div', { key: 'a', className: 'acoes' }, [
+          e('div', { key: 'v', className: 'segmentado', role: 'group', 'aria-label': 'Exibição das automações' }, [
+            e('button', { key: 'g', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'false' : 'true', onClick: () => trocarVisao('grade') }, [ic('grade', 14), 'Cartões']),
+            e('button', { key: 'l', type: 'button', 'aria-pressed': visaoPainel === 'lista' ? 'true' : 'false', onClick: () => trocarVisao('lista') }, [ic('lista', 14), 'Lista']),
           ]),
+          podeGerenciar ? e('button', { key: 'n', type: 'button', className: 'btn primario', onClick: openNewModal }, [ic('mais', 14), 'Nova automação']) : null,
         ]),
       ]),
       !automationsLoaded
-        ? e('div', { key: 'loading', style: sx('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 20px;color:var(--muted-soft)') }, [
-            e('div', { key: 'spin', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 26, 'var(--accent)')),
-            e('div', { key: 't', style: { fontSize: 13.5 } }, 'Carregando automações…'),
-          ])
+        ? e('div', { key: 'loading', className: 'carregando' }, [e('span', { key: 's', style: { display: 'flex', animation: 'spin 1s linear infinite' } }, Icon('Loader2', 20, 'currentColor')), 'Carregando automações…'])
         : visible.length > 0
-        ? e('div', { key: 'groups' }, [mainList.length ? cardGrid('main', mainList) : null, dbSection])
-        : e('div', { key: 'empty', style: sx('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 20px;color:var(--muted-soft);text-align:center') }, [
-            Icon('Inbox', 34, 'var(--muted-soft)', 1.3),
-            e('div', { key: 't', style: { fontSize: 14 } }, q ? 'Nenhuma automação encontrada' : 'Nenhuma automação cadastrada'),
-          ]),
+          ? e('div', { key: 'groups' }, [mainList.length ? cardGrid('main', mainList) : null, dbSection])
+          : e('p', { key: 'empty', className: 'vazio' }, q ? 'Nenhuma automação encontrada.' : 'Nenhuma automação cadastrada.'),
     ]);
 
     // ---- viewer (no topbar — a floating button exposes the actions instead) ----
@@ -1047,19 +1063,13 @@
     // ---- confirm dialog ----
     let confirmModal = null;
     if (confirmDialog) {
-      confirmModal = e('div', { className: 'v1-veu', onClick: () => setConfirmDialog(null), style: sx('position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(3px);z-index:70;display:flex;align-items:center;justify-content:center;padding:16px') }, [
-        e('div', { key: 'box', onClick: (ev) => ev.stopPropagation(), style: sx('width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px -12px rgba(0,0,0,0.16);animation:modalIn 0.15s ease both;padding:20px') }, [
-          e('div', { key: 't', style: sx("font-weight:600;font-size:15px;margin-bottom:8px") }, confirmDialog.title),
-          e('div', { key: 'm', style: sx('color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:18px') }, confirmDialog.message),
-          e('div', { key: 'actions', style: sx('display:flex;gap:10px') }, [
-            e('button', { key: 'cancel', className: 'btn-secondary', onClick: () => setConfirmDialog(null), style: sx('flex:1;padding:10px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer') }, 'Cancelar'),
-            e('button', {
-              key: 'confirm', className: confirmDialog.danger ? 'btn-danger' : 'btn-primary', onClick: confirmDialog.onConfirm,
-              style: { flex: 1, padding: 10, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', background: confirmDialog.danger ? 'var(--error)' : 'var(--accent)', color: confirmDialog.danger ? '#fff' : 'var(--bg)' },
-            }, confirmDialog.confirmLabel || 'Confirmar'),
-          ]),
-        ]),
-      ]);
+      confirmModal = e(window.ExemploUI.Modal, {
+        titulo: confirmDialog.title, descricao: confirmDialog.message, perigo: confirmDialog.danger, largura: 440, fechar: () => setConfirmDialog(null),
+        rodape: [
+          e('button', { key: 'c', type: 'button', className: 'btn texto', onClick: () => setConfirmDialog(null) }, 'Cancelar'),
+          e('button', { key: 'o', type: 'button', className: 'btn primario', onClick: confirmDialog.onConfirm }, confirmDialog.confirmLabel || 'Confirmar'),
+        ],
+      });
     }
 
     // ---- GLPI quick-ticket floating button + widget (Messenger-style popup: no backdrop, opens/closes over the corner) ----
@@ -1276,7 +1286,7 @@
       })
     );
 
-    return e('div', { style: sx("height:100vh;width:100%;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:var(--font-sans);overflow:hidden") }, [
+    return e('div', { className: 'v1-app', style: sx("height:100vh;width:100%;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:var(--font-sans);overflow:hidden") }, [
       header,
       e('div', { key: 'main', style: sx('flex:1;position:relative;overflow:hidden'), onClick: closeMenus }, [
         e('div', { key: 'panel', style: { display: abaFixaAtiva('painel') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, panelBody),
@@ -1284,10 +1294,10 @@
           ? e('div', { key: 'chamados', style: { display: abaFixaAtiva('chamados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ChamadosView))
           : null,
         abasMontadas.admin && window.AdminView
-          ? e('div', { key: 'admin', style: { display: abaFixaAtiva('admin') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.AdminView))
+          ? e('div', { key: 'admin', style: { display: abaFixaAtiva('admin') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.AdminView, { key: recargas.admin || 0 }))
           : null,
         abasMontadas.resultados && window.ResultadosView
-          ? e('div', { key: 'resultados', style: { display: abaFixaAtiva('resultados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ResultadosView))
+          ? e('div', { key: 'resultados', style: { display: abaFixaAtiva('resultados') ? 'block' : 'none', height: '100%', overflowY: 'auto' } }, e(window.ResultadosView, { key: recargas.resultados || 0 }))
           : null,
         ...viewerNodes,
       ]),
