@@ -84,3 +84,32 @@ table th { font-size: 12px !important; font-weight: 400 !important; color: var(-
 table td { border-bottom-color: var(--border) !important; }
 .v2f-sit, .v2f-tag { height: 22px; padding: 0 9px; font-size: 12px; font-weight: 500; }
 details.v2f-tec summary, .tecnico summary { color: var(--muted); }
+
+/* ícone do título na cor do cadastro, sem fundo (o skin.js pinta um fundo colado no ícone) */
+.v2-icone { background: none !important; box-shadow: none !important; width: auto !important; height: auto !important; }
+.v2-icone svg { width: 24px; height: 24px; }
+
+/* formulário à esquerda e Resumo à direita, que desce junto com a página (skin-v1.js) */
+.v1-exec { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 14px; align-items: start; }
+.v1-exec > main.grid { grid-template-columns: minmax(0, 1fr) !important; margin: 0; }
+.v1-resumo, .v2a .v2f-grade > section.card, .v2f .v2f-grade > :last-child { position: sticky; top: 16px; }
+.v1-resumo h2 { margin-bottom: 14px; }
+.v1-resumo dl, .v2a-resumo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; margin: 0 0 18px; padding: 0; background: none; font-size: 14px; }
+.v1-resumo dt, .v2a-resumo dt { color: var(--muted-soft); }
+.v1-resumo dd, .v2a-resumo dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+.v1-resumo .acoes-linha { margin: 0; }
+.v1-resumo .primary-btn, .v2a #v2aIniciar .primary-btn { width: 100%; justify-content: center; }
+.v1-resumo .hint { margin: 10px 0 0; }
+.v2a .v2f-grade { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); }
+@media (max-width: 860px) {
+  .v1-exec, .v2a .v2f-grade { grid-template-columns: minmax(0, 1fr); }
+  .v1-resumo, .v2a .v2f-grade > section.card, .v2f .v2f-grade > :last-child { position: static; }
+}
+
+/* tema claro: página cinza clara e cartões brancos (sem borda, a separação é pela claridade) */
+:root:not([data-theme="dark"]) { --bg: #f3f4f6; --card: #ffffff; --field-bg: #ffffff; --log-bg: #f3f4f6; --accent-strong: #0a0a0a; --on-accent: #ffffff; --primary: #0a0a0a; --primary-hover: #2b2f36; --primary-fg: #ffffff; }
+/* cartões de escolha e abas do formulário (Colar lista ou planilha, modo de execução): marcados em neutro, como na maquete */
+.choice-card, .tab-btn { border: 1px solid transparent !important; border-radius: 12px !important; background: var(--bg) !important; box-shadow: none !important; transform: none !important; }
+.choice-card:hover, .tab-btn:hover { background: var(--hover-bg) !important; }
+.choice-card:has(input:checked), .tab-btn.active { background: var(--v1-raised) !important; border-color: var(--muted) !important; color: var(--text) !important; }
+.choice-card:has(input:checked) *, .tab-btn.active * { color: inherit; }

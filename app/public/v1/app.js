@@ -1278,7 +1278,14 @@
     }
 
     const glpiPodeEnviar = glpiAba === 'novo' && glpiToken && !glpiLookupLoading && !glpiLookupError && !glpiSucesso;
-    const glpiModal = glpiOpen ? e('div', { ref: glpiPanelRef, className: 'v2-glpi v3-glpi', role: 'dialog', 'aria-label': 'Chamado no GLPI', style: posGlpi.lado === 'dir' ? { right: 20, left: 'auto', bottom: posGlpi.baixo + 56 } : { left: 20, right: 'auto', bottom: posGlpi.baixo + 56 } }, [
+    // a janela do chamado abre em cima do botão; com o botão no alto (sem espaço em cima), abre para baixo
+    function estiloPainelGlpi() {
+      const lado = posGlpi.lado === 'dir' ? { right: 20, left: 'auto' } : { left: 20, right: 'auto' };
+      const topoBotao = window.innerHeight - posGlpi.baixo - 48;
+      if (topoBotao >= Math.min(560, window.innerHeight * 0.6)) return { ...lado, bottom: posGlpi.baixo + 56 };
+      return { ...lado, top: topoBotao + 56, bottom: 'auto', maxHeight: Math.max(240, window.innerHeight - topoBotao - 72) };
+    }
+    const glpiModal = glpiOpen ? e('div', { ref: glpiPanelRef, className: 'v2-glpi v3-glpi', role: 'dialog', 'aria-label': 'Chamado no GLPI', style: estiloPainelGlpi() }, [
       e('div', { key: 'c', className: 'exu-modal-cab' }, [
         e('span', { key: 'i', className: 'glpi-head-icon' }, Icon('Headset', 16, 'currentColor')),
         e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [e('h3', { key: 'h' }, 'Chamado no GLPI'), e('p', { key: 'p' }, 'Abre na entidade Sistemas com o seu usuário do GLPI.')]),

@@ -68,6 +68,8 @@ test('v1: com ?v1=1 a página também recebe o desenho da maquete (skin-v1.css),
   try {
     const corpo = await (await fetch(`${s.base}/a/7/?v2=1&v1=1`)).text();
     assert.match(corpo, /<link rel="stylesheet" href="\/__arx-v2\/skin\.css"><link rel="stylesheet" href="\/__arx-v2\/skin-v1\.css">/);
+    assert.match(corpo, /<script src="\/__arx-v2\/skin\.js" defer><\/script><script src="\/__arx-v2\/skin-v1\.js" defer><\/script>/);
+    assert.equal((await fetch(`${s.base}/__arx-v2/skin-v1.js`)).status, 200);
     assert.equal(s.vistos[0], '/');
     assert.doesNotMatch(await (await fetch(`${s.base}/a/7/?v2=1`)).text(), /skin-v1/);
     const css = await fetch(`${s.base}/__arx-v2/skin-v1.css`);

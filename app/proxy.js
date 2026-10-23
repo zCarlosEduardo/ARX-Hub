@@ -47,10 +47,11 @@ const ARQUIVOS_V2 = {
   'skin.js': [path.join(PASTA_V2, 'skin.js'), 'application/javascript; charset=utf-8'],
   // Hub v1 (?v1=1): o desenho da maquete por cima do skin.css
   'skin-v1.css': [path.join(PASTA_V2, 'skin-v1.css'), 'text/css; charset=utf-8'],
+  'skin-v1.js': [path.join(PASTA_V2, 'skin-v1.js'), 'application/javascript; charset=utf-8'],
   'icons.js': [path.join(__dirname, 'public', 'icons.js'), 'application/javascript; charset=utf-8'],
 };
 // darkreader-lock: extensões de modo escuro (Dark Reader e parecidas) não repintam a tela; o tema vem do Hub
-const tagsV2 = (v1) => '<meta name="darkreader-lock"><link rel="stylesheet" href="/__arx-v2/skin.css">' + (v1 ? '<link rel="stylesheet" href="/__arx-v2/skin-v1.css">' : '') + '<script src="/__arx-v2/skin.js" defer></script>';
+const tagsV2 = (v1) => '<meta name="darkreader-lock"><link rel="stylesheet" href="/__arx-v2/skin.css">' + (v1 ? '<link rel="stylesheet" href="/__arx-v2/skin-v1.css">' : '') + '<script src="/__arx-v2/skin.js" defer></script>' + (v1 ? '<script src="/__arx-v2/skin-v1.js" defer></script>' : '');
 
 function servirV2(req, res) {
   const nome = req.url.slice('/__arx-v2/'.length).split('?')[0];
