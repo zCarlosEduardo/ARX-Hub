@@ -1054,7 +1054,7 @@
     const abertosNaTela = lista.totalAbertos;
     const cabecalho = e('header', { key: 'head', className: 'exu-cab' }, [
       e('div', { key: 't' }, [
-        e('h2', { key: 'h' }, 'Chamados'),
+        e('h1', { key: 'h', className: 'v1-h1' }, 'Chamados'),
         e('p', { key: 'p' }, lista.usuario ? [
           (mostrarEntidade ? plural(lista.entidades.length, 'entidade', 'entidades') : 'Entidade ' + (lista.entidades[0] || 'Sistemas')) + ' · ' + plural(abertosNaTela, 'aberto', 'abertos') + ' · aprovação como ' + lista.usuario.nome,
           lista.em ? e('span', { key: 'em', title: (!lista.guardado && Cache.puro.textoTempos(lista.tempos)) || undefined }, ` · ${lista.guardado ? 'guardada às' : 'atualizado às'} ${lista.em.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`) : null,

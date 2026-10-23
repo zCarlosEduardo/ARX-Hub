@@ -1349,3 +1349,6 @@ body.v1-modal-aberto { overflow: hidden; }
 /* Banco de Dados: fundo liso, um tom acima, sem degradê */
 :root[data-theme="dark"] .db-section { background: var(--card) !important; border-color: transparent !important; }
 :root[data-theme="dark"] .db-section .card { background: var(--bg) !important; }
+/* o título da tela vira h1 (acessibilidade) com o mesmo tamanho do h2 de antes */
+h1.v1-h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.v1-aba, .v1-faixa .admin-btn { gap: 8px !important; }

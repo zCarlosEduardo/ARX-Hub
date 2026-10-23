@@ -465,7 +465,7 @@
     return e('div', { className: 'exu-tela' }, [
       e('header', { key: 'cab', className: 'exu-cab' }, [
         e('div', { key: 't' }, [
-          e('h2', { key: 'h' }, 'Resultados'),
+          e('h1', { key: 'h', className: 'v1-h1' }, 'Resultados'),
           e('p', { key: 'p' }, [(de.getTime() === ate.getTime() ? diaLongo(de) : diaLongo(de) + ' a ' + diaLongo(ate)), res.carregando && res.dados ? ' · atualizando…' : '']),
         ]),
         e('div', { key: 'a', className: 'exu-acoes' }, [
