@@ -141,15 +141,13 @@
         if (!campo || campo.tagName !== 'INPUT' || campo.dataset.v3Hub || !/pelo Hub/i.test(selo.textContent)) return;
         const campos = grupoDe(campo);
         campos.forEach((c) => { c.dataset.v3Hub = '1'; });
-        const ocultos = campos.flatMap(partes);
+        const ocultos = campos.flatMap(partes).concat(lembrarDoBloco(campo));
         const chip = document.createElement('div');
         chip.className = 'v3-hub-acesso';
         // o rótulo do campo pode ser o próprio oculto ou estar dentro do invólucro escondido
         const rotulo = campos.length === 1 && ocultos.map((el) => (el.tagName === 'LABEL' ? el : el.querySelector && el.querySelector('label'))).find(Boolean);
         const nome = rotulo ? rotulo.textContent.trim() + ' vem do Hub' : 'Acesso do Hub';
-        chip.innerHTML = '<span class="v3-hub-ok" aria-hidden="true">✓</span><span></span><button type="button" class="link-btn"></button>';
-        chip.children[1].textContent = nome;
-        chip.children[2].textContent = rotulo ? 'Usar outra' : 'Usar outro login';
+        preencherChip(chip, nome, rotulo ? 'Usar outra' : 'Usar outro login');
         const grupo = { campos, ocultos, chip, forcado: false };
         chip.querySelector('button').onclick = () => { grupo.forcado = true; mostrar(grupo, true); campos[0].focus(); };
         ocultos[0].parentNode.insertBefore(chip, ocultos[0]);
@@ -166,6 +164,59 @@
       });
       // o selo sumiu (cofre travado, login trocado): os campos voltam
       grupos.forEach((g) => { if (!g.forcado && !g.campos.some(temSeloDoHub)) mostrar(g, true); });
+      listasDoHub();
+    }
+    // "Lembrar neste navegador" e a explicação dele no mesmo bloco do login: com o login do Hub não há o que lembrar
+    function lembrarDoBloco(campo) {
+      const bloco = campo.closest('.painel-sistema, .card');
+      if (!bloco) return [];
+      const marca = Array.from(bloco.querySelectorAll('input[type="checkbox"]')).find((c) => !c.closest('.cred-row') && /lembrar/i.test((c.closest('label') || {}).textContent || ''));
+      if (!marca) return [];
+      const linha = marca.closest('.lembrar-row') || marca.closest('label');
+      const dica = linha.nextElementSibling && linha.nextElementSibling.matches('p.hint') && /lembrar|salv/i.test(linha.nextElementSibling.textContent) ? linha.nextElementSibling : null;
+      return [linha, dica].filter(Boolean);
+    }
+    function preencherChip(chip, nome, botao) {
+      chip.innerHTML = '<span class="v3-hub-ok" aria-hidden="true">✓</span><span></span><button type="button" class="link-btn"></button>';
+      chip.children[1].textContent = nome;
+      chip.children[2].textContent = botao;
+    }
+    // Lista de logins do SGA com as empresas de cada um (Bloqueio de usuário, Relatórios, Gerenciar permissões): com
+    // todos os logins vindos do Hub, o bloco inteiro (explicação, lista, Adicionar e Lembrar) dá lugar a um selo só,
+    // igual aos outros logins; "Usar outro login" mostra a lista de novo
+    const listas = new Map();
+    function listasDoHub() {
+      document.querySelectorAll('#sgaCredenciaisList').forEach((lista) => {
+        const linhas = Array.from(lista.querySelectorAll('.cred-row'));
+        const doHub = linhas.length > 0 && linhas.every((r) => Array.from(r.querySelectorAll('input')).some(temSeloDoHub));
+        let l = listas.get(lista);
+        if (!l) {
+          if (!doHub) return;
+          const pai = lista.parentElement;
+          let dica = lista.previousElementSibling;
+          if (dica && dica.classList.contains('hub-aviso')) dica = dica.previousElementSibling;
+          const lembrar = pai.querySelector('#lembrarSga');
+          const ocultos = [dica && dica.matches('p.hint') ? dica : null, lista, pai.querySelector('#sgaAddCredencial')].filter(Boolean).concat(lembrar ? lembrarDoBloco(lembrar) : []);
+          const chip = document.createElement('div');
+          chip.className = 'v3-hub-acesso';
+          ocultos[0].parentNode.insertBefore(chip, ocultos[0]);
+          l = { chip, ocultos, forcado: false };
+          listas.set(lista, l);
+        }
+        // só remonta o selo quando o texto muda (remontar a cada mudança da página faria o observador girar sem parar)
+        const nome = linhas.length > 1 ? 'Acesso do Hub (' + linhas.length + ' logins)' : 'Acesso do Hub';
+        if (l.nome !== nome) {
+          l.nome = nome;
+          preencherChip(l.chip, nome, 'Usar outro login');
+          l.chip.querySelector('button').onclick = () => { l.forcado = true; mostrarLista(l, true); };
+        }
+        const campos = l.forcado || !doHub;
+        if (l.campos !== campos) { l.campos = campos; mostrarLista(l, campos); }
+      });
+    }
+    function mostrarLista(l, campos) {
+      l.ocultos.forEach((el) => el.classList.toggle('v3-hub-oculto', !campos));
+      l.chip.hidden = campos;
     }
     function mostrar(g, campos) {
       g.ocultos.forEach((el) => el.classList.toggle('v3-hub-oculto', !campos));
