@@ -20,7 +20,8 @@ Para atualizar: baixe de novo pelo Hub, troque os arquivos da mesma pasta e cliq
 1. **Criar a senha mestra** (8 caracteres ou mais). Ela cifra os logins; sem ela não dá para recuperar o que foi
    guardado (em "Esqueci a senha" o cofre é apagado e os logins são cadastrados de novo).
 2. **Adicionar** cada login do SGA e marcar as empresas em que ele vale. Cada empresa fica num login só.
-3. Abra a tela de login de qualquer empresa do SGA: a extensão entra sozinha.
+3. Abra qualquer endereço do SGA: se cair na tela de login, a extensão cobre a tela com "Entrando no SGA…" e entra
+   sozinha, sem mostrar o formulário. Sem login para aquela empresa (ou travada), a tela de login aparece normal.
 
 - **Destravar** vale até fechar o navegador (ou até clicar em **Travar**). Travada, a tela de login mostra um aviso e
   nada é preenchido.
@@ -45,7 +46,9 @@ Para atualizar: baixe de novo pelo Hub, troque os arquivos da mesma pasta e cliq
 - `regras.js`: regras puras (empresa pela URL, login da empresa, erro de cookies, cofre). Testes em
   `app/test/extensao-sga.test.js` (`npm --prefix app test` no Hub).
 - `background.js`: service worker (entrega o login, apaga os cookies).
-- `conteudo.js`: roda nas páginas do SGA (entra sozinho, reage ao erro de cookies).
+- `cortina.js`: cobre a tela de login logo no começo (antes de ela aparecer).
+- `conteudo.js`: roda nas páginas do SGA (entra sozinho, tira a cortina quando não vai entrar, reage ao erro de cookies).
+- `icones/`: logo (`logo.svg`) e os PNGs que o Chrome pede (16, 32, 48 e 128 px).
 - `popup.*`: a janela da extensão.
 - `empresasSga.js` + `modulo.js`: a lista de empresas, carregada como script. É cópia de
   `ARX-Automacoes/shared/sga/empresasSga.js`: empresa nova no kit, copie para cá também.

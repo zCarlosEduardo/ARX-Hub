@@ -6,6 +6,9 @@
   const EMPRESAS = module.exports.EMPRESAS_SGA;
   const tela = document.getElementById('tela');
   const travarBtn = document.getElementById('travar');
+  const estado = document.getElementById('estado');
+  document.getElementById('versao').textContent = 'Versão ' + chrome.runtime.getManifest().version;
+  const situacao = (texto, classe) => { estado.textContent = texto; estado.className = 'estado ' + (classe || ''); };
   let chave = null; // CryptoKey do cofre aberto
   let pacote = null;
   let logins = [];
@@ -32,6 +35,7 @@
   // ---------- sem cofre: criar a senha mestra ----------
   function telaCriar() {
     travarBtn.hidden = true;
+    situacao('Sem cofre');
     const s1 = h('input', { type: 'password', autocomplete: 'new-password' });
     const s2 = h('input', { type: 'password', autocomplete: 'new-password' });
     const erro = h('div');
@@ -62,6 +66,7 @@
   // ---------- cofre travado: destravar (vale até fechar o navegador) ----------
   function telaTravada() {
     travarBtn.hidden = true;
+    situacao('Travado', 'travado');
     const senha = h('input', { type: 'password', autocomplete: 'current-password' });
     const erro = h('div');
     mostrar(h('form', {
@@ -99,13 +104,19 @@
   // ---------- cofre aberto: logins, entrar sozinho e cookies ----------
   async function telaAberta(aviso) {
     travarBtn.hidden = false;
+    situacao('Destravado: entra sozinho no SGA', 'aberto');
     const { auto } = await chrome.storage.local.get('auto');
     const lista = logins.length
       ? logins.map((l, i) => h('div', { className: 'login' }, [
-          h('div', { className: 'nome' }, [h('b', {}, [l.usuario]), h('small', {}, [l.empresas.length ? l.empresas.map(nomeEmpresa).join(', ') : 'Nenhuma empresa marcada'])]),
+          h('span', { className: 'avatar', 'aria-hidden': 'true' }, [l.usuario.slice(0, 1)]),
+          h('div', { className: 'nome' }, [
+            h('b', {}, [l.usuario]),
+            // até 4 empresas em selos; o resto vira "+N"
+            h('div', { className: 'selos' }, l.empresas.slice(0, 4).map((c) => h('span', { className: 'selo' }, [nomeEmpresa(c)])).concat(l.empresas.length > 4 ? [h('span', { className: 'selo', title: l.empresas.slice(4).map(nomeEmpresa).join(', ') }, ['+' + (l.empresas.length - 4)])] : [])),
+          ]),
           h('button', { type: 'button', className: 'texto', onclick: () => telaLogin(i) }, ['Editar']),
         ]))
-      : [h('p', { className: 'vazio' }, ['Nenhum login guardado.'])];
+      : [h('div', { className: 'vazio' }, [h('b', {}, ['Nenhum login guardado']), h('span', { className: 'dica' }, ['Adicione o login do SGA e marque as empresas em que ele vale.'])])];
     const autoChave = h('input', { type: 'checkbox', className: 'chave', checked: auto !== false, onchange: (ev) => chrome.storage.local.set({ auto: ev.target.checked }) });
     const resultado = h('div');
     mostrar(
@@ -164,7 +175,7 @@
       h('h2', {}, [i >= 0 ? 'Editar login' : 'Novo login']),
       h('label', {}, ['Usuário do SGA', usuario]),
       h('label', {}, ['Senha do SGA', senha]),
-      h('div', { className: 'campo' }, [h('p', { className: 'dica', style: 'margin-bottom:6px' }, ['Empresas em que esse login vale']), h('div', { className: 'empresas' }, marcas)]),
+      h('div', { className: 'campo' }, [h('p', { className: 'rotulo-empresas' }, ['Empresas em que esse login vale']), h('div', { className: 'empresas' }, marcas)]),
       erro,
       h('div', { className: 'acoes' }, [
         i >= 0 ? h('button', { type: 'button', className: 'texto perigo', onclick: async () => { logins.splice(i, 1); await salvar(); telaAberta('Login removido.'); } }, ['Remover']) : null,

@@ -33,12 +33,14 @@
 
   // fora da tela de login a entrada deu certo: a próxima tela de login (saiu, a sessão caiu) pode entrar sozinha de novo
   if (!/\/v5\/login\.php$/i.test(location.pathname)) return sessionStorage.removeItem('arx-sga-login-' + base);
+  // a cortina (cortina.js) cobre a tela de login; sai quando a extensão não vai entrar ou se o login não passar
+  const tirarCortina = () => { const c = document.getElementById('arx-sga-cortina'); if (c) c.remove(); };
   const r = await pedir({ tipo: 'credencial' });
-  if (!r || r.desligado || r.desconhecida) return;
-  if (r.travado) return aviso('destrave a extensão (ícone ARX SGA) para entrar sozinho.');
-  if (r.semLogin) return aviso('não há login salvo para esta empresa.');
-  if (!r.login) return;
-  if (jaTentou('login')) return aviso('o login salvo não entrou. Confira usuário e senha na extensão.');
+  if (!r || r.desligado || r.desconhecida || !(r.login || r.travado || r.semLogin)) return tirarCortina();
+  if (r.travado) { tirarCortina(); return aviso('destrave a extensão (ícone ARX SGA) para entrar sozinho.'); }
+  if (r.semLogin) { tirarCortina(); return aviso('não há login salvo para esta empresa.'); }
+  if (jaTentou('login')) { tirarCortina(); return aviso('o login salvo não entrou. Confira usuário e senha na extensão.'); }
+  setTimeout(tirarCortina, 10000); // ficou na tela de login (senha recusada, tela diferente): mostra o que o SGA disse
 
   const visivel = (el) => !!el && !!(el.offsetWidth || el.offsetHeight);
   // espera o elemento aparecer (sinal observável, sem tempo fixo); null depois do prazo
@@ -59,7 +61,7 @@
   if (aviso1) aviso1.click();
   const usuario = await esperar('#usuario', 10000);
   const senha = document.querySelector('#senha');
-  if (!usuario || !senha) return;
+  if (!usuario || !senha) return tirarCortina();
   preencher(usuario, r.login.usuario);
   preencher(senha, r.login.senha);
   document.body.click(); // "clicar fora" dispara a validação dos campos, como os robôs fazem

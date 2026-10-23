@@ -1,53 +1,79 @@
 /* Janela da extensão no desenho do Hub v1: fundo quase preto, superfícies um tom acima, controles em pílula, o principal
-   branco. Segue o tema do sistema (claro ou escuro). */
+   branco e o verde da ARX só na logo e na situação. Segue o tema do sistema (claro ou escuro). */
 :root {
   color-scheme: light dark;
   --bg: #f3f4f6; --card: #ffffff; --raised: #e8e9ec; --rule: #e3e5e8; --control: #cfd3d8;
   --text: #0a0a0a; --muted: #4a4f57; --faint: #6b6b6b; --primary: #0a0a0a; --primary-fg: #ffffff;
-  --ok-bg: #e4f5ea; --ok: #146c35; --erro-bg: #fde8e8; --erro: #a3000a;
+  --ok-bg: #e4f5ea; --ok: #146c35; --erro-bg: #fde8e8; --erro: #a3000a; --aviso-bg: #fbf0dc; --aviso: #7a3d05;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0c0d0f; --card: #15171a; --raised: #24272b; --rule: #1f2226; --control: #3a3e44;
     --text: #ffffff; --muted: #b4b4b4; --faint: #949494; --primary: #ffffff; --primary-fg: #000000;
-    --ok-bg: #15281d; --ok: #5bd68a; --erro-bg: #2c1a1d; --erro: #ff7a80;
+    --ok-bg: #15281d; --ok: #5bd68a; --erro-bg: #2c1a1d; --erro: #ff7a80; --aviso-bg: #2b2414; --aviso: #e5a93b;
   }
 }
 * { box-sizing: border-box; }
-body { width: 380px; margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 14px/20px "Geist", system-ui, sans-serif; }
-h1 { margin: 0; font-size: 16px; font-weight: 600; }
-h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
-p { margin: 0; }
-.topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+body { width: 384px; margin: 0; background: var(--bg); color: var(--text); font: 14px/20px "Geist", "Segoe UI", system-ui, sans-serif; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 15px; line-height: 20px; font-weight: 600; }
+h2 { font-size: 14px; font-weight: 600; }
+
+/* cabeçalho: logo, nome, situação do cofre e Travar */
+.topo { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--rule); background: var(--card); }
+.topo img { flex: none; border-radius: 8px; }
+.marca { flex: 1; min-width: 0; }
+.estado { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--faint); }
+.estado::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.estado.aberto { color: var(--ok); }
+.estado.travado { color: var(--aviso); }
+main { padding: 12px 16px; display: grid; gap: 10px; }
+.rodape { display: flex; justify-content: space-between; gap: 8px; padding: 0 16px 14px; color: var(--faint); font-size: 11px; line-height: 14px; }
+
+/* cartões, campos e botões */
 .caixa { padding: 14px; border-radius: 16px; background: var(--card); }
-.caixa + .caixa { margin-top: 10px; }
+.caixa > .dica { margin-top: 4px; }
 .dica { color: var(--faint); font-size: 12px; line-height: 16px; }
 label { display: grid; gap: 6px; font-weight: 500; }
-label + label, .campo + .campo { margin-top: 10px; }
-input[type="text"], input[type="password"] { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--control); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; }
+form label { margin-top: 12px; }
+input[type="text"], input[type="password"] { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--control); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-weight: 400; }
 input:focus-visible, button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
 button:hover:not(:disabled) { background: var(--control); }
 button.primario { background: var(--primary); color: var(--primary-fg); }
-button.texto { background: none; padding: 0 8px; color: var(--muted); }
+button.primario:hover:not(:disabled) { opacity: 0.88; background: var(--primary); }
+button.texto { background: none; padding: 0 10px; color: var(--muted); }
 button.texto:hover { background: var(--raised); color: var(--text); }
 button.perigo { color: var(--erro); }
-.linha { display: flex; align-items: center; gap: 8px; }
-.linha .esp { flex: 1; }
-.acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
-.login { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
-.login:first-of-type { border-top: 0; }
+.linha { display: flex; align-items: center; gap: 10px; }
+.linha .esp { flex: 1; min-width: 0; }
+.acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+
+/* logins: avatar com a inicial, usuário e as empresas em selos */
+.login { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--rule); }
+.caixa > .linha + .login { border-top: 0; margin-top: 4px; }
+.avatar { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--ok-bg); color: var(--ok); font-size: 13px; font-weight: 600; text-transform: uppercase; }
 .login .nome { flex: 1; min-width: 0; }
 .login b { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.login small { display: block; color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empresas { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; max-height: 180px; overflow-y: auto; padding: 6px 10px; border-radius: 10px; background: var(--bg); }
-.empresas label, .empresas label + label { display: flex; align-items: center; gap: 8px; height: 28px; font-weight: 400; margin: 0; }
+.selos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.selo { height: 20px; padding: 0 8px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 11px; line-height: 20px; white-space: nowrap; }
+.vazio { display: grid; gap: 4px; padding: 14px 0 4px; text-align: center; color: var(--faint); }
+
+/* empresas do login (cada empresa num login só) */
+.empresas { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; max-height: 188px; overflow-y: auto; padding: 6px 10px; border-radius: 12px; background: var(--bg); }
+.empresas label, form .empresas label { display: flex; align-items: center; gap: 8px; height: 28px; margin: 0; font-weight: 400; }
+.empresas input { accent-color: var(--text); }
 .empresas .usada { color: var(--faint); }
+.rotulo-empresas { margin: 12px 0 6px; font-weight: 500; }
+
+/* chave liga/desliga */
 .chave { appearance: none; position: relative; width: 34px; height: 20px; margin: 0; border-radius: 999px; background: var(--control); cursor: pointer; flex: none; }
 .chave::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 140ms ease; }
 .chave:checked { background: var(--primary); }
 .chave:checked::after { background: var(--primary-fg); transform: translateX(14px); }
+label.linha { display: flex; margin: 0; font-weight: 500; cursor: pointer; }
+
 .msg { margin-top: 10px; padding: 8px 12px; border-radius: 12px; font-size: 13px; }
 .msg.ok { background: var(--ok-bg); color: var(--ok); }
 .msg.erro { background: var(--erro-bg); color: var(--erro); }
-.vazio { color: var(--faint); padding: 6px 0; }
+@media (prefers-reduced-motion: reduce) { .chave::after { transition: none; } }
