@@ -1835,3 +1835,9 @@ button.exu-kpi:hover { background: var(--hover); }
   .exu-cab { flex-wrap: wrap; }
   .exu-cab .exu-acoes { flex: 1 1 100%; justify-content: flex-start; }
 }
+/* X de fechar a aba da automação: botão sem a borda padrão do navegador */
+.aba .fechar { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.aba .fechar:focus-visible { outline: 2px solid var(--ring-border); outline-offset: 1px; }
+/* botão do GLPI arrastável */
+.glpi-fab { touch-action: none; }
+.glpi-fab.arrastando { cursor: grabbing; transform: none; transition: none; }

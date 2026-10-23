@@ -222,7 +222,7 @@
     const pedirPasse = (id) => api('/api/automations/' + id + '/passe', { method: 'POST' }).then((r) => r.passe).catch(() => '');
     // v3: as automações ganham a tela nova (o proxy injeta o estilo com ?v2=1); icone e cor são os do cadastro no Hub,
     // para o título da automação ficar igual ao cartão
-    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
+    const comPasse = (a, passe) => urlProxy(a) + '?v2=1&v1=1&icone=' + encodeURIComponent(a.icon || '') + '&cor=' + encodeURIComponent(a.color || '') +
       (passe ? '&passe=' + encodeURIComponent(passe) : '');
     function abrirEmNovaAba(a) {
       const janela = window.open('', '_blank'); // abre já, no clique; depois do await o navegador bloquearia
@@ -273,6 +273,15 @@
     const [glpiHistoryError, setGlpiHistoryError] = useState(null);
     const glpiPanelRef = useRef(null);
     const glpiFabRef = useRef(null);
+    // O botão do GLPI pode ser arrastado: ao soltar, gruda no lado (esquerdo ou direito) mais perto, na altura em que
+    // ficou; o lugar fica salvo neste navegador. Shift + seta esquerda ou direita troca de lado pelo teclado.
+    const [posGlpi, setPosGlpi] = useState(() => {
+      try { const p = JSON.parse(localStorage.getItem('arxhub_v1_glpi_pos')); if (p && (p.lado === 'esq' || p.lado === 'dir') && p.baixo >= 0) return p; } catch (err) { /* sem posição salva: canto de baixo à esquerda */ }
+      return { lado: 'esq', baixo: 20 };
+    });
+    const mudarPosGlpi = (p) => { setPosGlpi(p); gravarLocal('arxhub_v1_glpi_pos', JSON.stringify(p)); };
+    const arrastoGlpi = useRef(null);
+    const [pontoArrasto, setPontoArrasto] = useState(null);
 
     const searchRef = useRef(null);
     const viewerRef = useRef(null);
@@ -1079,8 +1088,26 @@
     // Botão do GLPI: pílula na cor primária; no hover expande mostrando
     // "Abrir chamado"; aberto, o ícone vira um X (troca com animação).
     const glpiFab = e('button', {
-      key: 'glpi-fab', ref: glpiFabRef, title: glpiOpen ? 'Fechar' : 'Abrir chamado no GLPI', 'aria-label': glpiOpen ? 'Fechar chamado no GLPI' : 'Abrir chamado no GLPI', 'aria-expanded': glpiOpen ? 'true' : 'false',
-      className: 'glpi-fab' + (glpiOpen ? ' open' : ''), onClick: toggleGlpiWidget,
+      key: 'glpi-fab', ref: glpiFabRef, title: glpiOpen ? 'Fechar' : 'Abrir chamado no GLPI (arraste para mudar de lugar)', 'aria-label': glpiOpen ? 'Fechar chamado no GLPI' : 'Abrir chamado no GLPI', 'aria-expanded': glpiOpen ? 'true' : 'false',
+      className: 'glpi-fab' + (glpiOpen ? ' open' : '') + (pontoArrasto ? ' arrastando' : ''),
+      // um arrasto não vira clique: o clique só abre quando o botão não saiu do lugar
+      onClick: () => { if (arrastoGlpi.current && arrastoGlpi.current.moveu) { arrastoGlpi.current = null; return; } toggleGlpiWidget(); },
+      onPointerDown: (ev) => { if (ev.button !== 0) return; arrastoGlpi.current = { x0: ev.clientX, y0: ev.clientY, moveu: false }; ev.currentTarget.setPointerCapture(ev.pointerId); },
+      onPointerMove: (ev) => {
+        const a = arrastoGlpi.current;
+        if (!a || (!a.moveu && Math.hypot(ev.clientX - a.x0, ev.clientY - a.y0) < 6)) return;
+        a.moveu = true;
+        setPontoArrasto({ x: ev.clientX, y: ev.clientY });
+      },
+      onPointerUp: (ev) => {
+        const a = arrastoGlpi.current;
+        if (!a || !a.moveu) { arrastoGlpi.current = null; return; }
+        setPontoArrasto(null);
+        mudarPosGlpi({ lado: ev.clientX < window.innerWidth / 2 ? 'esq' : 'dir', baixo: Math.round(Math.min(Math.max(window.innerHeight - ev.clientY - 24, 12), window.innerHeight - 140)) });
+      },
+      onKeyDown: (ev) => { if (ev.shiftKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) { ev.preventDefault(); mudarPosGlpi({ ...posGlpi, lado: ev.key === 'ArrowLeft' ? 'esq' : 'dir' }); } },
+      style: pontoArrasto ? { left: pontoArrasto.x - 24, top: pontoArrasto.y - 24, right: 'auto', bottom: 'auto' }
+        : posGlpi.lado === 'dir' ? { right: 20, left: 'auto', bottom: posGlpi.baixo } : { left: 20, right: 'auto', bottom: posGlpi.baixo },
     }, [
       e('span', { key: glpiOpen ? 'x' : 'headset', className: 'glpi-fab-icon' }, glpiOpen ? Icon('X', 18, 'currentColor', 2) : Icon('Headset', 19, 'currentColor')),
       e('span', { key: 'label', className: 'glpi-fab-label' }, 'Abrir chamado'),
@@ -1251,7 +1278,7 @@
     }
 
     const glpiPodeEnviar = glpiAba === 'novo' && glpiToken && !glpiLookupLoading && !glpiLookupError && !glpiSucesso;
-    const glpiModal = glpiOpen ? e('div', { ref: glpiPanelRef, className: 'v2-glpi v3-glpi', role: 'dialog', 'aria-label': 'Chamado no GLPI' }, [
+    const glpiModal = glpiOpen ? e('div', { ref: glpiPanelRef, className: 'v2-glpi v3-glpi', role: 'dialog', 'aria-label': 'Chamado no GLPI', style: posGlpi.lado === 'dir' ? { right: 20, left: 'auto', bottom: posGlpi.baixo + 56 } : { left: 20, right: 'auto', bottom: posGlpi.baixo + 56 } }, [
       e('div', { key: 'c', className: 'exu-modal-cab' }, [
         e('span', { key: 'i', className: 'glpi-head-icon' }, Icon('Headset', 16, 'currentColor')),
         e('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [e('h3', { key: 'h' }, 'Chamado no GLPI'), e('p', { key: 'p' }, 'Abre na entidade Sistemas com o seu usuário do GLPI.')]),
@@ -1269,7 +1296,8 @@
     ]) : null;
 
     // ---- toasts ----
-    const toastEl = e('div', { style: sx('position:fixed;bottom:20px;right:20px;z-index:80;display:flex;flex-direction:column;gap:10px;max-width:340px') },
+    // com o botão do GLPI no lado direito, os avisos sobem para não ficar por cima dele
+    const toastEl = e('div', { style: { ...sx('position:fixed;right:20px;z-index:80;display:flex;flex-direction:column;gap:10px;max-width:340px'), bottom: posGlpi.lado === 'dir' ? posGlpi.baixo + 64 : 20 } },
       toasts.map((t) => {
         const meta = TOAST_META[t.type] || TOAST_META.info;
         return e('div', {
