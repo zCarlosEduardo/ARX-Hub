@@ -15,6 +15,10 @@
     busca: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    mais: '<path d="M12 5v14M5 12h14"/>',
+    voltar: '<path d="m15 18-6-6 6-6"/>', avancar: '<path d="m9 18 6-6-6-6"/>',
+    recarregar: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+    sino: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
     escolher: '<path d="m7 10 5-5 5 5M7 14l5 5 5-5"/>',
   };
   const ic = (n, t = 16) => `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONE[n]}</svg>`;
@@ -34,42 +38,30 @@
   };
   const minutos = (h) => { const [a, b] = h.split(':').map(Number); return a * 60 + b; };
   const posDia = (h) => ((minutos(h) - 420) / 720) * 100; // 07:00 a 19:00
-  const sec = (classe, id, h2, extra, corpo) => `<section class="painel ${classe}" aria-labelledby="t-${id}"><header><h2 id="t-${id}">${h2}</h2>${extra}</header>${corpo}</section>`;
+  const sec = (classe, id, h2, extra, corpo) => `<section class="cartao ${classe}" aria-labelledby="t-${id}"><header><h2 id="t-${id}">${h2}</h2>${extra}</header>${corpo}</section>`;
 
-  // ---------- moldura ----------
-  function moldura(rota, conteudo) {
-    const nav = (href, icone, rot, extra = '') => `<a class="nav" href="#${href}" ${rota === href ? 'aria-current="page"' : ''}>${ic(icone)}<span>${rot}</span>${extra}</a>`;
+  // ---------- moldura de navegador: faixa de abas + barra de endereço ----------
+  const FIXAS = [['painel', 'painel', 'Painel'], ['chamados', 'chamados', 'Chamados'], ['resultados', 'resultados', 'Resultados'], ['admin', 'admin', 'Administração']];
+  function moldura(rota, trilha, conteudo) {
     const prontos = V.conta('pronto');
-    return `<div class="app">
-  <nav class="sidebar" id="menu" aria-label="Navegação">
-    <div class="marca">${MARCA}<span>ARX Hub</span></div>
-    <a class="escopo" href="#admin" title="Trocar a entidade do GLPI"><span>Sistemas</span><span aria-hidden="true">${ic('escolher', 14)}</span></a>
-    ${nav('painel', 'painel', 'Painel')}
-    ${nav('chamados', 'chamados', 'Chamados', prontos ? `<span class="conta acao">${prontos} pronto</span>` : '')}
-    ${nav('resultados', 'resultados', 'Resultados')}
-    ${nav('admin', 'admin', 'Administração')}
-    <p class="grupo">Abertas agora</p>
-    ${ABERTAS.map((id) => nav('a/' + id, 'robo', nomeRobo(id))).join('')}
-    <div class="fim">
-      ${nav('ajuda', 'ajuda', 'Tutoriais em vídeo')}
-      <div class="pessoa"><span class="inicial">CM</span><div>Carla Menezes<small>Administradora do Hub</small></div></div>
-    </div>
+    const fixa = ([href, icone, rot]) => `<a class="aba fixa${href === 'chamados' && prontos ? ' com-conta' : ''}" href="#${href}" title="${rot}" aria-label="${rot}" ${rota === href ? 'aria-current="page"' : ''}>${ic(icone)}${href === 'chamados' && prontos ? `<span class="conta" aria-label="${prontos} pronto para rodar">${prontos}</span>` : ''}</a>`;
+    const aberta = (id) => { const n = nomeRobo(id); return `<a class="aba" href="#a/${id}" ${rota === 'a/' + id ? 'aria-current="page"' : ''}>${ic('robo', 14)}<span class="rot">${n}</span><span class="fechar" title="Fechar ${n}">${ic('x', 12)}</span></a>`; };
+    return `<header class="navegador">
+  <nav class="faixa" aria-label="Abas">
+    <span class="marca">${MARCA}ARX Hub</span>
+    ${FIXAS.map(fixa).join('')}
+    ${ABERTAS.map(aberta).join('')}
+    <a class="aba-nova" href="#painel" title="Abrir outra automação" aria-label="Abrir outra automação">${ic('mais', 16)}</a>
   </nav>
-  <header class="topo">
-    <button class="btn texto menu-toggle" type="button" aria-controls="menu" aria-label="Abrir o menu" onclick="document.getElementById('menu').classList.toggle('aberta')">${ic('menu', 18)}</button>
-    <div class="abas-abertas" role="list" aria-label="Automações abertas">
-      ${ABERTAS.map((id) => [id, nomeRobo(id)]).map(([id, n]) => `<a class="aba" role="listitem" href="#a/${id}" ${rota === 'a/' + id ? 'aria-current="page"' : ''}><span class="ponto" aria-hidden="true"></span>${n}<span class="fechar" title="Fechar ${n}">${ic('x', 12)}</span></a>`).join('')}
-    </div>
-    <div class="direita">
-      <label class="busca">${ic('busca', 14)}<span>Buscar automação ou chamado</span><kbd>Ctrl K</kbd></label>
-      <a class="btn" href="#admin">${ic('chave', 14)}Meus acessos</a>
-    </div>
-  </header>
-  <main class="folha"><div class="canvas">${conteudo}</div></main>
-</div>`;
+  <div class="endereco">
+    <div class="lado"><button class="icone-btn" type="button" aria-label="Voltar">${ic('voltar')}</button><button class="icone-btn" type="button" aria-label="Avançar" disabled>${ic('avancar')}</button><button class="icone-btn" type="button" aria-label="Atualizar">${ic('recarregar')}</button></div>
+    <label class="campo-endereco"><span class="trilha"><span>Sistemas</span><span>/</span>${trilha}</span><span class="busca">${ic('busca', 13)}Buscar <kbd>Ctrl K</kbd></span></label>
+    <div class="lado dir"><button class="icone-btn alerta some" type="button" aria-label="Alertas: 4 erros hoje">${ic('sino')}</button><a class="btn some" href="#admin">${ic('chave', 14)}Meus acessos</a><span class="inicial" title="Carla Menezes, administradora">CM</span></div>
+  </div>
+</header>
+<main class="coluna">${conteudo}</main>`;
   }
-  const titulo = (trilha, h1, sub, acoes = '') => `${trilha ? `<nav class="trilha" aria-label="Trilha">${trilha}</nav>` : ''}
-  <div class="titulo"><div><h1>${h1}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div><div class="acoes">${acoes}</div></div>`;
+  const titulo = (h1, sub, acoes = '') => `<div class="titulo"><div><h1>${h1}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div><div class="acoes">${acoes}</div></div>`;
   const kpi = (rot, valor, delta = '', classe = '') => `<div class="kpi"><div class="kpi-label">${rot}</div><div class="kpi-value ${classe}">${valor}</div>${delta ? `<div class="delta">${delta}</div>` : ''}</div>`;
 
   // ---------- Painel: os robôs estão no ar e a fila do GLPI está andando? ----------
@@ -87,7 +79,7 @@
     const abertos = V.filtra('todos');
     const senha = V.robos.find((r) => r.id === 'senha');
     const falhasSenha = V.falhas(senha);
-    return titulo('<span>ARX Administradora</span><span>/</span><span>Sistemas</span>', 'Painel',
+    return titulo('Painel',
       `Os ${V.robos.length} robôs estão no ar. A fila do GLPI tem ${V.conta('todos')} chamados abertos, ${V.conta('pronto')} pronto para rodar.`,
       `<span class="carimbo">Atualizado às ${V.agora}</span><a class="btn primario" href="#chamados">Rodar prontos (${V.conta('pronto')})</a>`)
     + `<div class="achado" role="status"><span><b>Altera Senha falhou ${falhasSenha.length} vezes hoje</b> entre ${falhasSenha[0][0]} e ${falhasSenha[falhasSenha.length - 1][0]}: o token da Unik no SGA expirou.</span><a class="btn" href="#chamados/erro">Ver o erro</a></div>`
@@ -111,12 +103,12 @@
   function chamados(aba = 'todos') {
     const lista = V.filtra(aba);
     const detalhe = (c) => c.erro || c.falta || c.motivo || '';
-    return titulo('<span>Sistemas</span><span>/</span><span>Fila do GLPI</span>', 'Chamados',
+    return titulo('Chamados',
       'Chamados abertos na entidade Sistemas, com o que cada um precisa para rodar.',
       `<label class="troca" style="align-items:center;gap:10px"><input class="chave" type="checkbox" checked aria-label="Modo teste"><span><b>Modo teste</b> <span class="muted">não escreve no GLPI</span></span></label>
        <a class="btn primario" href="#chamados">Rodar prontos (${V.conta('pronto')})</a>`)
     + `<nav class="tabs" role="tablist" aria-label="Situação">${V.ABAS.map(([k, n]) => `<a role="tab" href="#chamados/${k}" aria-selected="${k === aba}">${n} <span class="n">${V.conta(k)}</span></a>`).join('')}</nav>
-    <div class="barra"><label class="busca">${ic('busca', 14)}<span>Buscar por número, título ou solicitante</span></label><span class="esp"></span>
+    <div class="barra"><label class="busca-lista">${ic('busca', 14)}<span>Buscar por número, título ou solicitante</span></label><span class="esp"></span>
       <span class="muted">${lista.length === 1 ? '1 chamado' : lista.length + ' chamados'}</span><select class="input curto" aria-label="Ordem"><option>Mais antigos primeiro</option><option>Mais recentes primeiro</option></select></div>
     ${lista.length ? `<table class="tabela-linhas"><thead><tr><th>Chamado</th><th class="col-media">Tipo</th><th class="col-media">Associação</th><th class="dir col-media">Aberto há</th><th>Situação</th><th class="dir"><span class="sr">Ação</span></th></tr></thead><tbody>
       ${lista.map((c) => `<tr><td><span class="mono muted">#${c.id}</span> ${esc(c.titulo)}<small>${esc(c.quem)}${detalhe(c) ? `, ${esc(detalhe(c))}` : ''}</small></td>
@@ -136,12 +128,12 @@
         ${linhas.map(([n, v]) => `<tr><td><span class="fundo" style="width:${(v / max) * 100}%"></span><span>${n}</span></td><td class="dir num muted"><span>${nf((v / total) * 100, 1)}%</span></td><td class="dir num"><span>${nf(v)}</span></td></tr>`).join('')}
         </tbody></table></section>`;
     };
-    return titulo('', 'Resultados', `Chamados atendidos pelos robôs de 1 a 22 de outubro, fora o modo teste. Tempo economizado é uma estimativa.`,
+    return titulo('Resultados', `Chamados atendidos pelos robôs de 1 a 22 de outubro, fora o modo teste. Tempo economizado é uma estimativa.`,
       `<div class="segmentado" role="group" aria-label="Período"><button aria-pressed="false">Hoje</button><button aria-pressed="false">7 dias</button><button aria-pressed="true">Este mês</button></div>`)
     + `<div class="pilha"><div class="kpis soltos">${kpi('Chamados atendidos', nf(V.atendidosMes))}${kpi('Solucionados', nf(V.resolvidosMes), `${nf(taxa * 100, 1)}% dos atendidos`)}
       ${kpi('Com erro', nf(V.errosMes), 'Voltaram como pendentes', 'ruim')}${kpi('Tempo economizado', `${nf(V.resolvidosMes * 5.4 / 60, 1)}<small>h</small>`, 'Estimativa: minutos por item do cadastro')}
       ${kpi('Tempo médio', '2<small>min</small> 4<small>s</small>', 'Por chamado, do início ao fim')}</div>
-    <section class="secao"><header><div><h2>Solucionados por dia</h2><p>O dia 22 é hoje e ainda está em andamento.</p></div></header><div class="chart" id="grafico"></div></section>
+    <section class="secao"><header><div><h2>Solucionados por dia</h2><p>O dia 22 é hoje e ainda está em andamento.</p></div></header><div class="grafico"><div class="chart" id="grafico"></div></div></section>
     <div class="grade linhas-largas">
       ${tabela('Por tipo de chamado', 'Solucionados de cada tipo.', 'Tipo', V.porTipo.map((t) => [t[0], t[1]]), V.resolvidosMes)}
       ${tabela('Motivos de erro', 'Por que os chamados voltaram como pendentes.', 'Motivo', V.motivosErro, V.errosMes)}
@@ -154,7 +146,7 @@
   function admin() {
     const troca = (t, d, on) => `<div class="troca"><div><b>${t}</b><p>${d}</p></div><input class="chave" type="checkbox" ${on ? 'checked' : ''} aria-label="${t}"></div>`;
     const ajuste = (t, d, valores, caixa) => `<section class="ajuste"><div><h2>${t}</h2><p>${d}</p>${valores ? `<div class="valores">${valores}</div>` : ''}</div><div class="caixa">${caixa}</div></section>`;
-    return titulo('', 'Administração', 'Vale para todo mundo que usa o Hub. Cada caixa salva sozinha.', '<span class="carimbo">Salvo às 14:20 por Carla Menezes</span>')
+    return titulo('Administração', 'Vale para todo mundo que usa o Hub. Cada caixa salva sozinha.', '<span class="carimbo">Salvo às 14:20 por Carla Menezes</span>')
     + ajuste('Cofre dos acessos', 'Logins do SGA, do PowerCRM e o token do GLPI ficam cifrados no navegador de cada pessoa.',
       '<span>Hoje: senha mestra <b>ligada</b>, trava em <b>15 min</b> parado</span>',
       troca('Pedir senha mestra', 'Sem ela, o cofre abre sozinho neste navegador.', true)
@@ -179,23 +171,23 @@
   // ---------- automações ----------
   const cabAuto = (id, sub, acoes) => {
     const r = V.robos.find((x) => x.id === id);
-    return titulo(`<a href="#painel">Automações</a><span>/</span><span>${r.sistemas.join(' e ')}</span>`, `${r.nome} <span class="pill pos">No ar</span>`, sub, acoes);
+    return titulo(`${r.nome} <span class="pill pos">No ar</span>`, sub, acoes);
   };
   function altStatus() {
     return cabAuto('alt-usuario', 'Bloqueia ou ativa usuários no SGA e no PowerCRM, em todas as empresas marcadas, uma de cada vez.', '<a class="btn" href="#a/alt-usuario">Histórico</a>')
     + `<div class="grade">
-      <section class="painel c8" aria-labelledby="t-o-que"><header><h2 id="t-o-que">O que fazer</h2></header>
+      <section class="cartao c8" aria-labelledby="t-o-que"><header><h2 id="t-o-que">O que fazer</h2></header>
         <div class="campo"><span class="rot">Ação</span><div class="opcoes"><button class="opcao" aria-pressed="true">Bloquear e inativar<small>Inativa no SGA e bloqueia no PowerCRM</small></button><button class="opcao" aria-pressed="false">Ativar e desbloquear<small>Ativa no SGA e libera no PowerCRM</small></button></div></div>
         <div class="campo"><label for="pessoas">Pessoas</label><textarea class="input" id="pessoas">123.456.789-09
 JULIANA PRADO
 RODRIGO SALLES</textarea><span class="dica">Um CPF ou nome por linha. Também aceita colar da planilha.</span></div>
         <div class="campo"><span class="rot">Empresas</span><div class="marcas">${V.empresasSga.map((n, i) => `<label><input type="checkbox" ${i < 4 ? 'checked' : ''}>${n}</label>`).join('')}</div><span class="dica">4 de ${V.empresasSga.length} marcadas. Os logins vêm de Meus acessos.</span></div>
       </section>
-      <section class="painel c4" aria-labelledby="t-resumo"><header><h2 id="t-resumo">Antes de iniciar</h2></header>
+      <section class="cartao c4 lateral" aria-labelledby="t-resumo"><header><h2 id="t-resumo">Antes de iniciar</h2></header>
         <dl class="resumo"><dt>Ação</dt><dd class="perigo">Bloquear e inativar</dd><dt>Pessoas</dt><dd>3</dd><dt>Empresas</dt><dd>Ancore e mais 3</dd><dt>Sistemas</dt><dd>SGA e PowerCRM</dd><dt>Modo teste</dt><dd>Desligado</dd></dl>
         <ol class="passos"><li class="ok">Conferir os dados e os logins</li><li>Executar em cada empresa</li><li>Concluir e guardar o resultado</li></ol>
         <button class="btn primario largo" type="button">Iniciar para 3 pessoas</button></section>
-      <section class="painel c12" aria-labelledby="t-ultimas"><header><h2 id="t-ultimas">Últimas execuções</h2><a class="link" href="#a/alt-usuario">Ver todas</a></header>
+      <section class="cartao c12" aria-labelledby="t-ultimas"><header><h2 id="t-ultimas">Últimas execuções</h2><a class="link" href="#a/alt-usuario">Ver todas</a></header>
         <table class="tabela-linhas"><thead><tr><th>Quando</th><th>Quem</th><th class="col-media">Ação</th><th class="col-media">Empresas</th><th class="dir">Resultado</th></tr></thead><tbody>
         ${V.execucoesAlt.map((x) => `<tr><td>${x.quando}<small class="mono">${x.job}</small></td><td>${x.quem}<small>${x.alvo}</small></td><td class="col-media">${x.acao}</td><td class="col-media">${x.empresas}</td>
           <td class="dir">${x.res === 'ok' ? `<span class="pill ${x.teste ? '' : 'pos'}">${x.teste ? 'Teste concluído' : 'Concluída'}</span>` : `<span class="pill neg" title="${esc(x.erro)}">Erro</span>`}</td></tr>`).join('')}
@@ -206,35 +198,35 @@ RODRIGO SALLES</textarea><span class="dica">Um CPF ou nome por linha. Também ac
   const retrato = (nome, depto) => {
     const ini = nome.split(' ').map((p) => p[0]).slice(0, 2).join('');
     return `<svg viewBox="0 0 240 240" role="img" aria-label="Foto de perfil de ${esc(nome)}"><rect width="240" height="240" fill="#17864a"/><circle cx="120" cy="104" r="58" fill="#ffffff" opacity=".14"/>
-      <text x="120" y="122" text-anchor="middle" font-family="IBM Plex Sans" font-weight="600" font-size="54" fill="#fff">${ini}</text>
-      <rect y="190" width="240" height="50" fill="#0f5c33"/><text x="120" y="221" text-anchor="middle" font-family="IBM Plex Sans" font-weight="500" font-size="17" fill="#fff">${esc(depto)}</text></svg>`;
+      <text x="120" y="122" text-anchor="middle" font-family="Geist" font-weight="600" font-size="54" fill="#fff">${ini}</text>
+      <rect y="190" width="240" height="50" fill="#0f5c33"/><text x="120" y="221" text-anchor="middle" font-family="Geist" font-weight="500" font-size="17" fill="#fff">${esc(depto)}</text></svg>`;
   };
   function foto() {
     return cabAuto('foto', 'Gera a foto de perfil do WhatsApp com o nome e o departamento, no padrão da ARX.', '<a class="btn" href="#a/foto">Histórico</a>')
     + `<div class="grade">
-      <section class="painel c8" aria-labelledby="t-gerar"><header><h2 id="t-gerar">Gerar uma foto</h2><div class="segmentado" role="group" aria-label="Quantidade"><button aria-pressed="true">Uma pessoa</button><button aria-pressed="false">Várias pessoas</button></div></header>
+      <section class="cartao c8" aria-labelledby="t-gerar"><header><h2 id="t-gerar">Gerar uma foto</h2><div class="segmentado" role="group" aria-label="Quantidade"><button aria-pressed="true">Uma pessoa</button><button aria-pressed="false">Várias pessoas</button></div></header>
         <div class="campo"><label for="nome">Nome</label><input class="input" id="nome" value="Juliana Prado"></div>
         <div class="campo"><label for="depto">Departamento</label><select class="input" id="depto"><option>Cadastro</option><option>Sinistro</option><option>Assistência</option><option>Comercial</option></select></div>
         <div class="campo"><span class="rot">Chamado do GLPI</span><input class="input mono" value="#13877" aria-label="Chamado do GLPI"><span class="dica">Com o número, a foto vai anexada ao chamado quando terminar.</span></div>
         <div class="barra rodape"><button class="btn primario" type="button">Gerar foto</button><button class="btn" type="button">Baixar sem gerar chamado</button></div></section>
-      <section class="painel c4" aria-labelledby="t-previa"><header><h2 id="t-previa">Prévia</h2><span class="meta">Muda enquanto você digita</span></header><div class="foto">${retrato('Juliana Prado', 'Cadastro')}</div></section>
-      <section class="painel c12" aria-labelledby="t-hoje"><header><h2 id="t-hoje">Geradas hoje</h2><span class="meta">${V.fotos.length} fotos</span></header>
+      <section class="cartao c4" aria-labelledby="t-previa"><header><h2 id="t-previa">Prévia</h2><span class="meta">Muda enquanto você digita</span></header><div class="foto">${retrato('Juliana Prado', 'Cadastro')}</div></section>
+      <section class="cartao c12" aria-labelledby="t-hoje"><header><h2 id="t-hoje">Geradas hoje</h2><span class="meta">${V.fotos.length} fotos</span></header>
         <div class="galeria">${V.fotos.map((f) => `<figure><div class="foto">${retrato(f.nome, f.depto)}</div><figcaption><b>${f.nome}</b>${f.depto}, ${f.quando.toLowerCase()}</figcaption></figure>`).join('')}</div></section></div>`;
   }
   function relatorios() {
     return cabAuto('relatorios', 'Extrai relatórios do SGA de várias empresas de uma vez e junta numa planilha só.', '<a class="btn" href="#a/relatorios">Agendados</a>')
     + `<div class="grade">
-      <section class="painel c8" aria-labelledby="t-rel"><header><h2 id="t-rel">Relatório</h2></header>
+      <section class="cartao c8" aria-labelledby="t-rel"><header><h2 id="t-rel">Relatório</h2></header>
         <div class="campo"><span class="rot">Tipo</span><div class="segmentado" role="group" aria-label="Tipo de relatório"><button aria-pressed="true">Boletos</button><button aria-pressed="false">Veículos</button><button aria-pressed="false">Fotografia de veículos</button><button aria-pressed="false">Fotografia de boletos</button></div></div>
         <div class="duas"><div class="campo"><label for="de">Vencimento de</label><input class="input" id="de" type="date" value="2026-10-01"></div><div class="campo"><label for="ate">Até</label><input class="input" id="ate" type="date" value="2026-10-31"></div></div>
         <div class="campo"><span class="rot">Situação do boleto</span><div class="opcoes"><button class="opcao" aria-pressed="true">Abertos<small>Inclui os vencidos</small></button><button class="opcao" aria-pressed="false">Todos os baixados<small>Baixado e baixado com pendência</small></button></div></div>
         <div class="campo"><span class="rot">Empresas</span><div class="marcas">${V.empresasSga.map((n, i) => `<label><input type="checkbox" ${[0, 3, 4].includes(i) ? 'checked' : ''}>${n}</label>`).join('')}</div></div>
         <div class="campo"><span class="rot">Dados visualizados</span><p>Todos os <b>224</b> campos do SGA. <a class="link" href="#a/relatorios">Escolher campos</a></p></div></section>
-      <section class="painel c4" aria-labelledby="t-antes"><header><h2 id="t-antes">Antes de iniciar</h2></header>
+      <section class="cartao c4 lateral" aria-labelledby="t-antes"><header><h2 id="t-antes">Antes de iniciar</h2></header>
         <dl class="resumo"><dt>Relatório</dt><dd>Boletos abertos</dd><dt>Período</dt><dd>1 a 31/10/2026</dd><dt>Empresas</dt><dd>Ancore, Valle e Unik</dd><dt>Cooperativas</dt><dd>Todas</dd><dt>Saída</dt><dd>Uma planilha .xlsx</dd></dl>
         <button class="btn primario largo" type="button">Extrair de 3 empresas</button>
         <p class="dica">Leva uns 4 minutos por empresa. Dá para fechar a aba.</p></section>
-      <section class="painel c12" aria-labelledby="t-hist"><header><h2 id="t-hist">Últimas extrações</h2><a class="link" href="#a/relatorios">Ver todas</a></header>
+      <section class="cartao c12" aria-labelledby="t-hist"><header><h2 id="t-hist">Últimas extrações</h2><a class="link" href="#a/relatorios">Ver todas</a></header>
         <table class="tabela-linhas"><thead><tr><th>Quando</th><th>Relatório</th><th class="col-media">Empresas</th><th class="dir">Linhas</th><th class="dir"><span class="sr">Ação</span></th></tr></thead><tbody>
         ${V.relatorios.map((x) => `<tr><td>${x.quando}<small class="mono">${x.job}</small></td><td>${x.tipo}</td><td class="col-media">${x.empresas}</td><td class="dir num">${nf(x.linhas)}</td><td class="dir"><button class="btn texto" type="button">Baixar</button></td></tr>`).join('')}
         </tbody></table></section></div>`;
@@ -242,7 +234,7 @@ RODRIGO SALLES</textarea><span class="dica">Um CPF ou nome por linha. Também ac
 
   // ---------- rotas ----------
   const TELAS = {
-    painel: ['Painel', painel], chamados: ['Chamados', chamados], resultados: ['Resultados', resultados], admin: ['Administração', admin],
+    painel: ['Painel', painel], chamados: ['Chamados', chamados], resultados: ['Resultados', resultados], admin: ['Administração', admin], // [nome, tela]
     'a/alt-usuario': [nomeRobo('alt-usuario'), altStatus], 'a/foto': [nomeRobo('foto'), foto], 'a/relatorios': [nomeRobo('relatorios'), relatorios],
   };
   // o gráfico é desenhado uma vez e o mesmo nó volta a cada visita: desenhar de novo deixaria um ResizeObserver
@@ -253,7 +245,8 @@ RODRIGO SALLES</textarea><span class="dica">Um CPF ou nome por linha. Também ac
     const rota = base === 'a' ? 'a/' + resto[0] : base;
     const chave = TELAS[rota] ? rota : 'painel';
     const [nome, tela] = TELAS[chave];
-    document.getElementById('raiz').innerHTML = moldura(chave, tela(resto[0]));
+    const trilha = chave.startsWith('a/') ? `<span>Automações</span><span>/</span><b>${nome}</b>` : `<b>${nome}</b>`;
+    document.getElementById('raiz').innerHTML = moldura(chave, trilha, tela(resto[0]));
     document.title = 'ARX ' + nome;
     const vaga = document.getElementById('grafico');
     if (vaga && grafico) vaga.replaceWith(grafico);
