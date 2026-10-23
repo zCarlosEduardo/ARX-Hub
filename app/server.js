@@ -48,8 +48,10 @@ app.get(['/api/versao', '/v1/api/versao'], (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ versao: versaoFront });
 });
-app.get(['/', '/index.html', '/v1/', '/v1/index.html'], (req, res, next) => {
-  const arquivo = req.path.startsWith('/v1/') ? 'v1/index.html' : 'index.html';
+// O Hub v1 (arquivos em public/v1/) é o Hub principal, servido em /. O /v1/api/versao fica para as abas que ainda estavam
+// abertas em /v1/ descobrirem a versão nova e recarregarem (caem em /).
+app.get(['/', '/index.html'], (req, res, next) => {
+  const arquivo = 'v1/index.html';
   try {
     if (!indexComVersao[arquivo]) {
       indexComVersao[arquivo] = injetarVersaoNoHtml(require('fs').readFileSync(path.join(pastaPublic, arquivo), 'utf8'), versaoFront);
@@ -61,10 +63,8 @@ app.get(['/', '/index.html', '/v1/', '/v1/index.html'], (req, res, next) => {
   res.send(indexComVersao[arquivo]);
 });
 
-// O layout novo (antes em /v3/) virou o Hub principal; endereços salvos de /v3/ vão para /. A versão anterior
-// fica em /original/ como reserva.
-// O Hub de exemplo /v2/ foi removido; quem tinha o endereço salvo também cai no principal.
-app.get(['/v3', '/v3/', '/v3/index.html', '/v2', '/v2/', '/v2/index.html'], (req, res) => res.redirect(302, '/'));
+// Endereços salvos das versões anteriores (/v1/, /v3/, /v2/) vão para o principal. O Hub antigo fica em /original/ como reserva.
+app.get(['/v1', '/v1/', '/v1/index.html', '/v3', '/v3/', '/v3/index.html', '/v2', '/v2/', '/v2/index.html'], (req, res) => res.redirect(302, '/'));
 
 // Tutoriais em vídeo do botão "?" (Hub e automações): pasta montada no container, fora do Git (mídia pesada).
 // CORS aberto porque as automações, em outras portas, leem o índice tutoriais.json daqui.
