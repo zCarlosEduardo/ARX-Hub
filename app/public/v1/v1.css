@@ -1337,3 +1337,15 @@ body.v1-modal-aberto { overflow: hidden; }
 /* compactas: as abas fixas mostram só o ícone quando falta espaço */
 .v1-aba.compact .panel-tab-label, .v1-faixa .admin-btn.compact .panel-tab-label { display: none; }
 .v1-resposta-ia { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--bg); white-space: pre-wrap; line-height: 20px; }
+
+/* abas fixas sempre com o nome (o Hub antigo escondia até passar o mouse); somem só quando falta espaço */
+.v1-aba .panel-tab-label, .v1-faixa .admin-btn .panel-tab-label { max-width: none; opacity: 1; }
+/* cartões do painel: ícone na cor do cadastro sem quadrado, status escrito */
+.v1-auto-ic { display: flex; align-items: center; height: 38px; }
+.v1-status { display: inline-flex; align-items: center; gap: 6px; height: 22px; margin-right: 4px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--secondary); color: var(--muted); }
+.v1-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.v1-status.online { background: var(--accent-soft); color: var(--accent); }
+.v1-status.offline { background: var(--error-tint); color: var(--error); }
+/* Banco de Dados: fundo liso, um tom acima, sem degradê */
+:root[data-theme="dark"] .db-section { background: var(--card) !important; border-color: transparent !important; }
+:root[data-theme="dark"] .db-section .card { background: var(--bg) !important; }

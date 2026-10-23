@@ -217,6 +217,11 @@
     const abrirPainel = () => abrirAbaFixa('painel');
     const abrirChamados = () => abrirAbaFixa('chamados');
     const abaFixaAtiva = (qual) => activeTabId === null && abaFixa === qual;
+    // endereço direto de uma aba fixa (?aba=chamados|resultados|admin): atalho salvo e teste da tela
+    useEffect(() => {
+      const aba = new URLSearchParams(location.search).get('aba');
+      if (['chamados', 'resultados', 'admin'].includes(aba)) abrirAbaFixa(aba);
+    }, []);
 
     // ---- GLPI quick-ticket widget ----
     const [glpiOpen, setGlpiOpen] = useState(false);
@@ -869,9 +874,9 @@
         style: { position: 'relative', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeInUp 0.3s ease both', animationDelay: Math.min(i, 10) * 35 + 'ms' },
       }, [
         e('div', { key: 'top', style: sx('display:flex;align-items:flex-start;justify-content:space-between') }, [
-          e('div', { key: 'icon', style: { width: 38, height: 38, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: a.color + '22', color: a.color } }, Icon(a.icon, 19, a.color)),
+          e('div', { key: 'icon', className: 'v1-auto-ic', style: { color: a.color } }, Icon(a.icon, 22, a.color)),
           e('div', { key: 'actions', style: sx('display:flex;align-items:center;gap:2px') }, [
-            e('span', { key: 'dot', className: isPulsing ? 'pulse-dot' : '', style: { position: 'relative', width: 8, height: 8, borderRadius: '50%', background: meta.color, color: meta.color, marginTop: 6, marginRight: 4 } }),
+            e('span', { key: 'dot', className: 'v1-status ' + (a.status || 'checking') }, meta.label),
             // o menu só tem ações de admin (editar, abrir/copiar o endereço, remover)
             podeGerenciar && e('button', {
               key: 'menu', className: 'icon-btn', onClick: (ev) => { ev.stopPropagation(); setMenuOpenId(menuOpen ? null : a.id); },
@@ -947,7 +952,7 @@
 
     const panelBody = e('div', { style: sx('padding:28px 24px 96px;max-width:1200px;margin:0 auto') }, [
       e('div', { key: 'head', style: sx('display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px') }, [
-        e('div', { key: 't', onDoubleClick: toggleTheme, style: sx('font-weight:600;font-size:19px;user-select:none') }, 'Automações'),
+        e('h1', { key: 't', onDoubleClick: toggleTheme, style: sx('font-weight:600;font-size:20px;line-height:26px;margin:0;user-select:none') }, 'Automações'),
         e('div', { key: 's', style: sx('display:flex;align-items:center;gap:12px;flex-wrap:wrap') }, [
           e('span', { key: 't', style: { color: 'var(--muted-soft)', fontSize: 12.5 } }, total + ' automações · ' + online + ' online · ' + offline + ' offline'),
           e('div', { key: 'v', className: 'exu-seg', role: 'group', 'aria-label': 'Exibição das automações' }, [
