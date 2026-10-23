@@ -69,7 +69,7 @@ test('configuração padrão: cofre ativo com sessão do dia e WhatsApp desligad
   // o padrão é válido pelas próprias regras
   assert.equal(validarSecao('cofre', c.cofre).ok, true);
   assert.equal(validarSecao('whatsapp', c.whatsapp).ok, true);
-  assert.deepEqual(validarSecao('automacoes', c.automacoes), { ok: true, valor: { cadastro: 'admins', endereco: 'mascarado', novaAba: true } });
+  assert.deepEqual(validarSecao('automacoes', c.automacoes), { ok: true, valor: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' } });
 });
 
 test('ia: padrão desligada; aceita tipos existentes e recusa limites fora da faixa', () => {
@@ -83,7 +83,12 @@ test('ia: padrão desligada; aceita tipos existentes e recusa limites fora da fa
 });
 
 test('automacoes: aceita as opções da tela e recusa valor desconhecido', () => {
-  assert.deepEqual(validarSecao('automacoes', { cadastro: 'todos', endereco: 'oculto', novaAba: false }).valor, { cadastro: 'todos', endereco: 'oculto', novaAba: false });
+  assert.deepEqual(validarSecao('automacoes', { cadastro: 'todos', endereco: 'oculto', novaAba: false }).valor, { cadastro: 'todos', endereco: 'oculto', novaAba: false, marca: '' });
+  // nome na barra de abas: texto curto, sem espaço sobrando; vazio deixa a barra sem nome
+  assert.equal(validarSecao('automacoes', { marca: '  ARX Aut  ' }).valor.marca, 'ARX Aut');
+  assert.equal(validarSecao('automacoes', { marca: '' }).valor.marca, '');
+  assert.equal(validarSecao('automacoes', { marca: 'x'.repeat(31) }).ok, false);
+  assert.equal(validarSecao('automacoes', { marca: 12 }).ok, false);
   assert.equal(validarSecao('automacoes', { cadastro: 'qualquer' }).ok, false);
   assert.equal(validarSecao('automacoes', { endereco: 'completo' }).ok, false);
   assert.equal(validarSecao('automacoes', { novaAba: 'sim' }).ok, false);

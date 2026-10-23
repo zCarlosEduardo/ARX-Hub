@@ -125,7 +125,7 @@ function configPadrao() {
     cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
     // quem cadastra, edita e remove automação (e vê o endereço real), como o endereço aparece para os outros e se
     // eles podem abrir a automação em nova aba (sempre pelo proxy, sem o endereço real)
-    automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true },
+    automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
     // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
     // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
     ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
@@ -168,7 +168,10 @@ function validarAutomacoes(b) {
   if (endereco !== 'mascarado' && endereco !== 'oculto') return { erro: 'automacoes.endereco deve ser mascarado ou oculto' };
   const novaAba = c.novaAba === undefined ? padrao.novaAba : c.novaAba;
   if (typeof novaAba !== 'boolean') return { erro: 'automacoes.novaAba deve ser verdadeiro ou falso' };
-  return { valor: { cadastro, endereco, novaAba } };
+  // nome que aparece no começo da barra de abas (ex.: "ARX Aut"); vazio deixa a barra sem nome
+  const marca = c.marca === undefined ? padrao.marca : c.marca;
+  if (typeof marca !== 'string' || marca.trim().length > 30) return { erro: 'automacoes.marca deve ser um texto de até 30 caracteres' };
+  return { valor: { cadastro, endereco, novaAba, marca: marca.trim() } };
 }
 
 function validarIa(b) {

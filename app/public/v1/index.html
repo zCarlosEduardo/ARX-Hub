@@ -1,24 +1,67 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ARX Hub</title>
   <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- taste-skill-ignore: Geist Mono só nos números de chamado e ids -->
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="v1.css">
+  <link rel="stylesheet" href="/v1/v1.css">
+  <script>
+    (function () {
+      var d = document.documentElement;
+      function apply(t) {
+        t = t === 'dark' ? 'dark' : 'light';
+        d.setAttribute('data-theme', t);
+        try { localStorage.setItem('arx-tema-v1', t); } catch (e) { /* sem armazenamento: vale só nesta aba */ }
+      }
+      var q = new URLSearchParams(location.search).get('theme'), s = null;
+      try { s = localStorage.getItem('arx-tema-v1'); } catch (e) { /* sem armazenamento: tema claro */ }
+      apply(q || s || 'dark');
+      // O sistema pai (ArxConnect) pode trocar o tema: postMessage({ type: 'arx-theme', theme: 'dark' | 'light' }).
+      window.addEventListener('message', function (ev) {
+        if (ev.data && ev.data.type === 'arx-theme') apply(ev.data.theme);
+      });
+    })();
+  </script>
+  <script>
+    // Repassa o tema recebido do sistema pai para as automações abertas em iframe.
+    (function () {
+      function post(f) {
+        try { f.contentWindow.postMessage({ type: 'arx-theme', theme: document.documentElement.getAttribute('data-theme') }, '*'); } catch (e) { /* iframe ainda sem janela */ }
+      }
+      document.addEventListener('load', function (ev) { if (ev.target && ev.target.tagName === 'IFRAME') post(ev.target); }, true);
+      new MutationObserver(function () { document.querySelectorAll('iframe').forEach(post); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    })();
+  </script>
+  <script>
+    // Com uma janela aberta, a página de trás não rola (as janelas do Hub já fecham com clique no fundo).
+    document.addEventListener('DOMContentLoaded', function () {
+      new MutationObserver(function () {
+        document.body.classList.toggle('v1-modal-aberto', !!document.querySelector('.exu-modal-fundo, [aria-modal="true"], .v1-veu'));
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+  </script>
 </head>
 <body>
-  <!-- ARX Hub v1: só visual, com dados de exemplo (dados.js). Nenhum botão fala com o servidor. -->
-  <div id="raiz"></div>
-  <script src="charts.js"></script>
-  <!-- o icons.js do Hub monta os ícones com React.createElement: aqui um React mínimo que só guarda a árvore -->
-  <script>window.React = { createElement: (t, p, ...c) => ({ t, p: p || {}, c: c.flat() }), cloneElement: (n, p) => ({ ...n, p: { ...n.p, ...p } }) };</script>
-  <script src="/icons.js"></script>
-  <script src="automacoes.js"></script>
-  <script src="dados.js"></script>
-  <script src="v1.js"></script>
+  <!-- Hub v1: o mesmo Hub (mesmas rotas e dados), com a moldura de navegador e o visual escuro. Scripts próprios em /v1/. -->
+  <div id="root"></div>
+  <script src="/vendor/react.production.min.js"></script>
+  <script src="/vendor/react-dom.production.min.js"></script>
+  <script src="/versao.js" defer></script>
+  <script src="/icons.js" defer></script>
+  <script src="/exemplo-ui.js" defer></script>
+  <script src="/vendor/arx-cripto.min.js" defer></script>
+  <script src="/cofre.js" defer></script>
+  <script src="/v1/acessos.js" defer></script>
+  <script src="/admin.js" defer></script>
+  <script src="/alertas.js" defer></script>
+  <script src="/chamados-cache.js" defer></script>
+  <script src="/chamados-auto.js" defer></script>
+  <script src="/v1/chamados.js" defer></script>
+  <script src="/v1/resultados.js" defer></script>
+  <script src="/arx-ajuda.js" defer></script>
+  <script src="/ajuda.js" defer></script>
+  <script src="/v1/app.js" defer></script>
 </body>
 </html>
