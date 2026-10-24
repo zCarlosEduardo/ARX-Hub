@@ -833,7 +833,9 @@
       aoSalvar({ ...config, ia: novo });
     });
 
-    const ligada = !!(estado && estado.controle && estado.controle.ligada);
+    // ligada = containers no ar E a chave da configuração (é ela que o chamados-glpi obedece); containers de pé por um
+    // deploy com a chave desligada aparecem como desligada, com o botão "Ligar IA"
+    const ligada = !!(estado && estado.controle && estado.controle.ligada) && !(estado && estado.config && estado.config.ligada === false);
     const ia = estado && estado.ia;
     const exp = estado && estado.exportacao;
     const treino = ia && ia.treino;
@@ -873,6 +875,7 @@
         e('a', { key: 'au', href: '/ia-auditoria.html', target: '_blank', rel: 'noopener', className: 'btn-outline', style: { ...S().btnSec, textDecoration: 'none', marginLeft: 'auto' } }, 'Abrir auditoria'),
       ])),
       secao('cfg', 'Como a IA age', 'Cada chave liga uma ajuda da IA. Desligada ou fora do ar, tudo segue pelas regras de hoje.', [
+        estado && !ligada ? e('div', { key: 'off', className: 'admin-aviso alerta', role: 'status' }, 'A IA está desligada: as opções abaixo ficam guardadas, mas só valem depois de clicar em "Ligar IA" acima. Até lá, os chamados usam o texto fixo e não leem as respostas pela IA.') : null,
         campo('ta', 'Tipos que rodam no automático com a validação da IA', e('div', { className: 'admin-grade-tipos' },
           tipos.map((t) => e('label', { key: t.chave, className: 'admin-marcar' }, [e('input', { key: 'c', type: 'checkbox', checked: c.automaticoTipos.includes(t.chave), onChange: (ev) => setC({ ...c, automaticoTipos: ev.target.checked ? [...c.automaticoTipos, t.chave] : c.automaticoTipos.filter((x) => x !== t.chave) }) }), e('span', { key: 't' }, t.nome)]))),
           'Nestes tipos, se a IA discordar da regra com confiança acima do mínimo, o chamado vai para o automático com o tipo que ela sugeriu. Nos outros, a sugestão aparece e o chamado fica manual.'),

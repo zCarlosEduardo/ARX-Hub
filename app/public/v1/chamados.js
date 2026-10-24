@@ -250,6 +250,19 @@
     const [d, setD] = useState({ carregando: true, erro: null, chamado: null });
     const [h, setH] = useState({ carregando: true, erro: null, itens: [] });
     const [copiado, setCopiado] = useState(false);
+    // resposta ao solicitante: começa com a que a IA daria (lendo as respostas dele) e pode ser editada antes de enviar
+    const [resposta, setResposta] = useState(item.respostaSugerida || '');
+    const [envio, setEnvio] = useState({ enviando: false, msg: '', erro: '' });
+    useEffect(() => { setResposta(item.respostaSugerida || ''); setEnvio({ enviando: false, msg: '', erro: '' }); }, [item.id, item.respostaSugerida]);
+    async function responder() {
+      setEnvio({ enviando: true, msg: '', erro: '' });
+      try {
+        const r = await p.responder(resposta.trim());
+        setEnvio({ enviando: false, msg: r.teste ? 'Modo teste: nada foi escrito no GLPI (desligue o modo teste para responder de verdade).' : 'Resposta enviada no chamado; ele ficou Pendente esperando o solicitante.', erro: '' });
+      } catch (err) {
+        setEnvio({ enviando: false, msg: '', erro: err.message });
+      }
+    }
 
     useEffect(() => {
       let vivo = true;
@@ -399,6 +412,16 @@
             item.ajusteIa ? e('div', { key: 'aj', className: 'v2c-aviso', role: 'status' }, `Ajuste pedido (lido pela IA): ${item.ajusteIa.resumo}${item.tipo === 'foto_perfil' && Object.keys(item.ajusteIa.campos || {}).length ? ' Os campos da foto já vêm com a sugestão: confira antes de rodar.' : ''}`) : e('div', { key: 'aj', className: 'v2c-aviso', role: 'status' }, 'Leia as respostas e ajuste os dados antes de rodar: o chamado não roda de novo sozinho.'),
             e('ol', { key: 'l', style: { margin: '8px 0 0', paddingLeft: 18, display: 'grid', gap: 6, fontSize: 13 } }, item.respostas.map((r, i) =>
               e('li', { key: i }, [e('span', { key: 'q', style: { color: 'var(--muted)' } }, dataBr(r.em) + ' · '), r.texto]))),
+            p && p.responder ? e('div', { key: 'rp', className: 'exu-campo', style: { marginTop: 12 } }, [
+              e('label', { key: 'l', htmlFor: 'resp-' + item.id }, item.respostaSugerida ? 'Resposta que a IA daria (pode editar)' : 'Responder o solicitante'),
+              e('textarea', { key: 't', id: 'resp-' + item.id, rows: 4, maxLength: 2000, value: resposta, placeholder: 'Ex.: Vamos refazer a foto com o nome certo. Assim que ficar pronta, a solução chega aqui.', onChange: (ev) => setResposta(ev.target.value) }),
+              e('div', { key: 'b', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6 } }, [
+                e('button', { key: 'r', type: 'button', className: 'exu-btn', disabled: envio.enviando || !resposta.trim(), onClick: responder }, envio.enviando ? 'Enviando…' : 'Responder no chamado'),
+                e('span', { key: 'd', className: 'exu-campo-ajuda', style: { margin: 0 } }, 'Só manda a resposta e deixa o chamado Pendente; não roda a automação.'),
+              ]),
+              envio.msg ? e('p', { key: 'ok', role: 'status', className: 'exu-campo-ajuda' }, envio.msg) : null,
+              envio.erro ? e('p', { key: 'er', role: 'alert', className: 'exu-campo-erro' }, envio.erro) : null,
+            ]) : null,
           ]) : null,
           p && p.detalhes ? e('section', { key: 'l', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'O que a automação leu'), p.detalhes]) : null,
           item.ia ? e('section', { key: 'ia', className: 'exu-bloco' }, [
@@ -409,9 +432,10 @@
           ]) : null,
           res ? e('section', { key: 'res', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'Resultado nesta tela'), p.resultado]) : null,
           // texto que a IA escreveu para o chamado (Administração > IA > texto pela IA); em teste, o que seria escrito
-          res && res.respostaIa ? e('section', { key: 'ria', className: 'exu-bloco' }, [
-            e('h4', { key: 'h' }, res.status === 'teste' ? 'Resposta da IA (seria escrita no GLPI)' : 'Resposta da IA no GLPI'),
-            e('p', { key: 't', className: 'v1-resposta-ia' }, res.respostaIa),
+          // o texto que foi (ou, em teste, iria) para o chamado, escrito pela IA ou o texto fixo
+          res && (res.resposta || res.respostaIa) ? e('section', { key: 'ria', className: 'exu-bloco' }, [
+            e('h4', { key: 'h' }, `${res.status === 'teste' ? 'Resposta que iria para o GLPI' : 'Resposta no GLPI'} (${res.respostaIa ? 'escrita pela IA' : 'texto fixo'})`),
+            e('p', { key: 't', className: 'v1-resposta-ia' }, res.respostaIa || res.resposta),
           ]) : null,
           e('section', { key: 'cv', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'Conversa no chamado'), conversa]),
           e('section', { key: 'lt', className: 'exu-bloco' }, [
@@ -1325,6 +1349,8 @@
           confirmandoEste: confirmando === itemAberto.id, modoTeste, dispensado: dispensados.includes(itemAberto.id),
           pedirRodar: () => { if (res) setResultados((r) => { const n = { ...r }; delete n[itemAberto.id]; return n; }); setConfirmando(itemAberto.id); },
           confirmarRodar: () => rodar([itemAberto], { manual: true }),
+          // resposta ao solicitante (sugerida pela IA ou digitada): só o acompanhamento, sem rodar; em teste não escreve
+          responder: (texto) => api('/api/responder', { glpi: { userToken: acessos.userToken }, id: itemAberto.id, texto, modoTeste }),
           cancelar: () => setConfirmando(null),
           dispensar: () => (dispensados.includes(itemAberto.id) ? dispensar(itemAberto.id, false) : setConfirmar({ tipo: 'dispensa', ids: [itemAberto.id] })),
         },
