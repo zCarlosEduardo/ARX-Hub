@@ -103,8 +103,12 @@
   /** Chegou a hora da nova tentativa automática de uma falha momentânea (IA)? */
   const horaDeRepetir = (quando) => !!quando && Date.now() >= Date.parse(quando);
 
+  // A automação já concluiu e o chamado segue aberto sem resposta nova do solicitante: a solução não chegou ao GLPI.
+  // Rodar de novo duplicaria o cadastro; com resposta nova é reaberto de verdade e segue as regras do servidor.
+  const concluidoAindaAberto = (item) => !!item.ultimaExecucao && item.ultimaExecucao.status === 'concluido' && !(item.respostas && item.respostas.length);
+
   function deveExcluirDoAutomatico(item) {
-    return !!item && (item.somenteManual === true || (ehSenhaSga(item) && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
+    return !!item && (item.somenteManual === true || concluidoAindaAberto(item) || (ehSenhaSga(item) && !!item.identidade && item.identidade.ok !== true && item.identidade.liberavelManual === true));
   }
 
   /** Textos do aviso âmbar do card (null = sem aviso). */
