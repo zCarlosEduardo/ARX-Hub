@@ -249,6 +249,34 @@
    * Qual GLPI o Hub e o chamados-glpi usam: produção ou o GLPI de teste desta máquina. O App-Token nunca volta do
    * servidor: o campo vazio mantém o guardado. "Testar conexão" entra com o token do GLPI do seu cofre.
    */
+  // Webhooks do GLPI em uso: o túnel sem conta muda de endereço quando reinicia, e o GLPI passa a avisar o endereço velho
+  function SecaoWebhook() {
+    const [w, setW] = useState({ carregando: true });
+    async function ler(aplicar) {
+      setW((x) => ({ ...x, carregando: true, erro: '' }));
+      try {
+        setW(await api('POST', '/api/admin/glpi/webhook', { aplicar }));
+      } catch (err) {
+        setW({ erro: err.message });
+      }
+    }
+    useEffect(() => { ler(false); }, []);
+    const lista = w.webhooks || [];
+    const errados = lista.filter((x) => !x.certo);
+    const pronto = !w.carregando && !w.erro;
+    return secao('webhook', 'Atualização em tempo real (webhook)', 'O GLPI avisa os Chamados quando um chamado muda. Vale o GLPI em uso.', [
+      w.carregando ? e('div', { key: 'c' }, dica('Lendo os webhooks do GLPI…')) : null,
+      w.erro ? e('div', { key: 'er', role: 'alert', className: 'admin-erro' }, w.erro) : null,
+      pronto ? campo('end', 'Endereço do receptor', e('code', { key: 'v', style: { fontSize: 12, wordBreak: 'break-all' } }, w.esperado || 'Sem endereço: o túnel do webhook não respondeu'), w.ambiente === 'teste' ? 'GLPI de teste: entrega direto, sem túnel.' : 'Muda quando o container do túnel reinicia.') : null,
+      pronto && lista.length ? e('ul', { key: 'l', style: { margin: 0, paddingLeft: 18, fontSize: 13 } }, lista.map((x) => e('li', { key: x.id }, `${x.nome || 'Webhook ' + x.id}: ${x.certo ? 'apontando para o endereço certo' : 'apontando para outro endereço'}${x.ativo ? '' : ' (desativado)'}`))) : null,
+      pronto && !lista.length ? e('div', { key: 'n' }, dica('Nenhum webhook do GLPI aponta para os Chamados. Crie em Configurar > Webhooks (POST, cabeçalho X-Webhook-Token).')) : null,
+      pronto && errados.length && w.esperado ? e('div', { key: 'b', className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        botao(errados.length === 1 ? 'Apontar o webhook para o endereço atual' : `Apontar os ${errados.length} webhooks para o endereço atual`, () => ler(true), 'prim', { key: 'a' }),
+        e('span', { key: 'd' }, dica('Grava só a URL do webhook no GLPI, com o token do GLPI do seu cofre.')),
+      ]) : null,
+    ]);
+  }
+
   function AbaGlpi({ config, aoSalvar }) {
     const [g, setG] = useState(() => copia(config.glpi));
     const [teste, setTeste] = useState({});
@@ -292,6 +320,7 @@
       ]),
       ambiente('producao', 'Produção', 'O GLPI de verdade.'),
       ambiente('teste', 'Teste', 'GLPI de teste nesta máquina (pasta glpi-teste do ARX Automações). A pasta guarda o App-Token e os tokens dos usuários de teste no .env.'),
+      e(SecaoWebhook, { key: 'webhook-' + (config.glpi && config.glpi.ambiente) }),
       e('div', { key: 'salvar', className: 'admin-barra-salvar' }, rodape(salvar.salvar, salvar.salvando, salvar.erro, salvar.ok, 'Salvar GLPI', 'Salva as três seções desta página.')),
     ]);
   }

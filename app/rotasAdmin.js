@@ -200,6 +200,24 @@ function criarRotasAdmin(deps) {
       }
     }));
 
+    // Webhooks do GLPI em uso x endereço do receptor (o do túnel muda quando ele reinicia). `aplicar` grava a URL nova
+    // nos webhooks da automação com o token de quem clicou (o chamados-glpi não guarda token).
+    app.post('/api/admin/glpi/webhook', asyncHandler(async (req, res) => {
+      const usuario = await exigirAdmin(req);
+      const aplicar = !!(req.body && req.body.aplicar === true);
+      const base = (process.env.CHAMADOS_GLPI_URL || 'http://chamados-glpi:4013').replace(/\/+$/, '');
+      let r;
+      try {
+        r = await fetch(`${base}/api/webhook/glpi`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aplicar, glpi: { userToken: String(req.get('X-Glpi-Token') || '').trim() } }), signal: AbortSignal.timeout(20000) });
+      } catch {
+        throw new ErroHttp(424, 'Os Chamados (chamados-glpi) não responderam.');
+      }
+      const dados = await r.json().catch(() => ({}));
+      if (!r.ok) throw new ErroHttp(r.status === 409 ? 409 : 424, dados.error || 'Falha ao ler os webhooks do GLPI.');
+      if (aplicar) await anotar(usuario, 'glpi.webhook', 'Webhook do GLPI', null, { url: dados.esperado });
+      res.json(dados);
+    }));
+
     app.get('/api/admin/historico', asyncHandler(async (req, res) => {
       await exigirAdmin(req);
       const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 200);
