@@ -500,7 +500,7 @@
         setTimeout(() => setLinkCopiado((x) => (x === item.id ? null : x)), 2500);
       }
     };
-    const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 8 s)
+    const [verificadoEm, setVerificadoEm] = useState(null); // última vez que o servidor respondeu "mudou?" (a cada 3 s)
     const autoRef = useRef(new Set()); // chamados que o automático já tentou nesta tela (não repete, mesmo com erro)
     const mudarAuto = (campos) => setAuto((a) => {
       const n = { ...a, ...campos };
@@ -532,21 +532,26 @@
     useEffect(() => {
       if (!pronto) return undefined;
       Cache.store.garantir();
-      // a cada 8 s (reserva do webhook, que o GLPI só entrega a cada ~1 min) só pergunta ao servidor se algo mudou no
-      // GLPI (1 busca leve) e recarrega a lista inteira só se mudou; com a aba escondida não pergunta; por segurança
-      // recarrega tudo a cada ~5 min mesmo sem mudança
+      // a cada 3 s (o webhook do GLPI só chega a cada ~1 min) só pergunta ao servidor se algo mudou no GLPI (1 busca
+      // leve de ~0,2 s) e recarrega a lista inteira só se mudou: chamado aberto aparece em 1 a 4 s. Com a aba escondida
+      // não pergunta, nunca duas perguntas ao mesmo tempo (GLPI lento não empilha) e, por segurança, recarrega tudo a
+      // cada ~5 min mesmo sem mudança
       let volta = 0;
+      let perguntando = false;
       const t = setInterval(async () => {
-        if (fontesRef.current.size || document.hidden) return;
+        if (fontesRef.current.size || document.hidden || perguntando) return;
         volta++;
+        perguntando = true;
         try {
           const m = await api('/api/mudou', { glpi: { userToken: acessos.userToken } });
           setVerificadoEm(new Date());
-          if (volta % 38 === 0 || m.assinatura !== assinaturaRef.current) buscar();
+          if (volta % 100 === 0 || m.assinatura !== assinaturaRef.current) buscar();
         } catch {
           // servidor fora por um instante: tenta de novo no próximo ciclo
+        } finally {
+          perguntando = false;
         }
-      }, 8000);
+      }, 3000);
       return () => clearInterval(t);
     }, [pronto, buscar, acessos.userToken]);
     useEffect(() => () => fontesRef.current.forEach((f) => f.close()), []);
