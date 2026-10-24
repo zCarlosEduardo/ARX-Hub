@@ -15,9 +15,9 @@
 const crypto = require('crypto');
 const path = require('path');
 const { listarExtensoes, montarZip } = require('./extensoes');
-const { adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
+const { glpiSemSegredo, adminCorrespondente, configPadrao, validarSecao, validarNovoAdmin, validarOrdem, TIPOS_SOLICITACAO, SESSOES_COFRE, MODOS_WHATSAPP } = require('./admin');
 
-const SECOES = ['cofre', 'automacoes', 'whatsapp', 'ia', 'extensoes'];
+const SECOES = ['cofre', 'automacoes', 'whatsapp', 'ia', 'extensoes', 'glpi'];
 const TTL_PADRAO_MS = 60000;
 
 /**
@@ -114,8 +114,10 @@ function criarRotasAdmin(deps) {
     app.get('/api/config-publica', asyncHandler(async (req, res) => {
       res.set('Cache-Control', 'no-store');
       // ia: lida pelo chamados-glpi (não tem segredo: só ligada, tipos e limites)
-      const { cofre, automacoes, ia, extensoes } = await configAtual();
-      res.json({ cofre, automacoes, ia, extensoes });
+      const { cofre, automacoes, ia, extensoes, glpi: g } = await configAtual();
+      // glpi: só qual ambiente está em uso e o site (o selo "GLPI de teste" e os links); o App-Token nunca sai daqui
+      const ativo = g[g.ambiente];
+      res.json({ cofre, automacoes, ia, extensoes, glpi: { ambiente: g.ambiente, site: ativo.site || ativo.url.replace(/\/api\.php\/.*/i, '') } });
     }));
 
     // Extensões de navegador para baixar (sem login, como o resto do Hub): só as que a administração deixa à mostra
@@ -144,19 +146,58 @@ function criarRotasAdmin(deps) {
     app.get('/api/admin/config', asyncHandler(async (req, res) => {
       await exigirAdmin(req);
       res.set('Cache-Control', 'no-store');
-      res.json({ config: await configAtual(), opcoes: { tipos: TIPOS_SOLICITACAO, sessoes: SESSOES_COFRE, modosWhatsapp: MODOS_WHATSAPP, extensoes: listarExtensoes(pastaExtensoes) } });
+      const config = await configAtual();
+      res.json({ config: { ...config, glpi: glpiSemSegredo(config.glpi) }, opcoes: { tipos: TIPOS_SOLICITACAO, sessoes: SESSOES_COFRE, modosWhatsapp: MODOS_WHATSAPP, extensoes: listarExtensoes(pastaExtensoes) } });
     }));
 
     app.put('/api/admin/config/:secao', asyncHandler(async (req, res) => {
       const usuario = await exigirAdmin(req);
       const secao = req.params.secao;
       if (!SECOES.includes(secao)) throw new ErroHttp(404, 'seção de configuração desconhecida');
-      const v = validarSecao(secao, req.body);
-      if (!v.ok) throw new ErroHttp(400, v.error);
       const antes = (await configAtual())[secao];
+      let corpo = req.body;
+      // GLPI: a tela nunca recebe o App-Token; vazio no pedido = manter o que já está guardado
+      if (secao === 'glpi' && corpo && typeof corpo === 'object') {
+        corpo = { ...corpo };
+        for (const amb of ['producao', 'teste']) {
+          const a = corpo[amb] && typeof corpo[amb] === 'object' ? corpo[amb] : null;
+          if (a && !String(a.appToken || '').trim()) corpo[amb] = { ...a, appToken: antes[amb].appToken };
+        }
+      }
+      const v = validarSecao(secao, corpo);
+      if (!v.ok) throw new ErroHttp(400, v.error);
       await repo.gravarConfig(secao, v.valor, usuario.nome || usuario.login);
-      await anotar(usuario, 'config.alterar', secao, antes, v.valor);
-      res.json(v.valor);
+      const visivel = (x) => (secao === 'glpi' ? glpiSemSegredo(x) : x);
+      await anotar(usuario, 'config.alterar', secao, visivel(antes), visivel(v.valor));
+      if (deps.aoMudarConfig) await deps.aoMudarConfig(secao, v.valor);
+      res.json(visivel(v.valor));
+    }));
+
+    // Conexão do GLPI em uso, para o chamados-glpi (rede interna, segredo HUB_SERVICO_TOKEN igual nos dois .env)
+    app.get('/api/interno/glpi', asyncHandler(async (req, res) => {
+      const enviado = String(req.get('X-Servico-Token') || '');
+      const segredo = deps.tokenInterno || '';
+      const hash = (x) => crypto.createHash('sha256').update(String(x)).digest();
+      if (!segredo || !enviado || !crypto.timingSafeEqual(hash(enviado), hash(segredo))) throw new ErroHttp(401, 'Credencial inválida.');
+      const g = (await configAtual()).glpi;
+      res.set('Cache-Control', 'no-store');
+      res.json({ ambiente: g.ambiente, ...g[g.ambiente] });
+    }));
+
+    // Testa o GLPI de um ambiente com o token de quem está na Administração (o do cofre): entra e diz quem é
+    app.post('/api/admin/glpi/testar', asyncHandler(async (req, res) => {
+      await exigirAdmin(req);
+      const amb = req.body && req.body.ambiente;
+      const g = (await configAtual()).glpi;
+      if (!['producao', 'teste'].includes(amb)) throw new ErroHttp(400, 'ambiente inválido');
+      if (!g[amb].url || !g[amb].appToken) throw new ErroHttp(400, 'Salve o endereço e o App-Token deste ambiente antes de testar.');
+      const token = String(req.get('X-Glpi-Token') || '').trim();
+      try {
+        const usuario = await glpi.testarConexao(g[amb], token);
+        res.json({ ok: true, usuario: usuario.nome || usuario.login });
+      } catch (err) {
+        res.json({ ok: false, erro: String((err && err.message) || 'falhou').split(token).join('[oculto]').slice(0, 300) });
+      }
     }));
 
     app.get('/api/admin/historico', asyncHandler(async (req, res) => {

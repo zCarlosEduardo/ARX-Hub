@@ -33,6 +33,9 @@ services:
       GLPI_BASE_URL: ${GLPI_BASE_URL:-}
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
       GLPI_ENTITY_ID: ${GLPI_ENTITY_ID:-}
+      GLPI_SITE_URL: ${GLPI_SITE_URL:-}
+      # segredo que o chamados-glpi usa para ler a conexão do GLPI escolhida na Administração (scripts/gerar-segredo-servico.sh)
+      HUB_SERVICO_TOKEN: ${HUB_SERVICO_TOKEN:-}
       # Quem é administrador do Hub na primeira subida (nome completo ou login do GLPI, separados por ;). Depois a lista
       # é gerida no painel de administração.
       HUB_ADMINS_INICIAIS: ${HUB_ADMINS_INICIAIS:-Carlos Eduardo de Souza Alonso}

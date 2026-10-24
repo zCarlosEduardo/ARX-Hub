@@ -203,6 +203,14 @@
     // Conversas do WhatsApp: quem vê é configurado na Administração (o servidor decide)
     const podeConversas = (window.usePodeConversas || (() => false))();
     const [cfgAuto, setCfgAuto] = useState({ cadastro: 'admins', endereco: 'mascarado', novaAba: true });
+    // GLPI de teste ligado na Administração: selo na barra para ninguém achar que mexe nos chamados reais
+    const [glpiTeste, setGlpiTeste] = useState(false);
+    useEffect(() => {
+      const ler = () => api('/api/config-publica').then((c) => setGlpiTeste(!!(c && c.glpi && c.glpi.ambiente === 'teste'))).catch(() => { /* sem config: produção */ });
+      ler();
+      window.addEventListener('arx-config-glpi', ler);
+      return () => window.removeEventListener('arx-config-glpi', ler);
+    }, []);
     useEffect(() => {
       api('/api/config-publica').then((c) => c && c.automacoes && setCfgAuto(c.automacoes)).catch(() => { /* sem config: valem os padrões */ });
       const aoMudar = (ev) => setCfgAuto(ev.detail);
@@ -915,6 +923,7 @@
           e('button', { key: 'a', type: 'button', className: 'icone-btn', 'aria-label': 'Avançar', title: 'Avançar', disabled: !podeAvancar, onClick: () => andar(1) }, ic('avancar')),
           e('button', { key: 'r', type: 'button', className: 'icone-btn', 'aria-label': 'Recarregar', title: 'Recarregar', onClick: recarregarAtual }, ic('recarregar')),
           e('span', { key: 'o', className: 'no-ar' + (offline ? ' com-falha' : ''), title: online + ' de ' + total + ' automações no ar' }, [e('i', { key: 'i', 'aria-hidden': 'true' }), online + '/' + total + ' online']),
+          glpiTeste ? e('span', { key: 'g', className: 'pill warn', title: 'Os chamados e o botão do GLPI usam o GLPI de teste desta máquina (Administração > GLPI).' }, 'GLPI de teste') : null,
         ]),
         e('label', { key: 'campo', className: 'campo-endereco' }, [
           e('span', { key: 'tr', className: 'trilha' }, [

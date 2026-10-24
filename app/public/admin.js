@@ -245,6 +245,57 @@
 
   /** Escolha dos grupos do GLPI que veem uma automação (nenhum marcado = todos veem). */
   // ---------- aba: Extensões (extensões de navegador que o Hub oferece para baixar) ----------
+  /**
+   * Qual GLPI o Hub e o chamados-glpi usam: produção ou o GLPI de teste desta máquina. O App-Token nunca volta do
+   * servidor: o campo vazio mantém o guardado. "Testar conexão" entra com o token do GLPI do seu cofre.
+   */
+  function AbaGlpi({ config, aoSalvar }) {
+    const [g, setG] = useState(() => copia(config.glpi));
+    const [teste, setTeste] = useState({});
+    const salvar = useSalvar(async () => {
+      const novo = await api('PUT', '/api/admin/config/glpi', g);
+      setG(novo);
+      aoSalvar({ ...config, glpi: novo });
+      window.dispatchEvent(new Event('arx-config-glpi')); // o selo "GLPI de teste" da barra muda na hora
+    });
+    const mudar = (amb, k, v) => setG((x) => ({ ...x, [amb]: { ...x[amb], [k]: v } }));
+    async function testar(amb) {
+      setTeste((t) => ({ ...t, [amb]: { carregando: true } }));
+      try {
+        const r = await api('POST', '/api/admin/glpi/testar', { ambiente: amb });
+        setTeste((t) => ({ ...t, [amb]: r.ok ? { ok: `Conectou como ${r.usuario}.` } : { erro: r.erro } }));
+      } catch (err) {
+        setTeste((t) => ({ ...t, [amb]: { erro: err.message } }));
+      }
+    }
+    const entrada = (amb, k, rotulo, nota, extra = {}) => campo(k, rotulo, e('input', { className: 'field-input', value: g[amb][k] == null ? '' : g[amb][k], onChange: (ev) => mudar(amb, k, ev.target.value), style: S().input, ...extra }), nota);
+    const ambiente = (amb, titulo, descricao) => secao(amb, titulo, descricao, [
+      entrada(amb, 'url', 'Endereço da API', 'Termina em /api.php/v1.', { placeholder: 'https://suporte.exemplo.com.br/api.php/v1', id: `glpi-${amb}-url` }),
+      entrada(amb, 'site', 'Endereço do site (links dos chamados)', 'Vazio = a raiz do endereço da API.', { placeholder: 'https://suporte.exemplo.com.br' }),
+      entrada(amb, 'appToken', 'App-Token', g[amb].appTokenDefinido ? 'Já está guardado. Deixe vazio para manter; digite só para trocar.' : 'Configuração > Geral > API > Cliente da API, no GLPI.', { type: 'password', autoComplete: 'off', placeholder: g[amb].appTokenDefinido ? 'Guardado' : 'Não informado' }),
+      e('div', { key: 'ent', className: 'admin-linha-campos' }, [
+        entrada(amb, 'entidades', 'Entidades lidas pelos chamados', 'Nomes ou IDs, separados por vírgula.', { placeholder: 'Sistemas' }),
+        entrada(amb, 'entidadeId', 'ID da entidade padrão', 'Onde o Hub abre chamado e a entidade de reserva dos chamados.', { inputMode: 'numeric', placeholder: 'Não informado' }),
+      ]),
+      e('div', { key: 'testar', className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        botao(teste[amb] && teste[amb].carregando ? 'Testando…' : 'Testar conexão', () => testar(amb), 'sec', { key: 'b', disabled: !!(teste[amb] && teste[amb].carregando) }),
+        teste[amb] && teste[amb].ok ? e('span', { key: 'ok', role: 'status', style: { color: 'var(--success, #16a34a)', fontSize: 13 } }, teste[amb].ok) : null,
+        teste[amb] && teste[amb].erro ? e('span', { key: 'er', role: 'alert', className: 'admin-erro' }, teste[amb].erro) : null,
+        dica('Usa o token do GLPI do seu cofre; o de produção não entra no GLPI de teste. Salve antes de testar.'),
+      ]),
+    ]);
+    return e('div', { className: 'admin-pilha' }, [
+      secao('em-uso', 'GLPI em uso', 'Vale para o Hub (abrir chamado, Conversas, administradores) e para os Chamados. Troca na hora, sem reiniciar nada.', [
+        campo('amb', 'Ambiente', selecao(g.ambiente, (v) => setG((x) => ({ ...x, ambiente: v })), [['producao', 'Produção'], ['teste', 'Teste (GLPI desta máquina)']]),
+          g.ambiente === 'teste' ? 'Com o teste ligado, cada pessoa precisa do token do GLPI de teste no cofre. A barra do Hub mostra "GLPI de teste".' : 'Os chamados reais.'),
+        g.ambiente === 'teste' ? e('div', { key: 'av', className: 'admin-aviso alerta' }, 'Nada do GLPI de produção aparece com o teste ligado: Chamados, Conversas e o botão do GLPI passam a usar o de teste.') : null,
+      ]),
+      ambiente('producao', 'Produção', 'O GLPI de verdade.'),
+      ambiente('teste', 'Teste', 'GLPI de teste nesta máquina (pasta glpi-teste do ARX Automações). A pasta guarda o App-Token e os tokens dos usuários de teste no .env.'),
+      e('div', { key: 'salvar', className: 'admin-barra-salvar' }, rodape(salvar.salvar, salvar.salvando, salvar.erro, salvar.ok, 'Salvar GLPI', 'Salva as três seções desta página.')),
+    ]);
+  }
+
   function AbaExtensoes({ config, opcoes, aoSalvar }) {
     const [c, setC] = useState(() => copia(config.extensoes));
     const lista = (opcoes && opcoes.extensoes) || [];
@@ -937,6 +988,7 @@
     ['Automações', [
       ['automacoes', 'Automações', 'Workflow', 'Quem gerencia, como o endereço aparece, quem vê cada automação e a ordem no painel.'],
       ['extensoes', 'Extensões', 'FileText', 'Extensões de navegador que o Hub oferece para baixar.'],
+      ['glpi', 'GLPI', 'Server', 'Qual GLPI o Hub e os Chamados usam: produção ou o de teste desta máquina.'],
     ]],
     ['IA local', [
       ['ia', 'IA local', 'Bot', 'Ligar e desligar, treinar e escolher como a IA ajuda nos chamados.'],
@@ -977,6 +1029,7 @@
     else if (aba === 'cofre') corpo = e(AbaCofre, { key: 'cofre', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'admins') corpo = e(AbaAdmins, { key: 'admins' });
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
+    else if (aba === 'glpi') corpo = e(AbaGlpi, { key: 'glpi', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'extensoes') corpo = e(AbaExtensoes, { key: 'extensoes', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
     else if (aba === 'revisao') corpo = e(AbaRevisao, { key: 'revisao' });

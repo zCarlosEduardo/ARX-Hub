@@ -131,6 +131,13 @@ function configPadrao() {
     ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
     // extensões de navegador para baixar (app/extensoes): mostrar = botão "Extensões" no Hub; ocultas = ids escondidas
     extensoes: { mostrar: true, ocultas: [] },
+    // GLPI em uso pelo Hub e pelo chamados-glpi: produção (começa pelo .env) ou o GLPI de teste desta máquina
+    // (glpi-teste/ no ARX-Automacoes). O App-Token é segredo: nunca volta para a tela nem para o histórico.
+    glpi: {
+      ambiente: 'producao',
+      producao: { url: process.env.GLPI_BASE_URL || '', site: process.env.GLPI_SITE_URL || '', appToken: process.env.GLPI_APP_TOKEN || '', entidadeId: Number(process.env.GLPI_ENTITY_ID) || null, entidades: 'Sistemas' },
+      teste: { url: 'http://glpi-teste/api.php/v1', site: 'http://localhost:8090', appToken: '', entidadeId: null, entidades: 'Sistemas' },
+    },
     whatsapp: {
       ativo: false,
       modo: 'observacao',
@@ -189,6 +196,38 @@ function validarExtensoes(b) {
   const ocultas = c.ocultas === undefined ? padrao.ocultas : c.ocultas;
   if (!Array.isArray(ocultas) || ocultas.some((x) => typeof x !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(x))) return { erro: 'extensoes.ocultas deve ser uma lista de ids de extensão' };
   return { valor: { mostrar, ocultas: [...new Set(ocultas)] } };
+}
+
+const AMBIENTES_GLPI = ['producao', 'teste'];
+const NOME_AMBIENTE = { producao: 'produção', teste: 'teste' };
+function validarGlpi(b) {
+  const padrao = configPadrao().glpi;
+  const c = b && typeof b === 'object' ? b : {};
+  const ambiente = c.ambiente === undefined ? padrao.ambiente : c.ambiente;
+  if (!AMBIENTES_GLPI.includes(ambiente)) return { erro: 'glpi.ambiente deve ser producao ou teste' };
+  const endereco = (v) => (typeof v === 'string' ? v.trim().replace(/\/+$/, '') : '');
+  const valor = { ambiente };
+  for (const amb of AMBIENTES_GLPI) {
+    const a = c[amb] && typeof c[amb] === 'object' ? c[amb] : padrao[amb];
+    const url = endereco(a.url);
+    const site = endereco(a.site);
+    if (url && (!/^https?:\/\/[^\s/]+/i.test(url) || url.length > 300)) return { erro: `o endereço da API do GLPI de ${NOME_AMBIENTE[amb]} deve começar com http:// ou https://` };
+    if (site && (!/^https?:\/\/[^\s/]+/i.test(site) || site.length > 300)) return { erro: `o endereço do site do GLPI de ${NOME_AMBIENTE[amb]} deve começar com http:// ou https://` };
+    const appToken = typeof a.appToken === 'string' ? a.appToken.trim() : '';
+    if (appToken.length > 200 || /\s/.test(appToken)) return { erro: `o App-Token do GLPI de ${NOME_AMBIENTE[amb]} é inválido` };
+    const entidadeId = a.entidadeId === undefined || a.entidadeId === null || a.entidadeId === '' ? null : Number(a.entidadeId);
+    if (entidadeId !== null && (!Number.isInteger(entidadeId) || entidadeId < 0)) return { erro: `o ID da entidade do GLPI de ${NOME_AMBIENTE[amb]} é inválido` };
+    const entidades = typeof a.entidades === 'string' && a.entidades.trim() ? a.entidades.trim().slice(0, 300) : 'Sistemas';
+    valor[amb] = { url, site, appToken, entidadeId, entidades };
+  }
+  if (!valor[ambiente].url || !valor[ambiente].appToken) return { erro: `preencha o endereço da API e o App-Token do GLPI de ${NOME_AMBIENTE[ambiente]} antes de usá-lo` };
+  return { valor };
+}
+
+/** Configuração do GLPI sem os App-Tokens (para a tela e o histórico): diz só se cada um está preenchido. */
+function glpiSemSegredo(g) {
+  const sem = (a) => ({ ...a, appToken: '', appTokenDefinido: !!a.appToken });
+  return { ambiente: g.ambiente, producao: sem(g.producao), teste: sem(g.teste) };
 }
 
 function validarIa(b) {
@@ -337,7 +376,7 @@ function validarWhatsapp(b) {
 
 /** Valida UMA seção da configuração. @returns {{ok: true, valor: object} | {ok: false, error: string}} */
 function validarSecao(chave, corpo) {
-  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp, ia: validarIa, extensoes: validarExtensoes };
+  const validadores = { cofre: validarCofre, automacoes: validarAutomacoes, whatsapp: validarWhatsapp, ia: validarIa, extensoes: validarExtensoes, glpi: validarGlpi };
   const r = validadores[chave] ? validadores[chave](corpo) : { erro: 'seção de configuração desconhecida' };
   return r.erro ? { ok: false, error: r.erro } : { ok: true, valor: r.valor };
 }
@@ -370,6 +409,7 @@ function validarOrdem(corpo) {
 }
 
 module.exports = {
+  glpiSemSegredo,
   norm,
   usuarioDaSessao,
   adminCorrespondente,

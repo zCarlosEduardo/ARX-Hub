@@ -71,6 +71,7 @@ test('config-publica não exige login e devolve o padrão (cofre ativo, sessão 
       automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
       ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
       extensoes: { mostrar: true, ocultas: [] },
+      glpi: { ambiente: 'producao', site: '' },
     });
   } finally { await s.fechar(); }
 });

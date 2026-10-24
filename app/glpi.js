@@ -1,10 +1,26 @@
-const BASE_URL = (process.env.GLPI_BASE_URL || '').replace(/\/+$/, '');
-const APP_TOKEN = process.env.GLPI_APP_TOKEN || '';
+// Conexão com o GLPI. Começa pelo .env e passa a seguir o ambiente escolhido em Administração > GLPI (produção ou
+// teste) por configurar(); as funções leem estas variáveis a cada chamada, então a troca vale na hora.
+let BASE_URL = '';
+let APP_TOKEN = '';
 // Todo chamado aberto por este widget cai nesta entidade (ex.: 1 = "Sistemas").
-const ENTITY_ID = process.env.GLPI_ENTITY_ID || '';
-// Raiz do site (sem o /api.php/v1) — usada só pra montar o link direto do
-// chamado (front/ticket.form.php), nunca chamada como API.
-const SITE_URL = (process.env.GLPI_SITE_URL || BASE_URL.replace(/\/api\.php\/.*/i, '') || 'https://suporte.mutualle.com.br').replace(/\/+$/, '');
+let ENTITY_ID = '';
+// Raiz do site (sem o /api.php/v1): só para montar o link direto do chamado (front/ticket.form.php), nunca chamada como API.
+let SITE_URL = '';
+// o outro ambiente: só para reconhecer quem é a pessoa quando o token dela é do outro GLPI (assim ninguém fica preso
+// fora da Administração depois de trocar de ambiente)
+let reserva = null;
+const semBarra = (u) => String(u || '').replace(/\/+$/, '');
+const siteDe = (c) => semBarra(c.site || semBarra(c.url).replace(/\/api\.php\/.*/i, '') || 'https://suporte.mutualle.com.br');
+
+/** Troca a conexão ativa: { url, appToken, entidadeId, site } e, opcional, a do outro ambiente. */
+function configurar(ativa, outra = null) {
+  BASE_URL = semBarra(ativa.url);
+  APP_TOKEN = ativa.appToken || '';
+  ENTITY_ID = ativa.entidadeId ? String(ativa.entidadeId) : '';
+  SITE_URL = siteDe(ativa);
+  reserva = outra && outra.url && outra.appToken ? { url: semBarra(outra.url), appToken: outra.appToken } : null;
+}
+configurar({ url: process.env.GLPI_BASE_URL, appToken: process.env.GLPI_APP_TOKEN, entidadeId: process.env.GLPI_ENTITY_ID, site: process.env.GLPI_SITE_URL });
 
 function ticketUrl(ticketId) {
   return `${SITE_URL}/front/ticket.form.php?id=${ticketId}`;
@@ -213,12 +229,50 @@ async function statusChamado(userToken, ticketId) {
  */
 async function identificarUsuario(userToken) {
   const { usuarioDaSessao } = require('./admin');
-  return withSession(userToken, async (sessionToken) => {
-    const sessao = await glpiFetch('/getFullSession', { method: 'GET', headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken } });
-    const usuario = usuarioDaSessao(sessao);
-    if (!usuario) throw new Error('O GLPI não informou quem é o dono do token.');
+  try {
+    return await withSession(userToken, async (sessionToken) => {
+      const sessao = await glpiFetch('/getFullSession', { method: 'GET', headers: { 'App-Token': APP_TOKEN, 'Session-Token': sessionToken } });
+      const usuario = usuarioDaSessao(sessao);
+      if (!usuario) throw new Error('O GLPI não informou quem é o dono do token.');
+      return usuario;
+    });
+  } catch (err) {
+    if (!reserva) throw err;
+    // token do outro ambiente (ex.: o de produção com o GLPI de teste ligado): ainda reconhece a pessoa
+    const usuario = await testarConexao(reserva, userToken).catch(() => null);
+    if (!usuario) throw err;
     return usuario;
-  });
+  }
 }
 
-module.exports = { statusChamado, criarChamado: createTicket, fetchLookup, createTicketComAnexos, lerAnexos, ticketUrl, sanitizar, identificarUsuario, listarGrupos };
+/**
+ * Entra num GLPI qualquer ({ url, appToken }) com o token da pessoa e diz quem ela é, sem mexer na conexão ativa.
+ * Serve para reconhecer a pessoa no outro ambiente e para o "Testar conexão" da Administração.
+ */
+async function testarConexao(conexao, userToken) {
+  const { usuarioDaSessao } = require('./admin');
+  if (!userToken) throw new Error('Informe o token do GLPI.');
+  const url = semBarra(conexao.url);
+  const pedir = async (caminho, headers) => {
+    const r = await fetch(url + caminho, { headers: { 'Content-Type': 'application/json', 'App-Token': conexao.appToken, ...headers }, signal: AbortSignal.timeout(15000) });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(Array.isArray(d) ? d.join('; ') : `o GLPI respondeu ${r.status}`);
+    return d;
+  };
+  try {
+    const { session_token: sessao } = await pedir('/initSession', { Authorization: 'user_token ' + userToken });
+    try {
+      const usuario = usuarioDaSessao(await pedir('/getFullSession', { 'Session-Token': sessao }));
+      if (!usuario) throw new Error('O GLPI não informou quem é o dono do token.');
+      return usuario;
+    } finally {
+      await pedir('/killSession', { 'Session-Token': sessao }).catch(() => {});
+    }
+  } catch (err) {
+    throw new Error(sanitizar(err && err.cause && err.cause.code ? `sem resposta do GLPI (${err.cause.code})` : err.message, [userToken, conexao.appToken]));
+  }
+}
+
+module.exports = {
+  configurar,
+  testarConexao, statusChamado, criarChamado: createTicket, fetchLookup, createTicketComAnexos, lerAnexos, ticketUrl, sanitizar, identificarUsuario, listarGrupos };

@@ -457,11 +457,21 @@ app.get('/api/glpi/history', asyncHandler(async (req, res) => {
 }));
 
 // Administração (painel de configuração): só admins do GLPI. Veja rotasAdmin.js.
+// GLPI em uso (Administração > GLPI): produção ou o GLPI de teste; o outro fica de reserva só para reconhecer quem é admin
+function aplicarGlpi(g) {
+  const outro = g.ambiente === 'teste' ? 'producao' : 'teste';
+  glpi.configurar(g[g.ambiente], g[outro]);
+}
 const rotasAdmin = criarRotasAdmin({
   repo: repoPg(pool),
   glpi,
   asyncHandler,
   ErroHttp,
+  // o chamados-glpi lê daqui a conexão do GLPI escolhida (segredo HUB_SERVICO_TOKEN igual nos dois .env)
+  tokenInterno: process.env.HUB_SERVICO_TOKEN || '',
+  aoMudarConfig: async (secao, valor) => {
+    if (secao === 'glpi') aplicarGlpi(valor);
+  },
   aoMudarOrdem: async () => {
     invalidarCache();
     await broadcastAutomations();
@@ -537,6 +547,7 @@ async function start() {
   if (senha.aviso) console.warn(senha.aviso);
   await waitForDb();
   await init();
+  aplicarGlpi((await rotasAdmin.configAtual()).glpi);
   await sweepAll().catch((err) => console.error('[varredura]', err.message));
   setInterval(() => sweepAll().catch((err) => console.error('[varredura]', err.message)), CHECK_INTERVAL_MS);
   // com o token de serviço, confere a cada minuto se os chamados que o robô abriu já foram solucionados
