@@ -1,4 +1,6 @@
 // Cards dos pedidos de senha (senha_sistemas e alterar_senha_sga) da aba Chamados.
+// PENDENTE: a tela de Chamados do v1 (public/v1/chamados.js) mostra estes dados em tabela e painel lateral; este teste
+// ainda cobre o chamados.js do Hub antigo, mantido só por ele. Portar para o v1 e então apagar public/chamados.js.
 // Renderiza com um React mínimo (sem DOM) e confere estrutura e textos. Não valida o visual.
 const test = require('node:test');
 const assert = require('node:assert/strict');

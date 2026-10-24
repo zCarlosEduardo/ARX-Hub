@@ -63,8 +63,8 @@ app.get(['/', '/index.html'], (req, res, next) => {
   res.send(indexComVersao[arquivo]);
 });
 
-// Endereços salvos das versões anteriores (/v1/, /v3/, /v2/) vão para o principal. O Hub antigo fica em /original/ como reserva.
-app.get(['/v1', '/v1/', '/v1/index.html', '/v3', '/v3/', '/v3/index.html', '/v2', '/v2/', '/v2/index.html'], (req, res) => res.redirect(302, '/'));
+// Endereços salvos das versões anteriores (/v1/, /v3/, /v2/ e o Hub antigo em /original/) vão para o principal.
+app.get(['/v1', '/v1/', '/v1/index.html', '/v3', '/v3/', '/v3/index.html', '/v2', '/v2/', '/v2/index.html', '/original', '/original/', '/original/index.html'], (req, res) => res.redirect(302, '/'));
 
 // Tutoriais em vídeo do botão "?" (Hub e automações): pasta montada no container, fora do Git (mídia pesada).
 // CORS aberto porque as automações, em outras portas, leem o índice tutoriais.json daqui.
