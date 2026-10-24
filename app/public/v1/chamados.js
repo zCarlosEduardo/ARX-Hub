@@ -26,6 +26,7 @@
       outros: d ? d.outros : 0,
       totalAbertos: d ? d.totalAbertos : 0,
       perfis: d ? d.perfis || [] : [],
+      tiposDisponiveis: d ? d.tiposDisponiveis || [] : [],
       entidades: d ? Cache.puro.entidadesDaLista(d) : [],
       tempos: s.tempos,
       em: s.em,
@@ -397,7 +398,20 @@
           e('section', { key: 'i', className: 'exu-bloco' }, [
             e('h4', { key: 'h' }, 'Informações'),
             dl([
-              ['Tipo', e('span', { className: 'exu-tipo' }, item.tipoNome || 'Sem automação')],
+              ['Tipo', e('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+                e('span', { key: 't', className: 'exu-tipo' }, item.tipoNome || 'Sem automação'),
+                item.tipoManual ? e('span', { key: 'm', style: { fontSize: 12, color: 'var(--muted)' } }, `escolhido à mão${item.tipoManual.por ? ` por ${item.tipoManual.por}` : ''}`) : null,
+                // a regra ou a IA erraram o tipo: troca aqui (vale na lista e na execução) ou volta ao das regras
+                p && p.trocarTipo && (p.tipos || []).length ? e('select', {
+                  key: 's', className: 'exu-select', 'aria-label': 'Trocar o tipo do chamado', value: '', disabled: !!p.rodandoEste,
+                  onChange: (ev) => { if (ev.target.value) p.trocarTipo(ev.target.value); },
+                }, [
+                  e('option', { key: '', value: '' }, 'Trocar o tipo…'),
+                  ...p.tipos.filter((t) => t.chave !== item.tipo).map((t) => e('option', { key: t.chave, value: t.chave }, t.nome)),
+                  e('option', { key: 'sem', value: 'sem_automacao' }, 'Sem automação (tirar da lista)'),
+                  item.tipoManual ? e('option', { key: 'regra', value: 'regra' }, 'Voltar ao tipo das regras') : null,
+                ]) : null,
+              ])],
               ['Categoria', (c && c.categoria) || item.categoria || 'Sem categoria'],
               ['Solicitante', (c && c.requerente) || item.requerente || 'Não informado'],
               ['Aberto há', tempoRelativo((c && c.abertoEm) || item.abertoEm) + ' · ' + dataBr((c && c.abertoEm) || item.abertoEm)],
@@ -426,7 +440,7 @@
           p && p.detalhes ? e('section', { key: 'l', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'O que a automação leu'), p.detalhes]) : null,
           item.ia ? e('section', { key: 'ia', className: 'exu-bloco' }, [
             e('h4', { key: 'h' }, 'Opinião da IA local'),
-            e('div', { key: 't', style: { fontSize: 13 } }, item.reabertoIa ? `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.` : item.ia.concorda ? 'Concorda com a regra' + (item.validadoPorIa ? '; liberado para o automático.' : '.') : `${item.ia.aplicar === 'auto' ? 'Trocou o tipo para' : 'Sugere'} ${item.tipoNome || 'sem automação'}${item.ia.motivo ? ': ' + item.ia.motivo : ''}.`),
+            e('div', { key: 't', style: { fontSize: 13 } }, item.reabertoIa ? `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.` : item.ia.concorda ? 'Concorda com a regra' + (item.validadoPorIa ? '; liberado para o automático.' : '.') : item.ia.sugerido ? `Sugere ${item.ia.sugeridoNome}${item.ia.motivo ? ': ' + item.ia.motivo : ''}. Vale a regra (${item.tipoNome}); se a IA estiver certa, troque o tipo acima.` : `${item.ia.aplicar === 'auto' ? 'Trocou o tipo para' : 'Sugere'} ${item.tipoNome || 'sem automação'}${item.ia.motivo ? ': ' + item.ia.motivo : ''}.`),
             e('div', { key: 'm', className: 'exu-medidor', role: 'meter', 'aria-valuenow': Math.round(item.ia.confianca * 100), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Confiança da IA' }, e('div', { style: { width: Math.round(item.ia.confianca * 100) + '%' } })),
             e('div', { key: 'p', style: { fontSize: 12, color: 'var(--muted)', marginTop: 4 } }, 'Confiança de ' + Math.round(item.ia.confianca * 100) + '%'),
           ]) : null,
@@ -1352,6 +1366,18 @@
           confirmarRodar: () => rodar([itemAberto], { manual: true }),
           // resposta ao solicitante (sugerida pela IA ou digitada): só o acompanhamento, sem rodar; em teste não escreve
           responder: (texto) => api('/api/responder', { glpi: { userToken: acessos.userToken }, id: itemAberto.id, texto, modoTeste }),
+          // trocar o tipo (ou voltar ao das regras): o servidor guarda e a lista volta montada com o tipo novo
+          tipos: lista.tiposDisponiveis || [],
+          trocarTipo: async (tipo) => {
+            try {
+              await api('/api/tipo', { id: itemAberto.id, tipo, quem: lista.usuario && lista.usuario.nome });
+              setResultados((r) => { const n = { ...r }; delete n[itemAberto.id]; return n; });
+              avisar(tipo === 'regra' ? 'O chamado voltou ao tipo das regras.' : tipo === 'sem_automacao' ? 'Chamado marcado como sem automação: sai da lista.' : 'Tipo trocado. A lista vai mostrar o chamado com o tipo novo.', 'ok');
+              buscar();
+            } catch (err) {
+              avisar('Não consegui trocar o tipo: ' + err.message, 'erro');
+            }
+          },
           cancelar: () => setConfirmando(null),
           dispensar: () => (dispensados.includes(itemAberto.id) ? dispensar(itemAberto.id, false) : setConfirmar({ tipo: 'dispensa', ids: [itemAberto.id] })),
         },
