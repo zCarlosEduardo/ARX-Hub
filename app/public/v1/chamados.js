@@ -393,6 +393,13 @@
             ].filter(Boolean)),
             link ? e('div', { key: 'cp', style: { marginTop: 10 } }, e('button', { type: 'button', className: 'exu-btn pequeno', onClick: async () => { if (await copiarTexto(link)) { setCopiado(true); setTimeout(() => setCopiado(false), 2500); } } }, [Icon('Copy', 13, 'currentColor'), copiado ? 'Link copiado' : 'Copiar link'])) : null,
           ]),
+          // o solicitante respondeu depois da automação (reaberto pedindo ajuste, correção depois de erro): ler antes de rodar
+          item.respostas && item.respostas.length ? e('section', { key: 'resp', className: 'exu-bloco' }, [
+            e('h4', { key: 'h' }, 'Respostas do solicitante depois da automação'),
+            item.ajusteIa ? e('div', { key: 'aj', className: 'v2c-aviso', role: 'status' }, `Ajuste pedido (lido pela IA): ${item.ajusteIa.resumo}${item.tipo === 'foto_perfil' && Object.keys(item.ajusteIa.campos || {}).length ? ' Os campos da foto já vêm com a sugestão: confira antes de rodar.' : ''}`) : e('div', { key: 'aj', className: 'v2c-aviso', role: 'status' }, 'Leia as respostas e ajuste os dados antes de rodar: o chamado não roda de novo sozinho.'),
+            e('ol', { key: 'l', style: { margin: '8px 0 0', paddingLeft: 18, display: 'grid', gap: 6, fontSize: 13 } }, item.respostas.map((r, i) =>
+              e('li', { key: i }, [e('span', { key: 'q', style: { color: 'var(--muted)' } }, dataBr(r.em) + ' · '), r.texto]))),
+          ]) : null,
           p && p.detalhes ? e('section', { key: 'l', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'O que a automação leu'), p.detalhes]) : null,
           item.ia ? e('section', { key: 'ia', className: 'exu-bloco' }, [
             e('h4', { key: 'h' }, 'Opinião da IA local'),
