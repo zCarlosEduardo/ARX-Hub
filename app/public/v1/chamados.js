@@ -358,7 +358,8 @@
             ]),
           ])
         : [
-            e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !p.pode || (res && res.status === 'concluido'), onClick: p.pedirRodar }, [Icon(res && res.status !== 'concluido' ? 'RefreshCw' : 'Activity', 14, 'currentColor'), res && res.status !== 'concluido' ? 'Rodar novamente' : 'Rodar']),
+            // já solucionado (ou testado) nesta tela e reaberto no GLPI: rodar de novo continua possível, com a confirmação
+            e('button', { key: 'r', type: 'button', className: 'exu-btn primario', disabled: !p.pode, onClick: p.pedirRodar }, [Icon(res ? 'RefreshCw' : 'Activity', 14, 'currentColor'), res ? 'Rodar novamente' : 'Rodar']),
             e('button', { key: 'd', type: 'button', className: 'exu-btn', disabled: !!res && res.status === 'concluido', onClick: p.dispensar }, p.dispensado ? 'Voltar para a lista' : 'Não rodar'),
             link ? e('a', { key: 'g', className: 'exu-btn', href: link, target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' }, title: 'Se cair em "sessão expirou", use Copiar link e cole na barra de endereço' }, [Icon('ExternalLink', 14, 'currentColor'), 'Abrir no GLPI']) : null,
           ];
@@ -988,7 +989,7 @@
                     : res.status === 'pendencia' ? 'Pedido o que falta: chamado Pendente'
                       : 'Erro: devolutiva pendente no chamado')]),
           e('p', { key: 't' }, res.texto),
-          res.status !== 'concluido' ? e('button', { key: 'again', type: 'button', className: 'exu-btn', style: { marginTop: 10 }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14, 'currentColor'), 'Rodar novamente']) : null,
+          e('button', { key: 'again', type: 'button', className: 'exu-btn', style: { marginTop: 10 }, onClick: () => { setResultados((r) => { const n = { ...r }; delete n[item.id]; return n; }); if (pode) setConfirmando(item.id); } }, [Icon('RefreshCw', 14, 'currentColor'), 'Rodar novamente']),
         ]);
       } else if (rodandoEste) {
         acoes = e('div', { key: 'rod', className: 'v2-carregando' }, [
@@ -1166,6 +1167,9 @@
           if (!item.problemas.length && !lista.guardado && !falta(item)) rodarEste(); else setAberto(item.id);
         } }, 'Rodar novamente');
       }
+      // solucionado ou testado nesta tela e ainda na lista (reaberto, ou teste que agora vai rodar de verdade): abre o
+      // chamado para conferir e rodar de novo; nunca roda direto da linha
+      if (s === 'concluido' || s === 'teste') return e('button', { type: 'button', className: 'exu-btn texto', onClick: () => setAberto(item.id) }, 'Rodar novamente');
       if (s === 'falta') return e('button', { type: 'button', className: 'exu-btn texto', onClick: () => setAberto(item.id) }, 'Escolher');
       if (s === 'confirmar') return e('button', { type: 'button', className: 'exu-btn texto', onClick: () => setAberto(item.id) }, 'Conferir e rodar');
       return null;
