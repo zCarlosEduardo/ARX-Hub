@@ -543,8 +543,9 @@
         baseCrm: atual.baseCrm !== undefined ? atual.baseCrm : (item.baseCrm && (item.baseCrm.pedida || item.baseCrm.principal)) || '',
         cooperativa: atual.cooperativa !== undefined ? atual.cooperativa : (item.cooperativa && (item.cooperativa.exata || (item.cooperativa.sugestoes.length === 1 ? item.cooperativa.sugestoes[0] : ''))) || '',
         fotoLista: atual.fotoLista !== undefined ? atual.fotoLista : item.foto && item.foto.multi ? item.foto.fotos.map((x) => `${x.nome} | ${x.departamento}`).join('\n') : '',
-        fotoNome: atual.fotoNome !== undefined ? atual.fotoNome : '',
-        fotoDepartamento: atual.fotoDepartamento !== undefined ? atual.fotoDepartamento : '',
+        // ajuste pedido nas respostas (lido pela IA): os campos já vêm com o que o solicitante pediu; a pessoa confere
+        fotoNome: atual.fotoNome !== undefined ? atual.fotoNome : (item.ajusteIa && item.foto && item.foto.sugestaoNome) || '',
+        fotoDepartamento: atual.fotoDepartamento !== undefined ? atual.fotoDepartamento : (item.ajusteIa && item.foto && item.foto.sugestaoDepartamento) || '',
         loginSga: atual.loginSga !== undefined ? atual.loginSga : (item.usuario && item.usuario.loginSugerido) || '',
         empresasCrm: atual.empresasCrm || (item.associacaoUsuario ? item.associacaoUsuario.empresasCrm : []), // padrão: todas as bases (uma para cada)
       };
