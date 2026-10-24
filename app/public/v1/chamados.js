@@ -440,7 +440,7 @@
           p && p.detalhes ? e('section', { key: 'l', className: 'exu-bloco' }, [e('h4', { key: 'h' }, 'O que a automação leu'), p.detalhes]) : null,
           item.ia ? e('section', { key: 'ia', className: 'exu-bloco' }, [
             e('h4', { key: 'h' }, 'Opinião da IA local'),
-            e('div', { key: 't', style: { fontSize: 13 } }, item.reabertoIa ? `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.` : item.ia.concorda ? 'Concorda com a regra' + (item.validadoPorIa ? '; liberado para o automático.' : '.') : item.ia.sugerido ? `Sugere ${item.ia.sugeridoNome}${item.ia.motivo ? ': ' + item.ia.motivo : ''}. Vale a regra (${item.tipoNome}); se a IA estiver certa, troque o tipo acima.` : `${item.ia.aplicar === 'auto' ? 'Trocou o tipo para' : 'Sugere'} ${item.tipoNome || 'sem automação'}${item.ia.motivo ? ': ' + item.ia.motivo : ''}.`),
+            e('div', { key: 't', style: { fontSize: 13 } }, item.reabertoIa ? item.reabertoIa.aviso || `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.` : item.ia.concorda ? 'Concorda com a regra' + (item.validadoPorIa ? '; liberado para o automático.' : '.') : item.ia.sugerido ? `Sugere ${item.ia.sugeridoNome}${item.ia.motivo ? ': ' + item.ia.motivo : ''}. Vale a regra (${item.tipoNome}); se a IA estiver certa, troque o tipo acima.` : `${item.ia.aplicar === 'auto' ? 'Trocou o tipo para' : 'Sugere'} ${item.tipoNome || 'sem automação'}${item.ia.motivo ? ': ' + item.ia.motivo : ''}.`),
             e('div', { key: 'm', className: 'exu-medidor', role: 'meter', 'aria-valuenow': Math.round(item.ia.confianca * 100), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Confiança da IA' }, e('div', { style: { width: Math.round(item.ia.confianca * 100) + '%' } })),
             e('div', { key: 'p', style: { fontSize: 12, color: 'var(--muted)', marginTop: 4 } }, 'Confiança de ' + Math.round(item.ia.confianca * 100) + '%'),
           ]) : null,
@@ -1011,7 +1011,7 @@
         item.ia || item.reabertoIa ? e('div', { key: 'ia', className: 'chamado-ia v2c-ia' }, [
           Icon('Bot', 14, 'currentColor'),
           e('span', { key: 't' }, item.reabertoIa
-            ? `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.`
+            ? item.reabertoIa.aviso || `Reaberto com outro pedido (${item.reabertoIa.tipoNovoNome}); rodar encerra o chamado explicando.`
             : item.ia.concorda
               ? `IA local confirma o tipo (${Math.round(item.ia.confianca * 100)}%)${item.validadoPorIa ? '; liberado para o automático' : ''}.`
               : `IA local ${item.ia.aplicar === 'auto' ? 'trocou o tipo para' : 'sugere'} ${item.tipoNome || 'sem automação'} (${Math.round(item.ia.confianca * 100)}%)${item.ia.motivo ? ': ' + item.ia.motivo : ''}`),
