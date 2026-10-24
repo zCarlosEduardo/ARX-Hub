@@ -883,7 +883,15 @@
         ]),
         e('div', { key: 'chaves', className: 'admin-chaves' }, [
           caixa(c.repetirErros, (v) => setC({ ...c, repetirErros: v }), 'Quando uma automação der erro, a IA decide se dá para tentar de novo sozinho (falha momentânea) ou se precisa de alguém', { key: 're' }),
-          caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado (solução e devolutiva) no lugar do texto fixo; se ela falhar, vai o texto fixo', { key: 'tx' }),
+          caixa(c.textoPelaIa, (v) => setC({ ...c, textoPelaIa: v }), 'A IA escreve a resposta do chamado no lugar do texto fixo; se ela falhar ou perder o pedido de resposta, vai o texto fixo', { key: 'tx' }),
+          c.textoPelaIa ? e('div', { key: 'txo', className: 'admin-subcartao', style: { display: 'grid', gap: 10, marginLeft: 24 } }, [
+            e('div', { key: 's', className: 'admin-chaves' }, [
+              caixa((c.textoSituacoes || []).includes('solucao'), (v) => setC({ ...c, textoSituacoes: v ? [...new Set([...(c.textoSituacoes || []), 'solucao'])] : (c.textoSituacoes || []).filter((x) => x !== 'solucao') }), 'Na solução (deu certo)', { key: 'sol' }),
+              caixa((c.textoSituacoes || []).includes('devolutiva'), (v) => setC({ ...c, textoSituacoes: v ? [...new Set([...(c.textoSituacoes || []), 'devolutiva'])] : (c.textoSituacoes || []).filter((x) => x !== 'devolutiva') }), 'Na devolutiva de erro (pede a correção e deixa o chamado Pendente)', { key: 'dev' }),
+            ]),
+            campo('txt', 'Tipos em que a IA escreve (nenhum marcado = todos; tipos com senha nunca)', e('div', { className: 'admin-grade-tipos' },
+              tipos.map((t) => e('label', { key: t.chave, className: 'admin-marcar' }, [e('input', { key: 'c', type: 'checkbox', checked: (c.textoTipos || []).includes(t.chave), onChange: (ev) => setC({ ...c, textoTipos: ev.target.checked ? [...(c.textoTipos || []), t.chave] : (c.textoTipos || []).filter((x) => x !== t.chave) }) }), e('span', { key: 't' }, t.nome)])))),
+          ]) : null,
           caixa(c.pedirPendencias, (v) => setC({ ...c, pedirPendencias: v }), 'Pedir o que falta: no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card ou código FIPE, a IA procura nos acompanhamentos e nos prints; se não achar, pede no chamado e deixa Pendente, sem atribuir', { key: 'pp' }),
           caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra', { key: 'ra' }),
         ]),

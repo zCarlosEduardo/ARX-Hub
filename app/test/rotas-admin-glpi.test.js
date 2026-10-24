@@ -97,3 +97,13 @@ test('glpi.configurar troca a conexão na hora: link do chamado pelo site (ou pe
     glpi.configurar({ url: process.env.GLPI_BASE_URL, appToken: process.env.GLPI_APP_TOKEN });
   }
 });
+
+test('IA: onde a IA escreve a resposta (solução, devolutiva) e em quais tipos', () => {
+  const { validarSecao } = require('../admin');
+  const ok = validarSecao('ia', { textoPelaIa: true, textoSituacoes: ['devolutiva', 'devolutiva'], textoTipos: ['foto_perfil'] });
+  assert.equal(ok.ok, true);
+  assert.deepEqual([ok.valor.textoSituacoes, ok.valor.textoTipos], [['devolutiva'], ['foto_perfil']]);
+  assert.deepEqual(validarSecao('ia', {}).valor.textoSituacoes, ['solucao', 'devolutiva'], 'padrão: as duas, como antes');
+  assert.equal(validarSecao('ia', { textoSituacoes: ['outra'] }).ok, false);
+  assert.equal(validarSecao('ia', { textoTipos: ['inventado'] }).ok, false);
+});

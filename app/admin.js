@@ -128,7 +128,7 @@ function configPadrao() {
     automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
     // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
     // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
-    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
+    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, textoSituacoes: ['solucao', 'devolutiva'], textoTipos: [], repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
     // extensões de navegador para baixar (app/extensoes): mostrar = botão "Extensões" no Hub; ocultas = ids escondidas
     extensoes: { mostrar: true, ocultas: [] },
     // GLPI em uso pelo Hub e pelo chamados-glpi: produção (começa pelo .env) ou o GLPI de teste desta máquina
@@ -246,7 +246,15 @@ function validarIa(b) {
   if (!Number.isInteger(maxTentativas) || maxTentativas < 1 || maxTentativas > 5) return { erro: 'as tentativas automáticas devem ser de 1 a 5' };
   const whatsappModo = v('whatsappModo');
   if (whatsappModo !== 'reagir' && whatsappModo !== 'responder') return { erro: 'ia.whatsappModo deve ser reagir ou responder' };
-  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), pedirPendencias: v('pedirPendencias'), whatsappModo } };
+  // onde a IA escreve a resposta (solução e/ou devolutiva de erro) e em quais tipos (vazio = todos)
+  const situacoes = v('textoSituacoes');
+  if (!Array.isArray(situacoes) || situacoes.some((x) => !['solucao', 'devolutiva'].includes(x))) return { erro: 'ia.textoSituacoes deve ter solucao e/ou devolutiva' };
+  const textoTiposBrutos = v('textoTipos');
+  if (!Array.isArray(textoTiposBrutos)) return { erro: 'ia.textoTipos deve ser uma lista' };
+  const textoTipos = [...new Set(textoTiposBrutos.map(String))];
+  const tipoTextoInvalido = textoTipos.find((t) => !CHAVES_TIPOS.has(t));
+  if (tipoTextoInvalido) return { erro: `o tipo "${tipoTextoInvalido}" não existe` };
+  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), textoSituacoes: [...new Set(situacoes)], textoTipos, repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), pedirPendencias: v('pedirPendencias'), whatsappModo } };
 }
 
 function validarWhatsapp(b) {
