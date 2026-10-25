@@ -2,8 +2,8 @@
 // altere lá e copie). A área da aba aberta vem primeiro na lista; sem tutoriais no servidor, o botão não aparece.
 (function () {
   const { createElement: e, useState, useEffect } = React;
-  const AREAS = ['geral', 'alertas', 'meus-acessos', 'chamados', 'resultados', 'administracao'];
-  const AREA_DA_ABA = { chamados: 'chamados', resultados: 'resultados', admin: 'administracao' };
+  const AREAS = ['geral', 'alertas', 'meus-acessos', 'chamados', 'conversas', 'resultados', 'administracao'];
+  const AREA_DA_ABA = { chamados: 'chamados', conversas: 'conversas', resultados: 'resultados', admin: 'administracao' };
 
   function AjudaBotao({ aba }) {
     const [disponivel, setDisponivel] = useState(false);
