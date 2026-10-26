@@ -69,7 +69,7 @@ test('config-publica não exige login e devolve o padrão (cofre ativo, sessão 
     assert.deepEqual(r.corpo, {
       cofre: { modo: 'ativo', sessao: 'dia', horas: 8 },
       automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
-      ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, textoSituacoes: ['solucao', 'devolutiva'], textoTipos: [], repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
+      ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, textoSituacoes: ['solucao', 'devolutiva'], textoTipos: [], repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir', descricoesTipos: require('../admin').configPadrao().ia.descricoesTipos },
       extensoes: { mostrar: true, ocultas: [] },
       glpi: { ambiente: 'producao', site: '' },
     });

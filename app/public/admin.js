@@ -927,6 +927,16 @@
           caixa(c.pedirPendencias, (v) => setC({ ...c, pedirPendencias: v }), 'Pedir o que falta: no erro de exportação, sincronização de vistoria e cadastro de modelo sem placa, código do card ou código FIPE, a IA procura nos acompanhamentos e nos prints; se não achar, pede no chamado e deixa Pendente, sem atribuir', { key: 'pp' }),
           caixa(c.reabertos, (v) => setC({ ...c, reabertos: v }), 'Chamado reaberto com pedido de outra categoria: a IA encerra explicando que o chamado era de uma categoria e o novo pedido é de outra', { key: 'ra' }),
         ]),
+        campo('desc', 'O que cada tipo faz', e('div', { style: { display: 'grid', gap: 10 } },
+          tipos.map((t) => {
+            const texto = (c.descricoesTipos || {})[t.chave] || '';
+            return e('label', { key: t.chave, style: { display: 'grid', gap: 4 } }, [
+              e('span', { key: 'n', style: { fontSize: 13 } }, t.nome),
+              e('textarea', { key: 'd', className: 'field-input', rows: 2, maxLength: 300, value: texto, placeholder: 'Sem descrição: a IA vê só o nome', onChange: (ev) => setC({ ...c, descricoesTipos: { ...(c.descricoesTipos || {}), [t.chave]: ev.target.value } }), style: { ...S().input, resize: 'vertical' } }),
+              texto.length > 240 ? e('span', { key: 'c', className: 'admin-dica' }, `${texto.length} de 300 caracteres`) : null,
+            ]);
+          })),
+          'Uma ou duas frases dizendo o que o pedido é e o que ele NÃO é. A IA lê isso ao classificar os chamados e as mensagens do WhatsApp. Ao salvar, os chamados abertos são classificados de novo.'),
       ], rodape(salvar, salvando, erro, ok)),
     ]);
   }

@@ -128,7 +128,13 @@ function configPadrao() {
     automacoes: { cadastro: 'admins', endereco: 'mascarado', novaAba: true, marca: '' },
     // IA local (ia-local): ligada = containers rodando (ia-controle); automaticoTipos = tipos que rodam no automático
     // com a validação dela (mesmo quando discorda da regra, se a confiança passar de confiancaMinima)
-    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, textoSituacoes: ['solucao', 'devolutiva'], textoTipos: [], repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir' },
+    ia: { ligada: false, automaticoTipos: [], confiancaMinima: 0.8, textoPelaIa: false, textoSituacoes: ['solucao', 'devolutiva'], textoTipos: [], repetirErros: false, maxTentativas: 2, reabertos: false, pedirPendencias: false, whatsappModo: 'reagir',
+      // o que cada tipo é (vai ao prompt da IA ao lado do nome; o nome sozinho engana o modelo pequeno: #13346 e #13348)
+      descricoesTipos: {
+        fechamento: 'Relatório mensal de fechamento para cobrança, pedido pelo financeiro uma vez por mês. Erro em card, boleto ou cadastro não é este tipo.',
+        erro_exportar_modelo: 'Ao exportar o card aparece que o modelo do veículo não foi encontrado. Outro erro de exportação (voluntário, consultor) não é este tipo.',
+      },
+    },
     // extensões de navegador para baixar (app/extensoes): mostrar = botão "Extensões" no Hub; ocultas = ids escondidas
     extensoes: { mostrar: true, ocultas: [] },
     // GLPI em uso pelo Hub e pelo chamados-glpi: produção (começa pelo .env) ou o GLPI de teste desta máquina
@@ -230,6 +236,8 @@ function glpiSemSegredo(g) {
   return { ambiente: g.ambiente, producao: sem(g.producao), teste: sem(g.teste) };
 }
 
+const DESCRICAO_MAX = 300; // o modelo do dia a dia é pequeno: uma ou duas frases funcionam melhor
+
 function validarIa(b) {
   const padrao = configPadrao().ia;
   const c = b && typeof b === 'object' ? b : {};
@@ -254,7 +262,17 @@ function validarIa(b) {
   const textoTipos = [...new Set(textoTiposBrutos.map(String))];
   const tipoTextoInvalido = textoTipos.find((t) => !CHAVES_TIPOS.has(t));
   if (tipoTextoInvalido) return { erro: `o tipo "${tipoTextoInvalido}" não existe` };
-  return { valor: { ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), textoSituacoes: [...new Set(situacoes)], textoTipos, repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), pedirPendencias: v('pedirPendencias'), whatsappModo } };
+  const descricoesBrutas = v('descricoesTipos');
+  if (!descricoesBrutas || typeof descricoesBrutas !== 'object' || Array.isArray(descricoesBrutas)) return { erro: 'ia.descricoesTipos deve ser um objeto' };
+  const descricoesTipos = {};
+  for (const [tipo, texto] of Object.entries(descricoesBrutas)) {
+    if (!CHAVES_TIPOS.has(tipo)) return { erro: `o tipo "${tipo}" não existe` };
+    if (typeof texto !== 'string') return { erro: 'a descrição de cada tipo deve ser texto' };
+    const limpo = texto.replace(/\s+/g, ' ').trim();
+    if (limpo.length > DESCRICAO_MAX) return { erro: `a descrição de ${tipo} passa de ${DESCRICAO_MAX} caracteres` };
+    if (limpo) descricoesTipos[tipo] = limpo; // vazia = sem descrição (a IA vê só o nome)
+  }
+  return { valor: { descricoesTipos, ligada: v('ligada'), automaticoTipos, confiancaMinima: Math.round(confiancaMinima * 100) / 100, textoPelaIa: v('textoPelaIa'), textoSituacoes: [...new Set(situacoes)], textoTipos, repetirErros: v('repetirErros'), maxTentativas, reabertos: v('reabertos'), pedirPendencias: v('pedirPendencias'), whatsappModo } };
 }
 
 function validarWhatsapp(b) {

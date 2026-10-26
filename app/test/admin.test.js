@@ -86,6 +86,17 @@ test('ia: padrão desligada; aceita tipos existentes e recusa limites fora da fa
   assert.equal(validarSecao('ia', { whatsappModo: 'gritar' }).ok, false);
 });
 
+test('ia: descrição de cada tipo para a IA (texto curto, tipo existente, vazia some)', () => {
+  assert.match(configPadrao().ia.descricoesTipos.fechamento, /financeiro/);
+  assert.deepEqual(validarSecao('ia', {}).valor.descricoesTipos, configPadrao().ia.descricoesTipos, 'config antiga sem o campo fica com o padrão');
+  const d = validarSecao('ia', { descricoesTipos: { fechamento: '  Relatório\n do mês  ', cadastro_usuario: '   ' } }).valor.descricoesTipos;
+  assert.deepEqual(d, { fechamento: 'Relatório do mês' });
+  assert.equal(validarSecao('ia', { descricoesTipos: { nao_existe: 'x' } }).ok, false);
+  assert.equal(validarSecao('ia', { descricoesTipos: { fechamento: 'x'.repeat(301) } }).ok, false);
+  assert.equal(validarSecao('ia', { descricoesTipos: { fechamento: 3 } }).ok, false);
+  assert.equal(validarSecao('ia', { descricoesTipos: ['x'] }).ok, false);
+});
+
 test('automacoes: aceita as opções da tela e recusa valor desconhecido', () => {
   assert.deepEqual(validarSecao('automacoes', { cadastro: 'todos', endereco: 'oculto', novaAba: false }).valor, { cadastro: 'todos', endereco: 'oculto', novaAba: false, marca: '' });
   // nome na barra de abas: texto curto, sem espaço sobrando; vazio deixa a barra sem nome
