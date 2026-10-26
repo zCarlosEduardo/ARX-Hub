@@ -7,6 +7,7 @@
 //   POST /api/admin/ia/exportar    exporta os chamados da entidade e treina no fim
 //   POST /api/admin/ia/treinar     treina de novo com o que já foi exportado
 //   GET  /api/admin/ia/auditoria   dados da página de auditoria (eventos, métricas, decisões)
+//   GET  /api/admin/ia/gabarito    próximo chamado do gabarito (sem regra nem IA); POST .../sortear e .../decidir
 
 function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, buscar = fetch }) {
   const IA_URL = (env.IA_URL || 'http://ia-local:4025').replace(/\/+$/, '');
@@ -97,6 +98,27 @@ function criarRotasIa({ admin, repo, asyncHandler, ErroHttp, env = process.env, 
       const usuario = await admin.exigirAdmin(req);
       const b = req.body || {};
       const r = await ia('/api/revisao/decidir', 'POST', { id: String(b.id || ''), tipo: String(b.tipo || ''), quem: usuario.nome || usuario.login });
+      if (!r.ok) throw new ErroHttp(r.status === 400 || r.status === 404 ? r.status : 424, r.dados.error || 'IA fora do ar.');
+      res.json(r.dados);
+    }));
+
+    // Gabarito: chamados sorteados que uma pessoa classifica sem ver a regra nem a IA (a régua das medições; nunca treina)
+    app.get('/api/admin/ia/gabarito', admin.soAdmin, asyncHandler(async (req, res) => {
+      const r = await ia('/api/gabarito/proximo');
+      res.set('Cache-Control', 'no-store');
+      res.json(r.ok ? r.dados : { indisponivel: true });
+    }));
+    app.post('/api/admin/ia/gabarito/sortear', admin.soAdmin, asyncHandler(async (req, res) => {
+      const usuario = await admin.exigirAdmin(req);
+      const r = await ia('/api/gabarito/sortear', 'POST', {});
+      if (!r.ok) throw new ErroHttp(r.status === 400 ? 400 : 424, r.dados.error || 'IA fora do ar.');
+      await admin.anotar(usuario, 'ia.gabarito.sortear', 'IA local', null, { total: r.dados.total });
+      res.json(r.dados);
+    }));
+    app.post('/api/admin/ia/gabarito/decidir', admin.soAdmin, asyncHandler(async (req, res) => {
+      const usuario = await admin.exigirAdmin(req);
+      const b = req.body || {};
+      const r = await ia('/api/gabarito/decidir', 'POST', { id: String(b.id || ''), tipo: String(b.tipo || ''), quem: usuario.nome || usuario.login });
       if (!r.ok) throw new ErroHttp(r.status === 400 || r.status === 404 ? r.status : 424, r.dados.error || 'IA fora do ar.');
       res.json(r.dados);
     }));

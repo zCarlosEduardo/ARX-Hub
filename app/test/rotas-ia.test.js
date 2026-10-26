@@ -95,3 +95,19 @@ test('auditoria pública: só agregados (nenhum chamado ou texto) e cópia guard
     assert.equal(s.gravados[0][0], 'ia_auditoria');
   } finally { await s.fechar(); }
 });
+
+test('gabarito: só admin; decidir manda o tipo e quem decidiu; sortear anota no histórico', async () => {
+  const s = await subir({ respostas: { '/api/gabarito/sortear': [200, { sorteado: true, total: 300, feitos: 0 }], '/api/gabarito/decidir': [200, { feitos: 1 }] } });
+  try {
+    assert.equal((await s.chamar('POST', '/api/admin/ia/gabarito/sortear')).corpo.total, 300);
+    assert.equal(s.pedidos[0].url, 'http://ia/api/gabarito/sortear');
+    assert.equal(s.anotados[0][1], 'ia.gabarito.sortear');
+    const r = await s.chamar('POST', '/api/admin/ia/gabarito/decidir', { 'Content-Type': 'application/json' });
+    assert.equal(r.status, 200);
+    assert.deepEqual(s.pedidos[1].corpo, { id: '', tipo: '', quem: 'Fulano' }, 'quem vem do admin logado, nunca do corpo');
+  } finally { await s.fechar(); }
+  const n = await subir({ ehAdmin: false });
+  try {
+    assert.equal((await n.chamar('GET', '/api/admin/ia/gabarito')).status, 403);
+  } finally { await n.fechar(); }
+});

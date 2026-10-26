@@ -1028,6 +1028,49 @@
     ]);
   }
 
+  // ---------- aba: Gabarito da IA (chamados sorteados, classificados sem ver a regra nem a IA: a régua das medições) ----------
+  function AbaGabarito() {
+    const [d, setD] = useState(null); // { sorteado, total, feitos, item, tipos }
+    const [escolha, setEscolha] = useState('');
+    const [erro, setErro] = useState(null);
+    const [ocupado, setOcupado] = useState(false);
+    const ler = () => api('GET', '/api/admin/ia/gabarito').then((x) => { setD(x); setEscolha(''); }).catch((err) => setErro(err.message));
+    useEffect(() => { ler(); }, []);
+    const enviar = async (caminho, corpo) => {
+      setOcupado(true);
+      setErro(null);
+      try { await api('POST', caminho, corpo); await ler(); } catch (err) { setErro(err.message); }
+      setOcupado(false);
+    };
+    const decidir = (tipo) => d && d.item && tipo && enviar('/api/admin/ia/gabarito/decidir', { id: d.item.id, tipo });
+    const tipos = (d && d.tipos) || {};
+    const item = d && d.item;
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro),
+      !d ? dica('Carregando…') : d.indisponivel ? e('div', { key: 'ind', className: 'admin-aviso alerta' }, 'IA desligada ou fora do ar: ligue na página IA local.') : e('div', { key: 'kpis', className: 'admin-kpis' }, [
+        kpi('f', 'Classificados', d.sorteado ? `${d.feitos} de ${d.total}` : 'Sem sorteio', d.sorteado ? `${d.total ? Math.floor((d.feitos / d.total) * 100) : 0}% do gabarito` : 'sorteie para começar'),
+      ]),
+      d && !d.indisponivel ? secao('o', 'Como funciona', 'Uma amostra fixa de chamados, sorteada por tipo e com parte dos prints, que você classifica sem ver o que a regra ou a IA acharam. É a régua para medir, antes de cada mudança, se a IA e as regras melhoraram. Estas decisões não ensinam a IA: se ensinassem, a medida ficaria viciada.', [
+        !d.sorteado ? e('div', { key: 'a', className: 'admin-acoes' }, [botao(ocupado ? 'Sorteando…' : 'Sortear o gabarito', () => enviar('/api/admin/ia/gabarito/sortear', {}), 'prim', { key: 's', disabled: ocupado })]) : null,
+      ]) : null,
+      d && d.sorteado ? secao('item', 'Qual é o tipo deste chamado?', 'Escolha como você atenderia, lendo só o que veio no chamado. Na dúvida, "Não sei" tira o chamado da conta.', !item ? [e('div', { key: 'v', className: 'admin-vazio' }, 'Gabarito completo. Obrigado!')] : [
+        e('div', { key: 'cab', className: 'admin-revisao-cab' }, [
+          e('div', { key: 't' }, [
+            e('div', { key: 'm', className: 'admin-dica' }, `Chamado ${item.id}${item.categoria ? ' · ' + item.categoria : ''}`),
+            e('h4', { key: 'h' }, item.titulo || 'Sem título'),
+          ]),
+          e('span', { key: 'n', className: 'admin-contador' }, `${d.feitos + 1} de ${d.total}`),
+        ]),
+        e('pre', { key: 'x', className: 'revisao-texto admin-texto-chamado' }, item.texto || 'Sem descrição'),
+      ], item ? e('div', { className: 'admin-acoes' }, [
+        botao('Sem automação', () => decidir('sem_automacao'), 'sec', { key: 'sa', disabled: ocupado }),
+        selecao(escolha, setEscolha, [['', 'Escolha o tipo…'], ...Object.entries(tipos).filter(([k]) => k !== 'senha_crm').map(([k, v]) => [k, v])], { key: 'sel', maxWidth: 260, width: 'auto' }),
+        botao('Salvar', () => decidir(escolha), 'prim', { key: 'sv', disabled: !escolha || ocupado }),
+        botao('Não sei', () => decidir('nao_sei'), 'sec', { key: 'ns', disabled: ocupado, marginLeft: 'auto' }),
+      ]) : null) : null,
+    ]);
+  }
+
   // Menu agrupado por assunto (como as telas de configuração do GitHub e da Vercel); a descrição vira o subtítulo da página.
   const GRUPOS_ABAS = [
     ['Acesso', [
@@ -1043,6 +1086,7 @@
     ['IA local', [
       ['ia', 'IA local', 'Bot', 'Ligar e desligar, treinar e escolher como a IA ajuda nos chamados.'],
       ['revisao', 'Revisão da IA', 'Eye', 'A IA local revisa todos os chamados; você decide as divergências.'],
+      ['gabarito', 'Gabarito da IA', 'BarChart', 'Chamados sorteados que você classifica sem ver a IA: a régua que mede se ela melhorou.'],
     ]],
     ['WhatsApp', [
       ['whatsapp', 'Configuração', 'MessageCircle', 'Grupos, números, conversa privada e reações do robô do WhatsApp.'],
@@ -1083,6 +1127,7 @@
     else if (aba === 'extensoes') corpo = e(AbaExtensoes, { key: 'extensoes', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
     else if (aba === 'revisao') corpo = e(AbaRevisao, { key: 'revisao' });
+    else if (aba === 'gabarito') corpo = e(AbaGabarito, { key: 'gabarito' });
     else if (aba === 'ia') corpo = e(AbaIa, { key: 'ia', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
     else if (aba === 'vinculos') corpo = e(AbaVinculos, { key: 'vinculos' });
     else if (aba === 'conexao') corpo = e(AbaConexao, { key: 'conexao' });
