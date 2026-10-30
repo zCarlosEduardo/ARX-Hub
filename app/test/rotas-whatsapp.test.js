@@ -157,7 +157,31 @@ test('resultado do automático: conclui ou marca erro só do pedido aberto; cham
   assert.equal((await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId: 'x', ok: true })).status, 400);
   assert.equal((await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId, ok: false, texto: 'não achou o usuário' })).json.atualizado, true);
   assert.equal(s.repo.e.pedidos[0].status, 'erro');
-  assert.equal((await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId, ok: true })).json.atualizado, false, 'só sai do estado aberto uma vez');
+  // deu erro e depois o chamado foi finalizado numa nova execução: sai do erro para concluído (a reação no WhatsApp muda)
+  const antes = s.repo.e.pedidos[0].evento;
+  assert.equal((await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId, ok: true })).json.atualizado, true);
+  assert.equal(s.repo.e.pedidos[0].status, 'concluido');
+  assert.ok(s.repo.e.pedidos[0].evento > antes, 'evento novo: é por ele que o robô troca a reação');
+  // concluído não volta: um aviso atrasado de erro não desfaz o sucesso
+  assert.equal((await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId, ok: false, texto: 'atrasado' })).json.atualizado, false);
+  assert.equal(s.repo.e.pedidos[0].status, 'concluido');
+  s.fechar();
+});
+
+test('pedido em erro com chamado aberto: a conferência no GLPI conclui quando o chamado é solucionado à mão', async () => {
+  const s = await subir();
+  await s.vincular();
+  await s.configurar({});
+  await s.mensagem();
+  const id = (await s.comoOperador('GET', '/api/whatsapp/fila')).json[0].id;
+  const ticketId = (await s.comoOperador('POST', `/api/whatsapp/fila/${id}/abrir`)).json.ticketId;
+  await s.comoOperador('POST', '/api/whatsapp/resultado', { ticketId, ok: false, texto: 'falhou' });
+  assert.equal(s.repo.e.pedidos[0].status, 'erro');
+  const desde = s.repo.e.seq;
+  s.statusDosChamados.set(ticketId, 5);
+  assert.equal(await s.wa.verificarAbertos(), 1);
+  const ev = (await s.comoBot('GET', `/api/whatsapp/bot/eventos?desde=${desde}`)).json.eventos;
+  assert.deepEqual(ev.map((x) => x.status), ['concluido']);
   s.fechar();
 });
 

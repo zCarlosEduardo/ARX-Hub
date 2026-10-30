@@ -8,6 +8,10 @@ const linhaPedido = (r) => ({
   evento: Number(r.evento), criadoEm: r.criado_em, atualizadoEm: r.atualizado_em,
 });
 
+// Pedido com chamado aberto que ainda pode terminar: 'aberto' e também 'erro' (a automação falhou, mas o chamado continua
+// no GLPI e pode ser finalizado depois, por uma nova execução ou à mão). Pedido que nem abriu chamado fica sem ticket_id.
+const SITUACOES_COM_CHAMADO = ['aberto', 'erro'];
+
 function repoWhatsapp(pool) {
   return {
     async listarVinculos() {
@@ -47,7 +51,7 @@ function repoWhatsapp(pool) {
       return rows.map(linhaPedido);
     },
     async listarAbertos() {
-      const { rows } = await pool.query(`SELECT * FROM whatsapp_pedidos WHERE status = 'aberto' AND ticket_id IS NOT NULL ORDER BY id LIMIT 200`);
+      const { rows } = await pool.query(`SELECT * FROM whatsapp_pedidos WHERE status = ANY($1) AND ticket_id IS NOT NULL ORDER BY id LIMIT 200`, [SITUACOES_COM_CHAMADO]);
       return rows.map(linhaPedido);
     },
     async listarRecentes(n) {
@@ -69,7 +73,7 @@ function repoWhatsapp(pool) {
       return rows.length ? linhaPedido(rows[0]) : null;
     },
     async pedidoPorChamado(ticketId) {
-      const { rows } = await pool.query(`SELECT * FROM whatsapp_pedidos WHERE ticket_id = $1 AND status = 'aberto' ORDER BY id DESC LIMIT 1`, [ticketId]);
+      const { rows } = await pool.query(`SELECT * FROM whatsapp_pedidos WHERE ticket_id = $1 AND status = ANY($2) ORDER BY id DESC LIMIT 1`, [ticketId, SITUACOES_COM_CHAMADO]);
       return rows.length ? linhaPedido(rows[0]) : null;
     },
     async eventosDesde(desde) {
@@ -83,4 +87,4 @@ function repoWhatsapp(pool) {
   };
 }
 
-module.exports = { repoWhatsapp };
+module.exports = { repoWhatsapp, SITUACOES_COM_CHAMADO };

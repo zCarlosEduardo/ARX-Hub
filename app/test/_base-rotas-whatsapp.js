@@ -5,6 +5,7 @@ const { criarRotasAdmin } = require('../rotasAdmin');
 const { criarRotasWhatsapp } = require('../rotasWhatsapp');
 const { asyncHandler, ErroHttp, erroFinal } = require('../http');
 const { configPadrao } = require('../admin');
+const { SITUACOES_COM_CHAMADO } = require('../repoWhatsapp');
 
 const TOKEN_ADMIN = 'token-do-carlos-0123456789';
 const TOKEN_OPERADOR = 'token-do-operador-5555555555';
@@ -43,7 +44,7 @@ function repoWhatsMemoria() {
       return { pedido: copia(novo), novo: true };
     },
     async listarPendentes() { return e.pedidos.filter((p) => p.status === 'pendente').map(copia); },
-    async listarAbertos() { return e.pedidos.filter((p) => p.status === 'aberto' && p.ticketId).map(copia); },
+    async listarAbertos() { return e.pedidos.filter((p) => SITUACOES_COM_CHAMADO.includes(p.status) && p.ticketId).map(copia); },
     async listarRecentes(n) { return e.pedidos.slice(-n).reverse().map(copia); },
     async reivindicar(id) { const p = e.pedidos.find((x) => x.id === id && x.status === 'pendente'); if (!p) return null; p.status = 'abrindo'; return copia(p); },
     async mudarStatus(id, status, o = {}) {
@@ -52,7 +53,7 @@ function repoWhatsMemoria() {
       p.status = status; if (o.ticketId) p.ticketId = o.ticketId; if (o.erro !== undefined) p.erro = o.erro; p.evento = ++e.seq;
       return copia(p);
     },
-    async pedidoPorChamado(t) { return copia(e.pedidos.filter((p) => p.ticketId === t && p.status === 'aberto').pop()); },
+    async pedidoPorChamado(t) { return copia(e.pedidos.filter((p) => p.ticketId === t && SITUACOES_COM_CHAMADO.includes(p.status)).pop()); },
     async eventosDesde(d) { return e.pedidos.filter((p) => p.evento > d).sort((a, b) => a.evento - b.evento).map(copia); },
     async ultimoEvento() { return e.seq; },
   };

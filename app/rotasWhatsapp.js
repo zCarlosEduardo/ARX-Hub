@@ -14,6 +14,7 @@
 const crypto = require('crypto');
 const W = require('./whatsapp');
 const { TIPOS_SOLICITACAO } = require('./admin');
+const { SITUACOES_COM_CHAMADO } = require('./repoWhatsapp');
 
 // tipos que não dependem de associação: no privado não precisam de "Categoria X" (quem diz a associação é a categoria do GLPI)
 const TIPOS_SEM_CATEGORIA = new Set(['foto_perfil', 'senha_sistemas']);
@@ -209,7 +210,7 @@ function criarRotasWhatsapp(deps) {
     for (const p of await repo.listarAbertos()) {
       try {
         const st = await glpi.statusChamado(tokenServico, p.ticketId);
-        if (st >= 5 && (await repo.mudarStatus(p.id, 'concluido', { deSituacoes: ['aberto'] }))) concluidos += 1;
+        if (st >= 5 && (await repo.mudarStatus(p.id, 'concluido', { deSituacoes: SITUACOES_COM_CHAMADO }))) concluidos += 1;
       } catch {
         // GLPI fora do ar um instante ou chamado sem permissão de leitura: tenta de novo na próxima volta
       }
@@ -290,7 +291,8 @@ function criarRotasWhatsapp(deps) {
       if (!Number.isSafeInteger(ticketId) || ticketId < 1 || typeof b.ok !== 'boolean') throw new ErroHttp(400, 'informe ticketId e ok');
       const pedido = await repo.pedidoPorChamado(ticketId);
       if (!pedido) return res.json({ atualizado: false }); // chamado que não veio do WhatsApp
-      const novo = await repo.mudarStatus(pedido.id, b.ok ? 'concluido' : 'erro', { erro: b.ok ? '' : truncar(String(b.texto || ''), 300), deSituacoes: ['aberto'] });
+      // depois de um erro o chamado pode ser finalizado numa nova execução: erro -> concluído troca a reação no WhatsApp
+      const novo = await repo.mudarStatus(pedido.id, b.ok ? 'concluido' : 'erro', { erro: b.ok ? '' : truncar(String(b.texto || ''), 300), deSituacoes: SITUACOES_COM_CHAMADO });
       res.json({ atualizado: !!novo });
     }));
 
