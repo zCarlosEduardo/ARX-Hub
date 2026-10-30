@@ -641,20 +641,27 @@
   const camposLigacao = (v, set, { tipo, editando, sistemas, aoEscolher }) => {
     const r = ROTULOS_LIGACAO[tipo] || ROTULOS_LIGACAO.outro;
     const texto = (k, chave, [titulo, exemplo, ajuda], max) => campo(k, titulo, entrada(v[chave], (x) => set({ ...v, [chave]: x }), exemplo, { maxLength: max }), ajuda || null);
-    const segredo = tipo === 'sga';
-    return e('div', { key: 'cl', className: 'admin-linha-campos' }, [
-      editando ? null : campo('s', 'Sistema', selecao(v.sistemaId, aoEscolher, [['', 'Escolha o sistema'], ...sistemas.map((s) => [String(s.id), s.nome])])),
-      r.urlAcesso ? texto('ua', 'urlAcesso', r.urlAcesso, 300) : null,
-      texto('u', 'url', r.url, 300),
-      texto('nn', 'nomeNoSistema', r.nome, 120),
-      r.id ? texto('id', 'identificadorNoSistema', r.id, 120) : null,
-      segredo ? campo('m', 'Código mobile do SGA', entrada(v.mobile, (x) => set({ ...v, mobile: x }), editando && v.mobileDefinido ? 'Guardado. Digite só para trocar' : 'Não informado', { type: 'password', autoComplete: 'off', maxLength: 300 }),
-        'Fica só no banco central: não volta para esta tela. Vazio mantém o guardado.') : null,
-      segredo ? campo('tk', 'Token da API do SGA', entrada(v.tokenApi, (x) => set({ ...v, tokenApi: x, limparTokenApi: false }), editando && v.tokenApiDefinido ? 'Guardado. Digite só para trocar' : 'Vazio = o token do .env.tokens-sga', { type: 'password', autoComplete: 'off', maxLength: 500 }),
-        'Usado pelo Atualizar cooperativas, pelo Cadastro de voluntário e pelo monitor no lugar do .env. Não volta para esta tela.') : null,
-      segredo && editando && v.tokenApiDefinido ? caixa(v.limparTokenApi, (x) => set({ ...v, limparTokenApi: x, tokenApi: '' }), 'Apagar o token guardado (volta a valer o do .env.tokens-sga)', { key: 'lt' }) : null,
+    const segredo = (k, chave, titulo, definido, ajuda) => campo(k, titulo,
+      entrada(v[chave], (x) => set({ ...v, [chave]: x, ...(chave === 'tokenApi' ? { limparTokenApi: false } : {}) }), editando && definido ? 'Guardado. Digite só para trocar' : 'Não informado', { type: 'password', autoComplete: 'off', maxLength: 500 }),
+      ajuda);
+    const sga = tipo === 'sga';
+    return e('div', { key: 'cl', className: 'admin-pilha', style: { gap: 14 } }, [
+      e('div', { key: 'end', className: 'admin-linha-campos' }, [
+        editando ? null : campo('s', 'Sistema', selecao(v.sistemaId, aoEscolher, [['', 'Escolha o sistema'], ...sistemas.map((s) => [String(s.id), s.nome])])),
+        r.urlAcesso ? texto('ua', 'urlAcesso', r.urlAcesso, 300) : null,
+        texto('u', 'url', r.url, 300),
+        texto('nn', 'nomeNoSistema', r.nome, 120),
+        r.id ? texto('id', 'identificadorNoSistema', r.id, 120) : null,
+      ]),
+      sga ? e('div', { key: 'seg', className: 'admin-linha-campos' }, [
+        segredo('tk', 'tokenApi', 'Token da API do SGA', v.tokenApiDefinido, 'Libera a empresa no Atualizar cooperativas e no Cadastro de voluntário. Fica só no banco central e não volta para esta tela.'),
+        segredo('m', 'mobile', 'Código mobile do SGA', v.mobileDefinido, 'Fica só no banco central e não volta para esta tela.'),
+      ]) : null,
+      sga && editando && v.tokenApiDefinido ? caixa(v.limparTokenApi, (x) => set({ ...v, limparTokenApi: x, tokenApi: '' }), 'Apagar o token guardado (a empresa sai das automações que usam a API do SGA)', { key: 'lt' }) : null,
     ]);
   };
+
+  const seloK = (key, texto, tom = '') => e('span', { key, className: 'admin-selo ' + tom }, texto);
 
   function AbaEmpresas() {
     const [dados, setDados] = useState(null); // { empresas, sistemas }
@@ -662,10 +669,10 @@
     const [info, setInfo] = useState(null);
     const [busca, setBusca] = useState('');
     const [aberta, setAberta] = useState(null); // id da empresa expandida
-    const [form, setForm] = useState(null); // edição da empresa aberta
-    const [lig, setLig] = useState(LIGACAO_VAZIA); // novo sistema da empresa aberta
+    const [form, setForm] = useState(null); // dados da empresa aberta
+    const [lig, setLig] = useState(null); // novo sistema da empresa aberta (null = formulário fechado)
     const [editLig, setEditLig] = useState(null); // sistema da empresa em edição
-    const [nova, setNova] = useState({ nome: '', cnpj: '' });
+    const [nova, setNova] = useState(null); // nova empresa (null = formulário fechado)
     const [novoSistema, setNovoSistema] = useState('');
     const [renomear, setRenomear] = useState({}); // id do sistema -> nome em edição
     const [confirmar, setConfirmar] = useState(''); // remoção pede segundo clique
@@ -689,10 +696,10 @@
       }
     }
     /** Botão Remover que só age no segundo clique. */
-    const remover = (chave, fn, ok) => botao(confirmar === chave ? 'Confirmar remoção' : 'Remover', () => (confirmar === chave ? fazer(fn, ok) : setConfirmar(chave)), 'perigo', { key: 'rm-' + chave, padding: '5px 10px' });
+    const remover = (chave, fn, ok, texto = 'Remover') => botao(confirmar === chave ? 'Confirmar remoção' : texto, () => (confirmar === chave ? fazer(fn, ok) : setConfirmar(chave)), 'perigo', { key: 'rm-' + chave, padding: '5px 10px' });
     function abrir(emp) {
       setConfirmar('');
-      setLig(LIGACAO_VAZIA);
+      setLig(null);
       setEditLig(null);
       if (aberta === emp.id) return setAberta(null);
       setAberta(emp.id);
@@ -702,74 +709,159 @@
     if (!dados) return e('div', { className: 'admin-pilha' }, [mensagem(erro), erro ? null : dica('Carregando…')]);
     const nomeSistema = (id) => (dados.sistemas.find((s) => s.id === id) || {}).nome || `Sistema ${id}`;
     const tipoSistema = (sistemaId) => ({ SGA: 'sga', POWERCRM: 'crm' }[nomeSistema(sistemaId).toUpperCase()] || 'outro');
-    /** Resumo de uma linha do sistema da empresa; nada de segredo (a tela só sabe se está guardado). */
-    function resumoLigacao(l, emp) {
-      const tipo = tipoSistema(l.sistemaId);
-      if (tipo === 'sga') return [
-        l.urlAcesso ? `SGA ${l.urlAcesso}` : 'sem endereço do SGA (as automações usam o fixo do código)',
-        emp.chaveSga ? `código nas automações ${emp.chaveSga}` : null,
-        l.mobileDefinido ? 'código mobile guardado' : 'sem código mobile',
-        l.tokenApiDefinido ? 'token da API guardado' : 'token da API do .env',
-      ];
-      return [l.urlAcesso, l.url, l.identificadorNoSistema ? `ID ${l.identificadorNoSistema}` : null];
-    }
+    const sgaDe = (emp) => emp.sistemas.find((l) => tipoSistema(l.sistemaId) === 'sga' && l.ativo);
+    const ativas = dados.empresas.filter((x) => x.ativo);
     const filtradas = dados.empresas.filter((x) => !busca || x.nome.toLowerCase().includes(busca.toLowerCase()));
 
-    const detalhe = (emp) => e('div', { key: 'det', className: 'admin-pilha', style: { padding: '12px 4px 4px', gap: 14 } }, [
-      e('div', { key: 'f', className: 'admin-linha-campos' }, [
-        campo('n', 'Nome', entrada(form.nome, (v) => setForm({ ...form, nome: v }), 'Nome da empresa', { maxLength: 120 })),
-        campo('c', 'CNPJ', entrada(form.cnpj, (v) => setForm({ ...form, cnpj: v }), 'Não informado', { maxLength: 18 })),
+    /** Selos da linha da empresa: os sistemas ligados e, no SGA, o que falta para as automações. */
+    function selosDaEmpresa(emp) {
+      const s = [];
+      if (!emp.ativo) s.push(seloK('des', 'Desativada', 'alerta'));
+      const vistos = new Set();
+      for (const l of emp.sistemas.filter((x) => x.ativo)) {
+        const nome = nomeSistema(l.sistemaId);
+        if (vistos.has(nome)) continue;
+        vistos.add(nome);
+        const n = emp.sistemas.filter((x) => x.ativo && x.sistemaId === l.sistemaId).length;
+        s.push(seloK('s' + l.sistemaId, n > 1 ? `${nome} (${n} bases)` : nome));
+      }
+      const sga = sgaDe(emp);
+      if (sga && !sga.urlAcesso) s.push(seloK('url', 'SGA sem endereço', 'alerta'));
+      if (sga && !sga.tokenApiDefinido) s.push(seloK('tk', 'Sem token da API', 'alerta'));
+      if (!emp.sistemas.length) s.push(seloK('nada', 'Sem sistemas'));
+      return s;
+    }
+
+    /** Detalhes de um sistema da empresa, em rótulo e valor; segredos só dizem se estão guardados. */
+    function detalhesLigacao(l, emp) {
+      const tipo = tipoSistema(l.sistemaId);
+      const r = ROTULOS_LIGACAO[tipo] || ROTULOS_LIGACAO.outro;
+      const linhas = [
+        r.urlAcesso ? [r.urlAcesso[0], l.urlAcesso || 'Não informado'] : null,
+        [r.url[0], l.url],
+        [r.nome[0], l.nomeNoSistema || 'O nome da empresa'],
+        r.id ? [r.id[0], l.identificadorNoSistema || 'Não informado'] : null,
+        tipo === 'sga' ? ['Código nas automações', emp.chaveSga || 'Não informado'] : null,
+        tipo === 'sga' ? ['Token da API', l.tokenApiDefinido ? 'Guardado' : 'Não informado'] : null,
+        tipo === 'sga' ? ['Código mobile', l.mobileDefinido ? 'Guardado' : 'Não informado'] : null,
+      ].filter(Boolean);
+      return e('dl', { key: 'dl', className: 'admin-detalhes' }, linhas.flatMap(([t, v], i) => [
+        e('dt', { key: 'dt' + i }, t),
+        e('dd', { key: 'dd' + i, style: { wordBreak: 'break-all' } }, v),
+      ]));
+    }
+
+    function blocoLigacao(l, emp) {
+      const editando = editLig && editLig.id === l.id;
+      const qual = l.nomeNoSistema && tipoSistema(l.sistemaId) === 'crm' ? `${nomeSistema(l.sistemaId)}: ${l.nomeNoSistema}` : nomeSistema(l.sistemaId);
+      return e('div', { key: l.id, className: 'admin-subcartao' }, [
+        e('div', { key: 'cab', className: 'admin-acoes', style: { justifyContent: 'space-between' } }, [
+          e('div', { key: 't', className: 'admin-acoes' }, [e('strong', { key: 'n' }, qual), l.ativo ? null : seloK('d', 'Desativado', 'alerta')]),
+          editando ? null : e('div', { key: 'ac', className: 'admin-acoes' }, [
+            botao('Editar', () => setEditLig({ ...l, urlAcesso: l.urlAcesso || '', nomeNoSistema: l.nomeNoSistema || '', identificadorNoSistema: l.identificadorNoSistema || '', mobile: '', tokenApi: '', limparTokenApi: false }), 'sec', { key: 'ed', padding: '5px 10px' }),
+            botao(l.ativo ? 'Desativar' : 'Ativar', () => fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, { ...l, ativo: !l.ativo }), l.ativo ? 'Sistema desativado na empresa.' : 'Sistema ativado na empresa.'), 'sec', { key: 'at', padding: '5px 10px' }),
+            remover(`lig-${l.id}`, () => api('DELETE', `/api/admin/ligacoes/${l.id}`), 'Sistema tirado da empresa.', 'Tirar'),
+          ]),
+        ]),
+        editando ? camposLigacao(editLig, setEditLig, { tipo: tipoSistema(l.sistemaId), editando: true }) : detalhesLigacao(l, emp),
+        editando ? e('div', { key: 'sv', className: 'admin-acoes' }, [
+          botao('Salvar sistema', async () => {
+            if (await fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, editLig), 'Sistema da empresa salvo.')) setEditLig(null);
+          }, 'prim', { key: 's', disabled: !editLig.url.trim() }),
+          botao('Cancelar', () => setEditLig(null), 'sec', { key: 'c' }),
+        ]) : null,
+      ]);
+    }
+
+    const detalhe = (emp) => e('div', { key: 'det', className: 'admin-pilha', style: { paddingTop: 12, gap: 16 } }, [
+      e('div', { key: 'dados', className: 'admin-subcartao' }, [
+        rotulo('Dados da empresa'),
+        e('div', { key: 'f', className: 'admin-linha-campos' }, [
+          campo('n', 'Nome', entrada(form.nome, (v) => setForm({ ...form, nome: v }), 'Nome da empresa', { maxLength: 120 })),
+          campo('c', 'CNPJ', entrada(form.cnpj, (v) => setForm({ ...form, cnpj: v }), 'Não informado', { maxLength: 18 })),
+        ]),
+        caixa(form.ativo, (v) => setForm({ ...form, ativo: v }), 'Empresa ativa (desativada sai de todas as automações)', { key: 'a' }),
+        e('div', { key: 's', className: 'admin-acoes' }, botao('Salvar dados', () => fazer(() => api('PUT', `/api/admin/empresas/${emp.id}`, form), 'Empresa salva.'), 'prim', { key: 'b', disabled: !form.nome.trim() })),
       ]),
-      caixa(form.ativo, (v) => setForm({ ...form, ativo: v }), 'Empresa ativa (desativada some das escolhas das automações que leem o cadastro)', { key: 'a' }),
-      botao('Salvar empresa', () => fazer(() => api('PUT', `/api/admin/empresas/${emp.id}`, form), 'Empresa salva.'), 'prim', { key: 's', alignSelf: 'flex-start' }),
-      rotulo('Sistemas desta empresa'),
-      emp.sistemas.length === 0 ? dica('Nenhum sistema ligado.') : e('div', { key: 'ls', className: 'admin-lista' }, emp.sistemas.map((l) =>
-        editLig && editLig.id === l.id
-          ? e('div', { key: l.id, className: 'admin-item admin-item-bloco', style: { alignItems: 'stretch', gap: 12 } }, [
-            e('strong', { key: 't' }, `Editar ${nomeSistema(l.sistemaId)}`),
-            camposLigacao(editLig, setEditLig, { tipo: tipoSistema(l.sistemaId), editando: true }),
-            e('div', { key: 'ac', className: 'admin-item-acoes', style: { justifyContent: 'flex-start' } }, [
-              botao('Salvar', async () => {
-                if (await fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, editLig), 'Sistema da empresa salvo.')) setEditLig(null);
-              }, 'prim', { key: 's', padding: '5px 10px', disabled: !editLig.url.trim() }),
-              botao('Cancelar', () => setEditLig(null), 'sec', { key: 'c', padding: '5px 10px' }),
-            ]),
-          ])
-          : e('div', { key: l.id, className: 'admin-item' }, [
-            e('div', { key: 't', className: 'admin-item-texto' }, [
-              e('strong', { key: 'a' }, [nomeSistema(l.sistemaId), l.nomeNoSistema ? ` (${l.nomeNoSistema})` : '', l.ativo ? '' : ' · desativado'].join('')),
-              e('span', { key: 'b', style: { wordBreak: 'break-all' } }, resumoLigacao(l, emp).filter(Boolean).join(' · ')),
-            ]),
-            e('div', { key: 'ac', className: 'admin-item-acoes' }, [
-              botao('Editar', () => setEditLig({ ...l, urlAcesso: l.urlAcesso || '', nomeNoSistema: l.nomeNoSistema || '', identificadorNoSistema: l.identificadorNoSistema || '', mobile: '', tokenApi: '', limparTokenApi: false }), 'sec', { key: 'ed', padding: '5px 10px' }),
-              botao(l.ativo ? 'Desativar' : 'Ativar', () => fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, { ...l, ativo: !l.ativo }), l.ativo ? 'Sistema desativado na empresa.' : 'Sistema ativado na empresa.'), 'sec', { key: 'at', padding: '5px 10px' }),
-              remover(`lig-${l.id}`, () => api('DELETE', `/api/admin/ligacoes/${l.id}`), 'Sistema tirado da empresa.'),
-            ]),
-          ]))),
-      camposLigacao(lig, setLig, {
-        tipo: tipoSistema(Number(lig.sistemaId)),
-        editando: false,
-        sistemas: dados.sistemas,
-        // SGA: a API é a mesma para todas as empresas, já vem preenchida
-        aoEscolher: (x) => setLig({ ...lig, sistemaId: x, url: tipoSistema(Number(x)) === 'sga' && !lig.url ? API_SGA : lig.url }),
-      }),
-      botao('Ligar sistema à empresa', async () => {
-        if (await fazer(() => api('POST', `/api/admin/empresas/${emp.id}/sistemas`, lig), 'Sistema ligado à empresa.')) setLig(LIGACAO_VAZIA);
-      }, 'sec', { key: 'ln', alignSelf: 'flex-start', disabled: !lig.sistemaId || !lig.url.trim(), opacity: lig.sistemaId && lig.url.trim() ? 1 : 0.6 }),
-      e('div', { key: 'rm', className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
-        remover(`emp-${emp.id}`, () => api('DELETE', `/api/admin/empresas/${emp.id}`).then(() => setAberta(null)), 'Empresa removida.'),
-        e('span', { key: 'd' }, dica('Só remove empresa sem sistemas e sem histórico (chamados, regionais). Com histórico, desative.')),
+      e('div', { key: 'sis', className: 'admin-pilha', style: { gap: 10 } }, [
+        rotulo('Sistemas da empresa'),
+        emp.sistemas.length ? null : e('div', { key: 'v', className: 'admin-vazio' }, 'Nenhum sistema ligado. Ligue o SGA ou o PowerCRM para a empresa aparecer nas automações.'),
+        ...emp.sistemas.map((l) => blocoLigacao(l, emp)),
+        lig ? e('div', { key: 'novo', className: 'admin-subcartao' }, [
+          e('strong', { key: 't' }, 'Ligar sistema'),
+          camposLigacao(lig, setLig, {
+            tipo: tipoSistema(Number(lig.sistemaId)),
+            editando: false,
+            sistemas: dados.sistemas,
+            // SGA: a API é a mesma para todas as empresas, já vem preenchida
+            aoEscolher: (x) => setLig({ ...lig, sistemaId: x, url: tipoSistema(Number(x)) === 'sga' && !lig.url ? API_SGA : lig.url }),
+          }),
+          e('div', { key: 'ac', className: 'admin-acoes' }, [
+            botao('Ligar sistema', async () => {
+              if (await fazer(() => api('POST', `/api/admin/empresas/${emp.id}/sistemas`, lig), 'Sistema ligado à empresa.')) setLig(null);
+            }, 'prim', { key: 'l', disabled: !lig.sistemaId || !lig.url.trim() }),
+            botao('Cancelar', () => setLig(null), 'sec', { key: 'c' }),
+          ]),
+        ]) : botao('+ Ligar sistema', () => setLig(LIGACAO_VAZIA), 'sec', { key: 'abrir', alignSelf: 'flex-start' }),
+      ]),
+      e('div', { key: 'rm', className: 'admin-acoes' }, [
+        remover(`emp-${emp.id}`, () => api('DELETE', `/api/admin/empresas/${emp.id}`).then(() => setAberta(null)), 'Empresa removida.', 'Remover empresa'),
+        dica('Só sai empresa sem sistemas e sem histórico (chamados, regionais). Com histórico, desative.'),
       ]),
     ]);
 
+    const formNova = nova ? e('div', { key: 'nova', className: 'admin-subcartao' }, [
+      e('div', { key: 'f', className: 'admin-linha-campos' }, [
+        campo('n', 'Nome', entrada(nova.nome, (v) => setNova({ ...nova, nome: v }), 'Ex.: Nova Proteção', { maxLength: 120, autoFocus: true })),
+        campo('c', 'CNPJ', entrada(nova.cnpj, (v) => setNova({ ...nova, cnpj: v }), 'Opcional', { maxLength: 18 })),
+      ]),
+      e('div', { key: 'ac', className: 'admin-acoes' }, [
+        botao('Adicionar empresa', async () => {
+          const nome = nova.nome.trim();
+          if (await fazer(() => api('POST', '/api/admin/empresas', nova), 'Empresa adicionada. Agora ligue o SGA ou o PowerCRM a ela.')) {
+            setNova(null);
+            setBusca(nome);
+          }
+        }, 'prim', { key: 'b', disabled: !nova.nome.trim() }),
+        botao('Cancelar', () => setNova(null), 'sec', { key: 'c' }),
+      ]),
+    ]) : null;
+
+    const comSga = ativas.filter((x) => { const s = sgaDe(x); return s && s.urlAcesso; }).length;
+    const comApi = ativas.filter((x) => { const s = sgaDe(x); return s && s.tokenApiDefinido; }).length;
+    const crm = dados.sistemas.find((s) => s.nome.toUpperCase() === 'POWERCRM');
+    const basesCrm = crm ? ativas.reduce((n, x) => n + x.sistemas.filter((l) => l.ativo && l.sistemaId === crm.id).length, 0) : 0;
+
     return e('div', { className: 'admin-pilha' }, [
       mensagem(erro, info),
-      secao('sis', 'Sistemas', 'As categorias em que as empresas operam, como SGA e PowerCRM.', [
-        dados.sistemas.length === 0 ? dica('Nenhum sistema cadastrado.') : e('div', { key: 'l', className: 'admin-lista' }, dados.sistemas.map((s) =>
+      e('div', { key: 'kpis', className: 'admin-kpis' }, [
+        kpi('a', 'Empresas ativas', ativas.length, dados.empresas.length > ativas.length ? `${dados.empresas.length - ativas.length} desativada${dados.empresas.length - ativas.length === 1 ? '' : 's'}` : 'Todas ativas'),
+        kpi('s', 'No SGA das automações', comSga, 'Com o endereço do SGA preenchido'),
+        kpi('t', 'Com API do SGA', comApi, 'Com o token da API guardado', comApi < comSga ? 'alerta' : ''),
+        kpi('c', 'Bases no PowerCRM', basesCrm, 'Ativas'),
+      ]),
+      secao('emp', 'Empresas', 'O que as automações enxergam: uma empresa só aparece nas listas depois de ligada a um sistema. Mudanças valem em até 5 minutos.', [
+        formNova,
+        e('input', { key: 'busca', className: 'field-input admin-busca', value: busca, onChange: (ev) => setBusca(ev.target.value), placeholder: 'Buscar empresa', 'aria-label': 'Buscar empresa', style: S().input }),
+        filtradas.length === 0 ? e('div', { key: 'v', className: 'admin-vazio' }, busca ? `Nenhuma empresa com "${busca}".` : 'Nenhuma empresa no cadastro.') : e('div', { key: 'l', className: 'admin-lista' }, filtradas.map((emp) =>
+          e('div', { key: emp.id, className: 'admin-item admin-item-bloco', style: { alignItems: 'stretch' } }, [
+            e('div', { key: 'cab', className: 'admin-item' }, [
+              e('span', { key: 'av', className: 'admin-avatar', 'aria-hidden': true }, iniciais(emp.nome)),
+              e('div', { key: 't', className: 'admin-item-texto' }, [
+                e('strong', { key: 'a' }, emp.nome),
+                e('div', { key: 'b', className: 'admin-chips' }, selosDaEmpresa(emp)),
+              ]),
+              botao(aberta === emp.id ? 'Fechar' : 'Abrir', () => abrir(emp), 'sec', { key: 'e', padding: '5px 10px' }),
+            ]),
+            aberta === emp.id && form ? detalhe(emp) : null,
+          ]))),
+      ], null, nova ? null : botao('+ Adicionar empresa', () => setNova({ nome: '', cnpj: '' }), 'sec', { key: 'nova' })),
+      secao('sis', 'Sistemas', 'Os sistemas em que as empresas operam. A mesma lista aparece em "Sistemas" no cadastro de automação do painel.', [
+        e('div', { key: 'l', className: 'admin-lista' }, dados.sistemas.map((s) =>
           e('div', { key: s.id, className: 'admin-item' }, [
             renomear[s.id] !== undefined
-              ? e('div', { key: 'f', className: 'admin-item-texto' }, entrada(renomear[s.id], (v) => setRenomear({ ...renomear, [s.id]: v }), 'Nome do sistema', { maxLength: 60 }))
-              : e('div', { key: 't', className: 'admin-item-texto' }, [e('strong', { key: 'a' }, s.nome), e('span', { key: 'b' }, s.total === 1 ? '1 empresa' : `${s.total} empresas`)]),
+              ? e('div', { key: 'f', className: 'admin-item-texto' }, entrada(renomear[s.id], (v) => setRenomear({ ...renomear, [s.id]: v }), 'Nome do sistema', { maxLength: 60, 'aria-label': 'Nome do sistema' }))
+              : e('div', { key: 't', className: 'admin-item-texto' }, [e('strong', { key: 'a' }, s.nome), e('span', { key: 'b' }, s.total === 0 ? 'Nenhuma empresa' : s.total === 1 ? '1 empresa' : `${s.total} empresas`)]),
             e('div', { key: 'ac', className: 'admin-item-acoes' }, renomear[s.id] !== undefined ? [
               botao('Salvar', async () => {
                 if (await fazer(() => api('PUT', `/api/admin/sistemas/${s.id}`, { nome: renomear[s.id] }), 'Sistema renomeado.')) setRenomear(({ [s.id]: _, ...resto }) => resto);
@@ -780,38 +872,12 @@
               remover(`sis-${s.id}`, () => api('DELETE', `/api/admin/sistemas/${s.id}`), 'Sistema removido.'),
             ]),
           ]))),
-        e('div', { key: 'n', className: 'admin-linha-acao' }, [
-          entrada(novoSistema, setNovoSistema, 'Nome do novo sistema', { key: 'i', maxLength: 60, style: { ...S().input, flex: 1 } }),
-          botao('Adicionar sistema', async () => {
-            if (await fazer(() => api('POST', '/api/admin/sistemas', { nome: novoSistema }), 'Sistema adicionado.')) setNovoSistema('');
-          }, 'sec', { key: 'b', disabled: !novoSistema.trim() }),
-        ]),
-      ]),
-      secao('emp', 'Empresas', `${dados.empresas.length === 1 ? '1 empresa' : dados.empresas.length + ' empresas'} no cadastro único. Clique em uma para editar, ligar sistemas ou remover.`, [
-        entrada(busca, setBusca, 'Buscar empresa', { key: 'busca', className: 'field-input admin-busca' }),
-        filtradas.length === 0 ? dica('Nenhuma empresa encontrada.') : e('div', { key: 'l', className: 'admin-lista' }, filtradas.map((emp) =>
-          e('div', { key: emp.id, className: 'admin-item admin-item-bloco', style: { alignItems: 'stretch' } }, [
-            e('div', { key: 'cab', className: 'admin-item' }, [
-              e('span', { key: 'av', className: 'admin-avatar', 'aria-hidden': true }, iniciais(emp.nome)),
-              e('div', { key: 't', className: 'admin-item-texto' }, [
-                e('strong', { key: 'a' }, emp.nome),
-                e('span', { key: 'b' }, [emp.cnpj || 'CNPJ não informado', emp.sistemas.length ? emp.sistemas.map((l) => nomeSistema(l.sistemaId)).join(', ') : 'Sem sistemas'].join(' · ')),
-              ]),
-              emp.ativo ? null : selo('Desativada', 'alerta'),
-              botao(aberta === emp.id ? 'Fechar' : 'Editar', () => abrir(emp), 'sec', { key: 'e', padding: '5px 10px' }),
-            ]),
-            aberta === emp.id && form ? detalhe(emp) : null,
-          ]))),
-      ]),
-      secao('nova', 'Adicionar empresa', 'Depois de adicionar, abra a empresa para ligar os sistemas dela.', [
-        e('div', { key: 'f', className: 'admin-linha-campos' }, [
-          campo('n', 'Nome', entrada(nova.nome, (v) => setNova({ ...nova, nome: v }), 'Ex.: Nova Proteção', { maxLength: 120 })),
-          campo('c', 'CNPJ', entrada(nova.cnpj, (v) => setNova({ ...nova, cnpj: v }), 'Opcional', { maxLength: 18 })),
-        ]),
-        botao('Adicionar empresa', async () => {
-          if (await fazer(() => api('POST', '/api/admin/empresas', nova), 'Empresa adicionada.')) setNova({ nome: '', cnpj: '' });
-        }, 'prim', { key: 'b', alignSelf: 'flex-start', disabled: !nova.nome.trim(), opacity: nova.nome.trim() ? 1 : 0.6 }),
-      ]),
+      ], e('div', { className: 'admin-rodape-conteudo' }, [
+        entrada(novoSistema, setNovoSistema, 'Nome do novo sistema', { key: 'i', maxLength: 60, 'aria-label': 'Nome do novo sistema', style: { ...S().input, flex: 1, maxWidth: 360 } }),
+        botao('Adicionar sistema', async () => {
+          if (await fazer(() => api('POST', '/api/admin/sistemas', { nome: novoSistema }), 'Sistema adicionado.')) setNovoSistema('');
+        }, 'prim', { key: 'b', disabled: !novoSistema.trim() }),
+      ])),
     ]);
   }
 
