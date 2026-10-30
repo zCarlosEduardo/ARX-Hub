@@ -88,10 +88,21 @@ test('empresas: só admin; cria, edita, liga sistema sem devolver o mobile e rem
     assert.equal(s.banco.t.ligs[0].mobile, 'mobile-secreto');
     assert.equal(s.banco.t.ligs[0].ativo, false);
 
+    // trocar o mobile e o token da API; depois editar sem os dois mantém; limparTokenApi apaga só o token
+    const troca = await s.chamar('PUT', `/api/admin/ligacoes/${lig.corpo.id}`, { url: 'https://sga.exemplo/sgav4_nova2', mobile: 'mobile-novo', tokenApi: 'token-api-secreto' });
+    assert.deepEqual([troca.corpo.mobile, troca.corpo.tokenApi, troca.corpo.tokenApiDefinido], [undefined, undefined, true]);
+    assert.deepEqual([s.banco.t.ligs[0].mobile, s.banco.t.ligs[0].tokenApi], ['mobile-novo', 'token-api-secreto']);
+    await s.chamar('PUT', `/api/admin/ligacoes/${lig.corpo.id}`, { url: 'https://sga.exemplo/sgav4_nova2', mobile: '', tokenApi: '' });
+    assert.deepEqual([s.banco.t.ligs[0].mobile, s.banco.t.ligs[0].tokenApi], ['mobile-novo', 'token-api-secreto']);
+    const limpo = await s.chamar('PUT', `/api/admin/ligacoes/${lig.corpo.id}`, { url: 'https://sga.exemplo/sgav4_nova2', limparTokenApi: true });
+    assert.equal(limpo.corpo.tokenApiDefinido, false);
+    assert.deepEqual([s.banco.t.ligs[0].mobile, s.banco.t.ligs[0].tokenApi], ['mobile-novo', null]);
+    await s.chamar('PUT', `/api/admin/ligacoes/${lig.corpo.id}`, { url: 'https://sga.exemplo/sgav4_nova2', tokenApi: 'token-api-secreto' });
+
     const lista = await s.chamar('GET', '/api/admin/empresas');
     assert.deepEqual(lista.corpo.empresas.map((x) => x.nome), ['EMPRESA TESTE', 'Nova Proteção'], 'ordem alfabética');
     assert.equal(lista.corpo.sistemas.find((x) => x.nome === 'SGA').total, 1);
-    assert.ok(!JSON.stringify(lista.corpo).includes('mobile-secreto'), 'a tela nunca recebe o mobile');
+    assert.ok(!/mobile-secreto|mobile-novo|token-api-secreto/.test(JSON.stringify(lista.corpo)), 'a tela nunca recebe o mobile nem o token');
 
     // sistema em uso: o 409 do banco chega com a mensagem
     const emUso = await s.chamar('DELETE', '/api/admin/sistemas/1');
@@ -103,8 +114,8 @@ test('empresas: só admin; cria, edita, liga sistema sem devolver o mobile e rem
     assert.equal((await s.chamar('DELETE', `/api/admin/empresas/${criada.corpo.id}`)).status, 204);
     assert.equal((await s.chamar('DELETE', '/api/admin/empresas/abc')).status, 400);
 
-    assert.ok(!JSON.stringify(s.historico).includes('mobile-secreto'), 'o histórico não guarda o mobile');
-    assert.deepEqual(s.historico.map((h) => h.acao), ['empresa.adicionar', 'empresa.alterar', 'empresa.sistema.adicionar', 'empresa.sistema.alterar', 'empresa.sistema.remover', 'sistema.remover', 'empresa.remover']);
+    assert.ok(!/mobile-secreto|mobile-novo|token-api-secreto/.test(JSON.stringify(s.historico)), 'o histórico não guarda o mobile nem o token');
+    assert.deepEqual(s.historico.map((h) => h.acao), ['empresa.adicionar', 'empresa.alterar', 'empresa.sistema.adicionar', ...Array(5).fill('empresa.sistema.alterar'), 'empresa.sistema.remover', 'sistema.remover', 'empresa.remover']);
   } finally {
     s.fechar();
   }

@@ -1,6 +1,7 @@
 // Administração > Empresas e sistemas: cadastro único do banco-central (associações, sistemas como SGA e PowerCRM, e em
 // quais sistemas cada empresa está). Só admin; o Hub repassa com o token de serviço do banco (BANCO_CENTRAL_TOKEN).
-// O `mobile` do SGA (token da associação) nunca volta para a tela nem para o histórico: vazio na edição mantém o guardado.
+// O `mobile` e o token da API do SGA (`tokenApi`) nunca voltam para a tela nem para o histórico: vazio na edição mantém o
+// guardado; `limparTokenApi` apaga o token (volta a valer o TOKEN_<NOME> do .env.tokens-sga).
 //
 //   GET    /api/admin/empresas               empresas (com os sistemas de cada uma) e sistemas
 //   POST   /api/admin/empresas               { nome, cnpj? }
@@ -9,8 +10,8 @@
 //   POST   /api/admin/sistemas               { nome }
 //   PUT    /api/admin/sistemas/:id           { nome }
 //   DELETE /api/admin/sistemas/:id
-//   POST   /api/admin/empresas/:id/sistemas  { sistemaId, url, nomeNoSistema?, identificadorNoSistema?, mobile? }
-//   PUT    /api/admin/ligacoes/:id           { url, nomeNoSistema?, identificadorNoSistema?, ativo, mobile? }
+//   POST   /api/admin/empresas/:id/sistemas  { sistemaId, url, nomeNoSistema?, identificadorNoSistema?, mobile?, tokenApi? }
+//   PUT    /api/admin/ligacoes/:id           { url, nomeNoSistema?, identificadorNoSistema?, ativo, mobile?, tokenApi?, limparTokenApi? }
 //   DELETE /api/admin/ligacoes/:id
 
 function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco }) {
@@ -53,7 +54,7 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     if (!/^https?:\/\/\S+$/i.test(t)) throw new ErroHttp(400, 'O endereço precisa começar com http:// ou https://.');
     return t;
   }
-  const semMobile = ({ mobile, ...resto }) => ({ ...resto, mobileDefinido: !!mobile });
+  const semSegredo = ({ mobile, tokenApi, ...resto }) => ({ ...resto, mobileDefinido: !!mobile, tokenApiDefinido: !!tokenApi });
   const ligacao = (b, editar) => {
     const v = {
       url: endereco(b.url),
@@ -63,6 +64,9 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     };
     const mobile = texto(b.mobile, 'o código mobile', 300);
     if (mobile || !editar) v.mobile = mobile || undefined;
+    const tokenApi = texto(b.tokenApi, 'o token da API', 500);
+    if (tokenApi) v.tokenApi = tokenApi;
+    else if (editar && b.limparTokenApi === true) v.tokenApi = null;
     return v;
   };
 
@@ -73,7 +77,7 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
       const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
       res.set('Cache-Control', 'no-store');
       res.json({
-        empresas: assocs.sort(porNome).map((a) => ({ id: a.id, nome: a.nome, cnpj: a.cnpj, ativo: a.ativo, sistemas: ligs.filter((l) => l.associacaoId === a.id).map(semMobile) })),
+        empresas: assocs.sort(porNome).map((a) => ({ id: a.id, nome: a.nome, cnpj: a.cnpj, ativo: a.ativo, sistemas: ligs.filter((l) => l.associacaoId === a.id).map(semSegredo) })),
         sistemas: sists.sort(porNome).map((s) => ({ ...s, total: ligs.filter((l) => l.sistemaId === s.id).length })),
       });
     }));
@@ -129,14 +133,14 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     app.post('/api/admin/empresas/:id/sistemas', asyncHandler(async (req, res) => {
       const usuario = await exigirAdmin(req);
       const b = req.body || {};
-      const criado = semMobile(await chamar('POST', '/associacao-sistemas', { associacaoId: id(req.params.id), sistemaId: id(b.sistemaId), ...ligacao(b, false) }));
+      const criado = semSegredo(await chamar('POST', '/associacao-sistemas', { associacaoId: id(req.params.id), sistemaId: id(b.sistemaId), ...ligacao(b, false) }));
       await anotar(usuario, 'empresa.sistema.adicionar', `associação ${criado.associacaoId}`, null, criado);
       res.status(201).json(criado);
     }));
 
     app.put('/api/admin/ligacoes/:id', asyncHandler(async (req, res) => {
       const usuario = await exigirAdmin(req);
-      const novo = semMobile(await chamar('PUT', `/associacao-sistemas/${id(req.params.id)}`, ligacao(req.body || {}, true)));
+      const novo = semSegredo(await chamar('PUT', `/associacao-sistemas/${id(req.params.id)}`, ligacao(req.body || {}, true)));
       await anotar(usuario, 'empresa.sistema.alterar', `associação ${novo.associacaoId}`, null, novo);
       res.json(novo);
     }));
@@ -146,7 +150,7 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
       const n = id(req.params.id);
       const antes = (await chamar('GET', '/associacao-sistemas')).find((l) => l.id === n);
       await chamar('DELETE', `/associacao-sistemas/${n}`);
-      await anotar(usuario, 'empresa.sistema.remover', antes ? `associação ${antes.associacaoId}` : n, antes ? semMobile(antes) : null, null);
+      await anotar(usuario, 'empresa.sistema.remover', antes ? `associação ${antes.associacaoId}` : n, antes ? semSegredo(antes) : null, null);
       res.status(204).end();
     }));
   }
