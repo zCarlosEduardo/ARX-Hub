@@ -613,22 +613,48 @@
   // ---------- aba: Empresas e sistemas (cadastro único do banco central) ----------
   const entrada = (valor, onChange, placeholder, extra = {}) =>
     e('input', { className: 'field-input', value: valor == null ? '' : valor, onChange: (ev) => onChange(ev.target.value), placeholder, style: S().input, ...extra });
-  const LIGACAO_VAZIA = { sistemaId: '', url: '', nomeNoSistema: '', identificadorNoSistema: '', mobile: '', tokenApi: '' };
+  const LIGACAO_VAZIA = { sistemaId: '', url: '', urlAcesso: '', nomeNoSistema: '', identificadorNoSistema: '', mobile: '', tokenApi: '' };
+  const API_SGA = 'https://api.hinova.com.br/api/sga/v2';
+  // O que cada campo quer dizer em cada sistema (o banco guarda os mesmos campos para todos)
+  const ROTULOS_LIGACAO = {
+    sga: {
+      url: ['Endereço da API do SGA', API_SGA, 'A API da Hinova (igual para todas as empresas). Usada pelo Atualizar cooperativas e pelo Cadastro de voluntário.'],
+      urlAcesso: ['Endereço do SGA usado pelas automações', 'https://sga.hinova.com.br/sga/sgav4_empresa', 'O SGA da empresa que as automações abrem no navegador (Relatórios, Alterar senha, Grupos, Alt. status...). Sem /v5/login.php no fim.'],
+      nome: ['Nome nas telas das automações', 'Vazio = o nome da empresa', 'Como a empresa aparece nas listas das automações do SGA.'],
+    },
+    crm: {
+      url: ['Endereço do PowerCRM', 'https://app.powercrm.com.br/', ''],
+      nome: ['Nome da empresa no PowerCRM', 'Ex.: ANCORE PROTEÇÃO VEICULAR', 'Igual ao da tela de troca de empresa do PowerCRM: é por ele que as automações escolhem a base. Uma linha por base.'],
+      id: ['ID da empresa no PowerCRM', 'Não informado', 'Número da empresa no PowerCRM (separa as bases da mesma empresa).'],
+    },
+    outro: {
+      url: ['Endereço do sistema', 'https://…', ''],
+      urlAcesso: ['Endereço de acesso (navegador)', 'Opcional', 'Quando o sistema tem um endereço para a API e outro para abrir no navegador.'],
+      nome: ['Nome da empresa no sistema', 'Vazio = o nome da empresa', ''],
+      id: ['Identificador no sistema', 'Não informado', 'Código que separa as bases da mesma empresa.'],
+    },
+  };
   /**
    * Campos de um sistema da empresa (novo ou em edição). Código mobile e token da API são só de escrita: a tela nunca
    * recebe o valor guardado, e vazio na edição mantém o que está no banco.
    */
-  const camposLigacao = (v, set, { ehSga, editando, sistemas }) => e('div', { key: 'cl', className: 'admin-linha-campos' }, [
-    editando ? null : campo('s', 'Sistema', selecao(v.sistemaId, (x) => set({ ...v, sistemaId: x }), [['', 'Escolha o sistema'], ...sistemas.map((s) => [String(s.id), s.nome])])),
-    campo('u', 'Endereço no sistema', entrada(v.url, (x) => set({ ...v, url: x }), 'https://…', { maxLength: 300 })),
-    campo('nn', 'Nome no sistema', entrada(v.nomeNoSistema, (x) => set({ ...v, nomeNoSistema: x }), 'Vazio = o nome da empresa', { maxLength: 120 })),
-    campo('id', 'Identificador no sistema', entrada(v.identificadorNoSistema, (x) => set({ ...v, identificadorNoSistema: x }), 'Não informado', { maxLength: 120 }), 'Código que separa as bases (ex.: o id da empresa no PowerCRM).'),
-    ehSga ? campo('m', 'Código mobile do SGA', entrada(v.mobile, (x) => set({ ...v, mobile: x }), editando && v.mobileDefinido ? 'Guardado. Digite só para trocar' : 'Obrigatório no SGA', { type: 'password', autoComplete: 'off', maxLength: 300 }),
-      'Fica só no banco central: não volta para esta tela.') : null,
-    ehSga ? campo('tk', 'Token da API do SGA', entrada(v.tokenApi, (x) => set({ ...v, tokenApi: x, limparTokenApi: false }), editando && v.tokenApiDefinido ? 'Guardado. Digite só para trocar' : 'Vazio = o token do .env.tokens-sga', { type: 'password', autoComplete: 'off', maxLength: 500 }),
-      'Usado pelo Atualizar cooperativas, pelo Cadastro de voluntário e pelo monitor no lugar do .env.') : null,
-    ehSga && editando && v.tokenApiDefinido ? caixa(v.limparTokenApi, (x) => set({ ...v, limparTokenApi: x, tokenApi: '' }), 'Apagar o token guardado (volta a valer o do .env.tokens-sga)', { key: 'lt' }) : null,
-  ]);
+  const camposLigacao = (v, set, { tipo, editando, sistemas, aoEscolher }) => {
+    const r = ROTULOS_LIGACAO[tipo] || ROTULOS_LIGACAO.outro;
+    const texto = (k, chave, [titulo, exemplo, ajuda], max) => campo(k, titulo, entrada(v[chave], (x) => set({ ...v, [chave]: x }), exemplo, { maxLength: max }), ajuda || null);
+    const segredo = tipo === 'sga';
+    return e('div', { key: 'cl', className: 'admin-linha-campos' }, [
+      editando ? null : campo('s', 'Sistema', selecao(v.sistemaId, aoEscolher, [['', 'Escolha o sistema'], ...sistemas.map((s) => [String(s.id), s.nome])])),
+      r.urlAcesso ? texto('ua', 'urlAcesso', r.urlAcesso, 300) : null,
+      texto('u', 'url', r.url, 300),
+      texto('nn', 'nomeNoSistema', r.nome, 120),
+      r.id ? texto('id', 'identificadorNoSistema', r.id, 120) : null,
+      segredo ? campo('m', 'Código mobile do SGA', entrada(v.mobile, (x) => set({ ...v, mobile: x }), editando && v.mobileDefinido ? 'Guardado. Digite só para trocar' : 'Não informado', { type: 'password', autoComplete: 'off', maxLength: 300 }),
+        'Fica só no banco central: não volta para esta tela. Vazio mantém o guardado.') : null,
+      segredo ? campo('tk', 'Token da API do SGA', entrada(v.tokenApi, (x) => set({ ...v, tokenApi: x, limparTokenApi: false }), editando && v.tokenApiDefinido ? 'Guardado. Digite só para trocar' : 'Vazio = o token do .env.tokens-sga', { type: 'password', autoComplete: 'off', maxLength: 500 }),
+        'Usado pelo Atualizar cooperativas, pelo Cadastro de voluntário e pelo monitor no lugar do .env. Não volta para esta tela.') : null,
+      segredo && editando && v.tokenApiDefinido ? caixa(v.limparTokenApi, (x) => set({ ...v, limparTokenApi: x, tokenApi: '' }), 'Apagar o token guardado (volta a valer o do .env.tokens-sga)', { key: 'lt' }) : null,
+    ]);
+  };
 
   function AbaEmpresas() {
     const [dados, setDados] = useState(null); // { empresas, sistemas }
@@ -674,7 +700,18 @@
 
     if (!dados) return e('div', { className: 'admin-pilha' }, [mensagem(erro), erro ? null : dica('Carregando…')]);
     const nomeSistema = (id) => (dados.sistemas.find((s) => s.id === id) || {}).nome || `Sistema ${id}`;
-    const ehSga = (sistemaId) => nomeSistema(sistemaId).toUpperCase() === 'SGA';
+    const tipoSistema = (sistemaId) => ({ SGA: 'sga', POWERCRM: 'crm' }[nomeSistema(sistemaId).toUpperCase()] || 'outro');
+    /** Resumo de uma linha do sistema da empresa; nada de segredo (a tela só sabe se está guardado). */
+    function resumoLigacao(l, emp) {
+      const tipo = tipoSistema(l.sistemaId);
+      if (tipo === 'sga') return [
+        l.urlAcesso ? `SGA ${l.urlAcesso}` : 'sem endereço do SGA (as automações usam o fixo do código)',
+        emp.chaveSga ? `código nas automações ${emp.chaveSga}` : null,
+        l.mobileDefinido ? 'código mobile guardado' : 'sem código mobile',
+        l.tokenApiDefinido ? 'token da API guardado' : 'token da API do .env',
+      ];
+      return [l.urlAcesso, l.url, l.identificadorNoSistema ? `ID ${l.identificadorNoSistema}` : null];
+    }
     const filtradas = dados.empresas.filter((x) => !busca || x.nome.toLowerCase().includes(busca.toLowerCase()));
 
     const detalhe = (emp) => e('div', { key: 'det', className: 'admin-pilha', style: { padding: '12px 4px 4px', gap: 14 } }, [
@@ -689,7 +726,7 @@
         editLig && editLig.id === l.id
           ? e('div', { key: l.id, className: 'admin-item admin-item-bloco', style: { alignItems: 'stretch', gap: 12 } }, [
             e('strong', { key: 't' }, `Editar ${nomeSistema(l.sistemaId)}`),
-            camposLigacao(editLig, setEditLig, { ehSga: ehSga(l.sistemaId), editando: true }),
+            camposLigacao(editLig, setEditLig, { tipo: tipoSistema(l.sistemaId), editando: true }),
             e('div', { key: 'ac', className: 'admin-item-acoes', style: { justifyContent: 'flex-start' } }, [
               botao('Salvar', async () => {
                 if (await fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, editLig), 'Sistema da empresa salvo.')) setEditLig(null);
@@ -700,15 +737,21 @@
           : e('div', { key: l.id, className: 'admin-item' }, [
             e('div', { key: 't', className: 'admin-item-texto' }, [
               e('strong', { key: 'a' }, [nomeSistema(l.sistemaId), l.nomeNoSistema ? ` (${l.nomeNoSistema})` : '', l.ativo ? '' : ' · desativado'].join('')),
-              e('span', { key: 'b' }, [l.url, l.identificadorNoSistema ? `identificador ${l.identificadorNoSistema}` : null, l.mobileDefinido ? 'código mobile guardado' : null, ehSga(l.sistemaId) ? (l.tokenApiDefinido ? 'token da API guardado' : 'token da API do .env') : null].filter(Boolean).join(' · ')),
+              e('span', { key: 'b', style: { wordBreak: 'break-all' } }, resumoLigacao(l, emp).filter(Boolean).join(' · ')),
             ]),
             e('div', { key: 'ac', className: 'admin-item-acoes' }, [
-              botao('Editar', () => setEditLig({ ...l, nomeNoSistema: l.nomeNoSistema || '', identificadorNoSistema: l.identificadorNoSistema || '', mobile: '', tokenApi: '', limparTokenApi: false }), 'sec', { key: 'ed', padding: '5px 10px' }),
+              botao('Editar', () => setEditLig({ ...l, urlAcesso: l.urlAcesso || '', nomeNoSistema: l.nomeNoSistema || '', identificadorNoSistema: l.identificadorNoSistema || '', mobile: '', tokenApi: '', limparTokenApi: false }), 'sec', { key: 'ed', padding: '5px 10px' }),
               botao(l.ativo ? 'Desativar' : 'Ativar', () => fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, { ...l, ativo: !l.ativo }), l.ativo ? 'Sistema desativado na empresa.' : 'Sistema ativado na empresa.'), 'sec', { key: 'at', padding: '5px 10px' }),
               remover(`lig-${l.id}`, () => api('DELETE', `/api/admin/ligacoes/${l.id}`), 'Sistema tirado da empresa.'),
             ]),
           ]))),
-      camposLigacao(lig, setLig, { ehSga: ehSga(Number(lig.sistemaId)), editando: false, sistemas: dados.sistemas }),
+      camposLigacao(lig, setLig, {
+        tipo: tipoSistema(Number(lig.sistemaId)),
+        editando: false,
+        sistemas: dados.sistemas,
+        // SGA: a API é a mesma para todas as empresas, já vem preenchida
+        aoEscolher: (x) => setLig({ ...lig, sistemaId: x, url: tipoSistema(Number(x)) === 'sga' && !lig.url ? API_SGA : lig.url }),
+      }),
       botao('Ligar sistema à empresa', async () => {
         if (await fazer(() => api('POST', `/api/admin/empresas/${emp.id}/sistemas`, lig), 'Sistema ligado à empresa.')) setLig(LIGACAO_VAZIA);
       }, 'sec', { key: 'ln', alignSelf: 'flex-start', disabled: !lig.sistemaId || !lig.url.trim(), opacity: lig.sistemaId && lig.url.trim() ? 1 : 0.6 }),

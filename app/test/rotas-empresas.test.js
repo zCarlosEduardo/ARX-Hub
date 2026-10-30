@@ -10,7 +10,7 @@ const ADMIN = 'token-admin-0123456789';
 
 /** Banco central falso: as mesmas rotas usadas pelo Hub, em memória. */
 function bancoFalso() {
-  const t = { associacoes: [{ id: 1, nome: 'EMPRESA TESTE', cnpj: null, ativo: true }], sistemas: [{ id: 1, nome: 'SGA' }, { id: 2, nome: 'PowerCRM' }], ligs: [] };
+  const t = { associacoes: [{ id: 1, nome: 'EMPRESA TESTE', cnpj: null, ativo: true }], sistemas: [{ id: 1, nome: 'SGA' }, { id: 2, nome: 'PowerCRM' }], ligs: [], codigos: [] };
   const pedidos = [];
   let seq = 10;
   const resp = (status, corpo) => ({ ok: status < 400, status, json: async () => corpo });
@@ -18,11 +18,11 @@ function bancoFalso() {
     const corpo = body ? JSON.parse(body) : undefined;
     pedidos.push({ url, method, headers, corpo });
     const [, recurso, idTxt] = new URL(url).pathname.match(/^\/api\/([a-z-]+)\/?(\d+)?$/);
-    const lista = { associacoes: t.associacoes, sistemas: t.sistemas, 'associacao-sistemas': t.ligs }[recurso];
+    const lista = { associacoes: t.associacoes, sistemas: t.sistemas, 'associacao-sistemas': t.ligs, 'associacao-codigos': t.codigos }[recurso];
     const id = Number(idTxt);
     if (method === 'GET') return resp(200, lista);
     if (method === 'POST') {
-      if (recurso !== 'associacao-sistemas' && lista.some((x) => x.nome === corpo.nome)) return resp(409, { error: 'Já existe um sistema com esse nome.' });
+      if (!recurso.startsWith('associacao-') && lista.some((x) => x.nome === corpo.nome)) return resp(409, { error: 'Já existe um sistema com esse nome.' });
       const novo = { id: (seq += 1), ativo: true, ...corpo };
       lista.push(novo);
       return resp(201, novo);
@@ -77,11 +77,20 @@ test('empresas: só admin; cria, edita, liga sistema sem devolver o mobile e rem
     assert.equal(ed.corpo.ativo, false);
 
     assert.equal((await s.chamar('POST', `/api/admin/empresas/${criada.corpo.id}/sistemas`, { sistemaId: 1, url: 'ftp://x' })).status, 400, 'endereço precisa ser http(s)');
-    const lig = await s.chamar('POST', `/api/admin/empresas/${criada.corpo.id}/sistemas`, { sistemaId: 1, url: 'https://sga.exemplo/sgav4_nova', mobile: 'mobile-secreto', identificadorNoSistema: '' });
+    assert.equal((await s.chamar('POST', `/api/admin/empresas/${criada.corpo.id}/sistemas`, { sistemaId: 1, url: 'https://api.exemplo/sga', urlAcesso: 'sga.exemplo' })).status, 400, 'endereço de acesso também');
+    const lig = await s.chamar('POST', `/api/admin/empresas/${criada.corpo.id}/sistemas`, { sistemaId: 1, url: 'https://api.exemplo/sga', urlAcesso: 'https://sga.exemplo/sgav4_nova', mobile: 'mobile-secreto', identificadorNoSistema: '' });
     assert.equal(lig.status, 201);
     assert.equal(lig.corpo.mobile, undefined);
     assert.equal(lig.corpo.mobileDefinido, true);
     assert.equal(s.banco.t.ligs[0].identificadorNoSistema, null, 'vazio vira null (campo único no banco)');
+    assert.equal(s.banco.t.ligs[0].urlAcesso, 'https://sga.exemplo/sgav4_nova');
+    // SGA ligado a empresa nova: ganha a chave das automações pelo nome, sem acento
+    assert.deepEqual(s.banco.t.codigos.map((c) => [c.associacaoId, c.contexto, c.codigo]), [[criada.corpo.id, 'sga', 'novaprotecao']]);
+    // PowerCRM não cria chave do SGA
+    const crm = await s.chamar('POST', `/api/admin/empresas/${criada.corpo.id}/sistemas`, { sistemaId: 2, url: 'https://crm.exemplo', nomeNoSistema: 'NOVA PROTEÇÃO PV' });
+    assert.equal(s.banco.t.codigos.length, 1);
+    assert.equal((await s.chamar('DELETE', `/api/admin/ligacoes/${crm.corpo.id}`)).status, 204);
+    assert.equal((await s.chamar('GET', '/api/admin/empresas')).corpo.empresas.find((x) => x.id === criada.corpo.id).chaveSga, 'novaprotecao');
 
     // editar sem mobile mantém o guardado
     await s.chamar('PUT', `/api/admin/ligacoes/${lig.corpo.id}`, { url: 'https://sga.exemplo/sgav4_nova2', ativo: false, mobile: '' });
@@ -115,7 +124,7 @@ test('empresas: só admin; cria, edita, liga sistema sem devolver o mobile e rem
     assert.equal((await s.chamar('DELETE', '/api/admin/empresas/abc')).status, 400);
 
     assert.ok(!/mobile-secreto|mobile-novo|token-api-secreto/.test(JSON.stringify(s.historico)), 'o histórico não guarda o mobile nem o token');
-    assert.deepEqual(s.historico.map((h) => h.acao), ['empresa.adicionar', 'empresa.alterar', 'empresa.sistema.adicionar', ...Array(5).fill('empresa.sistema.alterar'), 'empresa.sistema.remover', 'sistema.remover', 'empresa.remover']);
+    assert.deepEqual(s.historico.map((h) => h.acao), ['empresa.adicionar', 'empresa.alterar', 'empresa.sistema.adicionar', 'empresa.sistema.adicionar', 'empresa.sistema.remover', ...Array(5).fill('empresa.sistema.alterar'), 'empresa.sistema.remover', 'sistema.remover', 'empresa.remover']);
   } finally {
     s.fechar();
   }

@@ -10,8 +10,9 @@
 //   POST   /api/admin/sistemas               { nome }
 //   PUT    /api/admin/sistemas/:id           { nome }
 //   DELETE /api/admin/sistemas/:id
-//   POST   /api/admin/empresas/:id/sistemas  { sistemaId, url, nomeNoSistema?, identificadorNoSistema?, mobile?, tokenApi? }
-//   PUT    /api/admin/ligacoes/:id           { url, nomeNoSistema?, identificadorNoSistema?, ativo, mobile?, tokenApi?, limparTokenApi? }
+//   POST   /api/admin/empresas/:id/sistemas  { sistemaId, url, urlAcesso?, nomeNoSistema?, identificadorNoSistema?, mobile?, tokenApi? }
+//                                            SGA sem chave nas automações (código "sga") ganha uma pelo nome
+//   PUT    /api/admin/ligacoes/:id           { url, urlAcesso?, nomeNoSistema?, identificadorNoSistema?, ativo, mobile?, tokenApi?, limparTokenApi? }
 //   DELETE /api/admin/ligacoes/:id
 
 function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco }) {
@@ -49,15 +50,18 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     if (t.length > max) throw new ErroHttp(400, `${rotulo[0].toUpperCase()}${rotulo.slice(1)} passa de ${max} caracteres.`);
     return t || null;
   }
-  function endereco(v) {
-    const t = texto(v, 'o endereço', 300, true);
-    if (!/^https?:\/\/\S+$/i.test(t)) throw new ErroHttp(400, 'O endereço precisa começar com http:// ou https://.');
+  function endereco(v, rotulo = 'o endereço', obrigatorio = true) {
+    const t = texto(v, rotulo, 300, obrigatorio);
+    if (t && !/^https?:\/\/\S+$/i.test(t)) throw new ErroHttp(400, `${rotulo[0].toUpperCase()}${rotulo.slice(1)} precisa começar com http:// ou https://.`);
     return t;
   }
+  /** Chave da empresa nas automações do SGA (e nos acessos guardados no Hub): letras e números, sem acento. */
+  const chaveDe = (nome) => String(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
   const semSegredo = ({ mobile, tokenApi, ...resto }) => ({ ...resto, mobileDefinido: !!mobile, tokenApiDefinido: !!tokenApi });
   const ligacao = (b, editar) => {
     const v = {
       url: endereco(b.url),
+      urlAcesso: endereco(b.urlAcesso, 'o endereço de acesso', false),
       nomeNoSistema: texto(b.nomeNoSistema, 'o nome no sistema', 120),
       identificadorNoSistema: texto(b.identificadorNoSistema, 'o identificador', 120),
       ativo: b.ativo === undefined ? true : !!b.ativo,
@@ -70,14 +74,26 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     return v;
   };
 
+  /** SGA ligado a empresa sem chave nas automações: cria a chave pelo nome (é ela que o Hub guarda nos acessos). */
+  async function garantirChaveSga(associacaoId, sistemaId) {
+    const sistema = (await chamar('GET', '/sistemas')).find((s) => s.id === sistemaId);
+    if (!sistema || sistema.nome !== 'SGA') return;
+    const codigos = await chamar('GET', '/associacao-codigos?contexto=sga');
+    if (codigos.some((c) => c.associacaoId === associacaoId)) return;
+    const empresa = (await chamar('GET', '/associacoes')).find((a) => a.id === associacaoId);
+    const base = chaveDe(empresa ? empresa.nome : '') || 'empresa';
+    const chave = codigos.some((c) => c.codigo === base) ? base + associacaoId : base;
+    await chamar('POST', '/associacao-codigos', { associacaoId, contexto: 'sga', codigo: chave, nome: empresa ? empresa.nome : null });
+  }
+
   function registrar(app) {
     app.get('/api/admin/empresas', asyncHandler(async (req, res) => {
       await exigirAdmin(req);
-      const [assocs, sists, ligs] = await Promise.all([chamar('GET', '/associacoes'), chamar('GET', '/sistemas'), chamar('GET', '/associacao-sistemas')]);
+      const [assocs, sists, ligs, cods] = await Promise.all([chamar('GET', '/associacoes'), chamar('GET', '/sistemas'), chamar('GET', '/associacao-sistemas'), chamar('GET', '/associacao-codigos?contexto=sga')]);
       const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
       res.set('Cache-Control', 'no-store');
       res.json({
-        empresas: assocs.sort(porNome).map((a) => ({ id: a.id, nome: a.nome, cnpj: a.cnpj, ativo: a.ativo, sistemas: ligs.filter((l) => l.associacaoId === a.id).map(semSegredo) })),
+        empresas: assocs.sort(porNome).map((a) => ({ id: a.id, nome: a.nome, cnpj: a.cnpj, ativo: a.ativo, chaveSga: (cods.find((c) => c.associacaoId === a.id) || {}).codigo || null, sistemas: ligs.filter((l) => l.associacaoId === a.id).map(semSegredo) })),
         sistemas: sists.sort(porNome).map((s) => ({ ...s, total: ligs.filter((l) => l.sistemaId === s.id).length })),
       });
     }));
@@ -133,7 +149,10 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
     app.post('/api/admin/empresas/:id/sistemas', asyncHandler(async (req, res) => {
       const usuario = await exigirAdmin(req);
       const b = req.body || {};
-      const criado = semSegredo(await chamar('POST', '/associacao-sistemas', { associacaoId: id(req.params.id), sistemaId: id(b.sistemaId), ...ligacao(b, false) }));
+      const associacaoId = id(req.params.id);
+      const sistemaId = id(b.sistemaId);
+      const criado = semSegredo(await chamar('POST', '/associacao-sistemas', { associacaoId, sistemaId, ...ligacao(b, false) }));
+      await garantirChaveSga(associacaoId, sistemaId);
       await anotar(usuario, 'empresa.sistema.adicionar', `associação ${criado.associacaoId}`, null, criado);
       res.status(201).json(criado);
     }));
