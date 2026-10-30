@@ -44,6 +44,9 @@ services:
       WHATSAPP_BOT_TOKEN: ${WHATSAPP_BOT_TOKEN:-}
       HUB_GLPI_TOKEN_SERVICO: ${HUB_GLPI_TOKEN_SERVICO:-}
       CHAMADOS_GLPI_URL: ${CHAMADOS_GLPI_URL:-http://chamados-glpi:4013}
+      # Administração > Empresas e sistemas: o mesmo token da API do banco central (API_TOKEN), só no .env
+      BANCO_CENTRAL_URL: ${BANCO_CENTRAL_URL:-http://banco-central-api:4000}
+      BANCO_CENTRAL_TOKEN: ${BANCO_CENTRAL_TOKEN:-}
       # IA local (ARX-Automacoes/ia-local): segredos gerados por scripts/gerar-segredo-ia.sh, só no .env
       IA_TOKEN: ${IA_TOKEN:-}
       IA_CONTROLE_TOKEN: ${IA_CONTROLE_TOKEN:-}

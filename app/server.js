@@ -479,6 +479,16 @@ const rotasAdmin = criarRotasAdmin({
 });
 rotasAdmin.registrar(app);
 
+// Administração > Empresas e sistemas: cadastro único do banco-central (rede arx-automacoes_default)
+const { criarRotasEmpresas } = require('./rotasEmpresas');
+criarRotasEmpresas({
+  exigirAdmin: rotasAdmin.exigirAdmin,
+  anotar: rotasAdmin.anotar,
+  asyncHandler,
+  ErroHttp,
+  banco: { url: process.env.BANCO_CENTRAL_URL || 'http://banco-central-api:4000', token: process.env.BANCO_CENTRAL_TOKEN || '' },
+}).registrar(app);
+
 // IA local: ligar/desligar, exportar, treinar e auditoria (veja rotasIa.js). Rede interna arx-ia-interna.
 const { criarRotasIa } = require('./rotasIa');
 const rotasIa = criarRotasIa({ admin: rotasAdmin, repo: repoPg(pool), asyncHandler, ErroHttp });

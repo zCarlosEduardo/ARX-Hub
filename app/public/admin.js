@@ -1,7 +1,8 @@
 // Painel de administração do Hub. O botão "Administração" só aparece para quem é administrador: o Hub não tem login próprio,
 // a pessoa é identificada pelo token do GLPI (guardado no cofre dos acessos) e a lista de admins fica no servidor.
 //
-// Páginas agrupadas no menu (GRUPOS_ABAS): Acesso (Cofre, Administradores, Histórico), Automações, IA local (IA e
+// Páginas agrupadas no menu (GRUPOS_ABAS): Acesso (Cofre, Administradores, Histórico), Automações (com Empresas e
+// sistemas, o cadastro único do banco central), IA local (IA e
 // Revisão da IA) e WhatsApp (Configuração, Vínculos, Conexão e pedidos). Layout no padrão das telas de configuração:
 // cada página com título e subtítulo, seções em cartões (secao) com rodapé de salvar, chaves liga/desliga e cartões
 // de opção; classes .admin-* em styles.css.
@@ -609,6 +610,144 @@
     return { painel, erro, recarregar: carregar };
   }
 
+  // ---------- aba: Empresas e sistemas (cadastro único do banco central) ----------
+  const entrada = (valor, onChange, placeholder, extra = {}) =>
+    e('input', { className: 'field-input', value: valor == null ? '' : valor, onChange: (ev) => onChange(ev.target.value), placeholder, style: S().input, ...extra });
+  const LIGACAO_VAZIA = { sistemaId: '', url: '', nomeNoSistema: '', identificadorNoSistema: '', mobile: '' };
+
+  function AbaEmpresas() {
+    const [dados, setDados] = useState(null); // { empresas, sistemas }
+    const [erro, setErro] = useState(null);
+    const [info, setInfo] = useState(null);
+    const [busca, setBusca] = useState('');
+    const [aberta, setAberta] = useState(null); // id da empresa expandida
+    const [form, setForm] = useState(null); // edição da empresa aberta
+    const [lig, setLig] = useState(LIGACAO_VAZIA); // novo sistema da empresa aberta
+    const [nova, setNova] = useState({ nome: '', cnpj: '' });
+    const [novoSistema, setNovoSistema] = useState('');
+    const [renomear, setRenomear] = useState({}); // id do sistema -> nome em edição
+    const [confirmar, setConfirmar] = useState(''); // remoção pede segundo clique
+
+    const carregar = () => api('GET', '/api/admin/empresas').then(setDados).catch((err) => setErro(err.message));
+    useEffect(() => { carregar(); }, []);
+
+    async function fazer(fn, ok) {
+      setErro(null);
+      setInfo(null);
+      setConfirmar('');
+      try {
+        await fn();
+        setInfo(ok);
+        await carregar();
+        return true;
+      } catch (err) {
+        setErro(err.message);
+        return false;
+      }
+    }
+    /** Botão Remover que só age no segundo clique. */
+    const remover = (chave, fn, ok) => botao(confirmar === chave ? 'Confirmar remoção' : 'Remover', () => (confirmar === chave ? fazer(fn, ok) : setConfirmar(chave)), 'perigo', { key: 'rm-' + chave, padding: '5px 10px' });
+    function abrir(emp) {
+      setConfirmar('');
+      setLig(LIGACAO_VAZIA);
+      if (aberta === emp.id) return setAberta(null);
+      setAberta(emp.id);
+      setForm({ nome: emp.nome, cnpj: emp.cnpj || '', ativo: emp.ativo });
+    }
+
+    if (!dados) return e('div', { className: 'admin-pilha' }, [mensagem(erro), erro ? null : dica('Carregando…')]);
+    const nomeSistema = (id) => (dados.sistemas.find((s) => s.id === id) || {}).nome || `Sistema ${id}`;
+    const sgaEscolhido = (nomeSistema(Number(lig.sistemaId)) || '').toUpperCase() === 'SGA';
+    const filtradas = dados.empresas.filter((x) => !busca || x.nome.toLowerCase().includes(busca.toLowerCase()));
+
+    const detalhe = (emp) => e('div', { key: 'det', className: 'admin-pilha', style: { padding: '12px 4px 4px', gap: 14 } }, [
+      e('div', { key: 'f', className: 'admin-linha-campos' }, [
+        campo('n', 'Nome', entrada(form.nome, (v) => setForm({ ...form, nome: v }), 'Nome da empresa', { maxLength: 120 })),
+        campo('c', 'CNPJ', entrada(form.cnpj, (v) => setForm({ ...form, cnpj: v }), 'Não informado', { maxLength: 18 })),
+      ]),
+      caixa(form.ativo, (v) => setForm({ ...form, ativo: v }), 'Empresa ativa (desativada some das escolhas das automações que leem o cadastro)', { key: 'a' }),
+      botao('Salvar empresa', () => fazer(() => api('PUT', `/api/admin/empresas/${emp.id}`, form), 'Empresa salva.'), 'prim', { key: 's', alignSelf: 'flex-start' }),
+      rotulo('Sistemas desta empresa'),
+      emp.sistemas.length === 0 ? dica('Nenhum sistema ligado.') : e('div', { key: 'ls', className: 'admin-lista' }, emp.sistemas.map((l) =>
+        e('div', { key: l.id, className: 'admin-item' }, [
+          e('div', { key: 't', className: 'admin-item-texto' }, [
+            e('strong', { key: 'a' }, [nomeSistema(l.sistemaId), l.nomeNoSistema ? ` (${l.nomeNoSistema})` : '', l.ativo ? '' : ' · desativado'].join('')),
+            e('span', { key: 'b' }, [l.url, l.identificadorNoSistema ? `identificador ${l.identificadorNoSistema}` : null, l.mobileDefinido ? 'código mobile guardado' : null].filter(Boolean).join(' · ')),
+          ]),
+          e('div', { key: 'ac', className: 'admin-item-acoes' }, [
+            botao(l.ativo ? 'Desativar' : 'Ativar', () => fazer(() => api('PUT', `/api/admin/ligacoes/${l.id}`, { ...l, ativo: !l.ativo }), l.ativo ? 'Sistema desativado na empresa.' : 'Sistema ativado na empresa.'), 'sec', { key: 'at', padding: '5px 10px' }),
+            remover(`lig-${l.id}`, () => api('DELETE', `/api/admin/ligacoes/${l.id}`), 'Sistema tirado da empresa.'),
+          ]),
+        ]))),
+      e('div', { key: 'nl', className: 'admin-linha-campos' }, [
+        campo('s', 'Sistema', selecao(lig.sistemaId, (v) => setLig({ ...lig, sistemaId: v }), [['', 'Escolha o sistema'], ...dados.sistemas.map((s) => [String(s.id), s.nome])])),
+        campo('u', 'Endereço no sistema', entrada(lig.url, (v) => setLig({ ...lig, url: v }), 'https://…', { maxLength: 300 })),
+        campo('nn', 'Nome no sistema', entrada(lig.nomeNoSistema, (v) => setLig({ ...lig, nomeNoSistema: v }), 'Vazio = o nome da empresa', { maxLength: 120 })),
+        campo('id', 'Identificador no sistema', entrada(lig.identificadorNoSistema, (v) => setLig({ ...lig, identificadorNoSistema: v }), 'Não informado', { maxLength: 120 }), 'Código que separa as bases (ex.: o id da empresa no PowerCRM).'),
+        sgaEscolhido ? campo('m', 'Código mobile do SGA', entrada(lig.mobile, (v) => setLig({ ...lig, mobile: v }), 'Obrigatório no SGA', { type: 'password', autoComplete: 'off', maxLength: 300 }), 'Fica só no banco central: não volta para esta tela.') : null,
+      ]),
+      botao('Ligar sistema à empresa', async () => {
+        if (await fazer(() => api('POST', `/api/admin/empresas/${emp.id}/sistemas`, lig), 'Sistema ligado à empresa.')) setLig(LIGACAO_VAZIA);
+      }, 'sec', { key: 'ln', alignSelf: 'flex-start', disabled: !lig.sistemaId || !lig.url.trim(), opacity: lig.sistemaId && lig.url.trim() ? 1 : 0.6 }),
+      e('div', { key: 'rm', className: 'admin-linha', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        remover(`emp-${emp.id}`, () => api('DELETE', `/api/admin/empresas/${emp.id}`).then(() => setAberta(null)), 'Empresa removida.'),
+        e('span', { key: 'd' }, dica('Só remove empresa sem sistemas e sem histórico (chamados, regionais). Com histórico, desative.')),
+      ]),
+    ]);
+
+    return e('div', { className: 'admin-pilha' }, [
+      mensagem(erro, info),
+      secao('sis', 'Sistemas', 'As categorias em que as empresas operam, como SGA e PowerCRM.', [
+        dados.sistemas.length === 0 ? dica('Nenhum sistema cadastrado.') : e('div', { key: 'l', className: 'admin-lista' }, dados.sistemas.map((s) =>
+          e('div', { key: s.id, className: 'admin-item' }, [
+            renomear[s.id] !== undefined
+              ? e('div', { key: 'f', className: 'admin-item-texto' }, entrada(renomear[s.id], (v) => setRenomear({ ...renomear, [s.id]: v }), 'Nome do sistema', { maxLength: 60 }))
+              : e('div', { key: 't', className: 'admin-item-texto' }, [e('strong', { key: 'a' }, s.nome), e('span', { key: 'b' }, s.total === 1 ? '1 empresa' : `${s.total} empresas`)]),
+            e('div', { key: 'ac', className: 'admin-item-acoes' }, renomear[s.id] !== undefined ? [
+              botao('Salvar', async () => {
+                if (await fazer(() => api('PUT', `/api/admin/sistemas/${s.id}`, { nome: renomear[s.id] }), 'Sistema renomeado.')) setRenomear(({ [s.id]: _, ...resto }) => resto);
+              }, 'prim', { key: 's', padding: '5px 10px' }),
+              botao('Cancelar', () => setRenomear(({ [s.id]: _, ...resto }) => resto), 'sec', { key: 'c', padding: '5px 10px' }),
+            ] : [
+              botao('Renomear', () => setRenomear({ ...renomear, [s.id]: s.nome }), 'sec', { key: 'r', padding: '5px 10px' }),
+              remover(`sis-${s.id}`, () => api('DELETE', `/api/admin/sistemas/${s.id}`), 'Sistema removido.'),
+            ]),
+          ]))),
+        e('div', { key: 'n', className: 'admin-linha-acao' }, [
+          entrada(novoSistema, setNovoSistema, 'Nome do novo sistema', { key: 'i', maxLength: 60, style: { ...S().input, flex: 1 } }),
+          botao('Adicionar sistema', async () => {
+            if (await fazer(() => api('POST', '/api/admin/sistemas', { nome: novoSistema }), 'Sistema adicionado.')) setNovoSistema('');
+          }, 'sec', { key: 'b', disabled: !novoSistema.trim() }),
+        ]),
+      ]),
+      secao('emp', 'Empresas', `${dados.empresas.length === 1 ? '1 empresa' : dados.empresas.length + ' empresas'} no cadastro único. Clique em uma para editar, ligar sistemas ou remover.`, [
+        entrada(busca, setBusca, 'Buscar empresa', { key: 'busca', className: 'field-input admin-busca' }),
+        filtradas.length === 0 ? dica('Nenhuma empresa encontrada.') : e('div', { key: 'l', className: 'admin-lista' }, filtradas.map((emp) =>
+          e('div', { key: emp.id, className: 'admin-item admin-item-bloco', style: { alignItems: 'stretch' } }, [
+            e('div', { key: 'cab', className: 'admin-item' }, [
+              e('span', { key: 'av', className: 'admin-avatar', 'aria-hidden': true }, iniciais(emp.nome)),
+              e('div', { key: 't', className: 'admin-item-texto' }, [
+                e('strong', { key: 'a' }, emp.nome),
+                e('span', { key: 'b' }, [emp.cnpj || 'CNPJ não informado', emp.sistemas.length ? emp.sistemas.map((l) => nomeSistema(l.sistemaId)).join(', ') : 'Sem sistemas'].join(' · ')),
+              ]),
+              emp.ativo ? null : selo('Desativada', 'alerta'),
+              botao(aberta === emp.id ? 'Fechar' : 'Editar', () => abrir(emp), 'sec', { key: 'e', padding: '5px 10px' }),
+            ]),
+            aberta === emp.id && form ? detalhe(emp) : null,
+          ]))),
+      ]),
+      secao('nova', 'Adicionar empresa', 'Depois de adicionar, abra a empresa para ligar os sistemas dela.', [
+        e('div', { key: 'f', className: 'admin-linha-campos' }, [
+          campo('n', 'Nome', entrada(nova.nome, (v) => setNova({ ...nova, nome: v }), 'Ex.: Nova Proteção', { maxLength: 120 })),
+          campo('c', 'CNPJ', entrada(nova.cnpj, (v) => setNova({ ...nova, cnpj: v }), 'Opcional', { maxLength: 18 })),
+        ]),
+        botao('Adicionar empresa', async () => {
+          if (await fazer(() => api('POST', '/api/admin/empresas', nova), 'Empresa adicionada.')) setNova({ nome: '', cnpj: '' });
+        }, 'prim', { key: 'b', alignSelf: 'flex-start', disabled: !nova.nome.trim(), opacity: nova.nome.trim() ? 1 : 0.6 }),
+      ]),
+    ]);
+  }
+
   function AbaVinculos() {
     const { painel, erro: erroPainel, recarregar } = usePainelWhatsapp(0);
     const [usuarios, setUsuarios] = useState([]);
@@ -1082,6 +1221,7 @@
       ['automacoes', 'Automações', 'Workflow', 'Quem gerencia, como o endereço aparece, quem vê cada automação e a ordem no painel.'],
       ['extensoes', 'Extensões', 'FileText', 'Extensões de navegador que o Hub oferece para baixar.'],
       ['glpi', 'GLPI', 'Server', 'Qual GLPI o Hub e os Chamados usam: produção ou o de teste desta máquina.'],
+      ['empresas', 'Empresas e sistemas', 'Database', 'Cadastro único do banco central: empresas, sistemas (SGA, PowerCRM) e em quais sistemas cada empresa está.'],
     ]],
     ['IA local', [
       ['ia', 'IA local', 'Bot', 'Ligar e desligar, treinar e escolher como a IA ajuda nos chamados.'],
@@ -1125,6 +1265,7 @@
     else if (aba === 'automacoes') corpo = e(AbaAutomacoes, { key: 'automacoes', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'glpi') corpo = e(AbaGlpi, { key: 'glpi', config: dados.config, aoSalvar: atualizarConfig });
     else if (aba === 'extensoes') corpo = e(AbaExtensoes, { key: 'extensoes', config: dados.config, opcoes: dados.opcoes, aoSalvar: atualizarConfig });
+    else if (aba === 'empresas') corpo = e(AbaEmpresas, { key: 'empresas' });
     else if (aba === 'historico') corpo = e(AbaHistorico, { key: 'historico' });
     else if (aba === 'revisao') corpo = e(AbaRevisao, { key: 'revisao' });
     else if (aba === 'gabarito') corpo = e(AbaGabarito, { key: 'gabarito' });
