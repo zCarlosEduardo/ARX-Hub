@@ -87,6 +87,13 @@ function criarRotasEmpresas({ exigirAdmin, anotar, asyncHandler, ErroHttp, banco
   }
 
   function registrar(app) {
+    // Nomes dos sistemas para os selos e o formulário de automação do painel (sem login, como o resto do painel; só nomes)
+    app.get('/api/sistemas', asyncHandler(async (req, res) => {
+      const sists = await chamar('GET', '/sistemas');
+      res.set('Cache-Control', 'no-store');
+      res.json(sists.map((s) => s.nome).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+    }));
+
     app.get('/api/admin/empresas', asyncHandler(async (req, res) => {
       await exigirAdmin(req);
       const [assocs, sists, ligs, cods] = await Promise.all([chamar('GET', '/associacoes'), chamar('GET', '/sistemas'), chamar('GET', '/associacao-sistemas'), chamar('GET', '/associacao-codigos?contexto=sga')]);

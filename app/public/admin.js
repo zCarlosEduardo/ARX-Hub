@@ -681,6 +681,7 @@
         await fn();
         setInfo(ok);
         await carregar();
+        window.dispatchEvent(new Event('arx-sistemas')); // o formulário de automação do painel usa a mesma lista de sistemas
         return true;
       } catch (err) {
         setErro(err.message);

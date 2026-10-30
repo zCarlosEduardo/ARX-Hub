@@ -1,8 +1,33 @@
 (function () {
   const e = React.createElement;
   const { useState, useEffect, useRef, useCallback } = React;
-  const { Icon, ICON_CHOICES, COLOR_CHOICES, CATEGORY_CHOICES } = window.Icons;
-  const CATEGORY_META = CATEGORY_CHOICES.reduce((acc, c) => { acc[c.key] = c; return acc; }, {});
+  const { Icon, ICON_CHOICES, COLOR_CHOICES, CATEGORY_CHOICES: SISTEMAS_FIXOS } = window.Icons;
+  // Sistemas (selos e "Sistemas" do formulário de automação): a lista é a da Administração > Empresas e sistemas. A fixa
+  // do icons.js vale até ela chegar e dá cor e chave aos que já existiam: a automação guarda a chave ('db' separa a seção
+  // Banco de Dados), então "Banco de Dados" continua 'db'; sistema novo ganha a chave pelo nome e cor neutra.
+  const CATEGORY_CHOICES = SISTEMAS_FIXOS.slice();
+  const CATEGORY_META = {};
+  const chaveDoNome = (nome) => String(nome || '').normalize('NFD').replace(/[^ -~]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  function usarSistemas(nomes) {
+    const lista = nomes.map((nome) => {
+      const fixo = SISTEMAS_FIXOS.find((c) => chaveDoNome(c.label) === chaveDoNome(nome));
+      return fixo ? { ...fixo, label: nome } : { key: chaveDoNome(nome), label: nome, color: '#6b7280' };
+    });
+    CATEGORY_CHOICES.splice(0, CATEGORY_CHOICES.length, ...lista);
+    for (const k of Object.keys(CATEGORY_META)) delete CATEGORY_META[k];
+    for (const c of lista) CATEGORY_META[c.key] = c;
+  }
+  usarSistemas(SISTEMAS_FIXOS.map((c) => c.label));
+  /** Busca a lista da administração; true quando trocou (banco fora: fica a fixa). */
+  const carregarSistemas = () =>
+    fetch('/api/sistemas', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((nomes) => {
+        if (!Array.isArray(nomes) || !nomes.length) return false;
+        usarSistemas(nomes);
+        return true;
+      })
+      .catch(() => false);
   const GLPI_TOKEN_STORAGE_KEY = 'arxhub_glpi_user_token';
 
   function toCamel(prop) {
@@ -216,6 +241,14 @@
       const aoMudar = (ev) => setCfgAuto(ev.detail);
       window.addEventListener('arx-config-automacoes', aoMudar); // admin.js avisa quando a aba Automações salva
       return () => window.removeEventListener('arx-config-automacoes', aoMudar);
+    }, []);
+    // Sistemas da Administração (banco central): carrega ao abrir e de novo quando a administração muda a lista
+    const [, setVersaoSistemas] = useState(0);
+    useEffect(() => {
+      const ler = () => carregarSistemas().then((mudou) => mudou && setVersaoSistemas((v) => v + 1));
+      ler();
+      window.addEventListener('arx-sistemas', ler);
+      return () => window.removeEventListener('arx-sistemas', ler);
     }, []);
     const podeGerenciar = ehAdmin || cfgAuto.cadastro === 'todos';
     const [urlsReais, setUrlsReais] = useState({});

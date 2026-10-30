@@ -136,6 +136,9 @@ test('sistemas: nome repetido volta 409 e sem token do banco a resposta explica'
     const dup = await s.chamar('POST', '/api/admin/sistemas', { nome: 'SGA' });
     assert.equal(dup.status, 409);
     assert.equal((await s.chamar('POST', '/api/admin/sistemas', { nome: 'Novo Sistema' })).status, 201);
+    // nomes para o formulário de automação do painel: sem login, só os nomes, em ordem
+    const nomes = await s.chamar('GET', '/api/sistemas', undefined, '');
+    assert.deepEqual([nomes.status, nomes.corpo], [200, ['Novo Sistema', 'PowerCRM', 'SGA']]);
   } finally {
     s.fechar();
   }
